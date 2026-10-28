@@ -9,6 +9,11 @@ export const kanbanMessages = defineMessages(
     sendFailed: (error: string) => `Envoi impossible : ${error}`,
     placeFailed: (error: string) => `Kanban impossible : ${error}`,
     agent: "l'agent",
+    github: {
+      failed: (detail: string) => `GitHub : ${detail}`,
+      synced: (repo: string) => `Synchronisé avec ${repo}`,
+      created: (number: number) => `Issue #${number} créée`,
+    },
   },
   {
     defaultColumns: ["To do", "In progress", "Done"],
@@ -17,5 +22,10 @@ export const kanbanMessages = defineMessages(
     sendFailed: (error: string) => `Could not send: ${error}`,
     placeFailed: (error: string) => `Could not create the Kanban: ${error}`,
     agent: "the agent",
+    github: {
+      failed: (detail: string) => `GitHub: ${detail}`,
+      synced: (repo: string) => `Synced with ${repo}`,
+      created: (number: number) => `Issue #${number} created`,
+    },
   },
 );

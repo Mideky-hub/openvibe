@@ -141,3 +141,15 @@ describe("readKanbanPayload", () => {
     });
   });
 });
+
+describe("readKanbanPayload's GitHub link", () => {
+  it("keeps a valid link and its project, drops a bad one", () => {
+    const base = { columns: [], cards: {} };
+    expect(readKanbanPayload({ ...base, github: { repo: "o/r", project: { owner: "o", number: 2 } } }).github).toEqual({
+      repo: "o/r",
+      project: { owner: "o", number: 2 },
+    });
+    expect(readKanbanPayload({ ...base, github: { repo: "o/r", project: { owner: "o", number: "2" } } }).github).toEqual({ repo: "o/r" });
+    expect(readKanbanPayload({ ...base, github: { repo: "not a repo" } })).not.toHaveProperty("github");
+  });
+});
