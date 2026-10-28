@@ -3,9 +3,10 @@ import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { bracketMatching, defaultHighlightStyle, foldGutter, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
-import { Compartment, EditorState, type Extension } from "@codemirror/state";
+import { Compartment, EditorSelection, EditorState, StateEffect, StateField, type Extension } from "@codemirror/state";
 import { oneDarkHighlightStyle } from "@codemirror/theme-one-dark";
 import {
+  Decoration,
   EditorView,
   drawSelection,
   highlightActiveLine,
@@ -15,6 +16,35 @@ import {
 } from "@codemirror/view";
 import type { Theme } from "@/app/theme";
 import { languageFor } from "./languages";
+import { studioStore, useStudio } from "./studioStore";
+
+/** The line just reached by Ctrl+P `fichier:ligne` or Ctrl+G, lit for a moment; null puts it out. */
+const flash = StateEffect.define<number | null>();
+const flashLine = StateField.define({
+  create: () => Decoration.none,
+  update(lit, tr) {
+    for (const effect of tr.effects)
+      if (effect.is(flash)) lit = effect.value === null ? Decoration.none : Decoration.set([Decoration.line({ class: "cm-ov-flash" }).range(effect.value)]);
+    return tr.docChanged ? lit.map(tr.changes) : lit;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+const FLASH_MS = 1200;
+
+/** Puts the cursor at `line` (and `column`, from 1), clamped to the file, centred on screen, the line lit. */
+export function revealLine(view: EditorView, line: number, column = 1) {
+  const doc = view.state.doc;
+  const target = doc.line(Math.min(Math.max(1, line), doc.lines));
+  const pos = Math.min(target.from + Math.max(0, column - 1), target.to);
+  view.dispatch({
+    selection: EditorSelection.cursor(pos),
+    effects: [EditorView.scrollIntoView(pos, { y: "center" }), flash.of(target.from)],
+  });
+  view.focus();
+  setTimeout(() => {
+    if (view.dom.isConnected) view.dispatch({ effects: flash.of(null) });
+  }, FLASH_MS);
+}
 
 /** The app's tokens, so the editor follows the theme; the highlighting is chosen per theme. */
 function themeFor(theme: Theme): Extension {
@@ -32,6 +62,7 @@ function themeFor(theme: Theme): Extension {
         ".cm-gutters": { backgroundColor: "transparent", color: "var(--ov-text-3)", border: "none" },
         ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "var(--ov-hover)" },
         ".cm-panels": { backgroundColor: "var(--ov-surface)", color: "var(--ov-text)" },
+        ".cm-ov-flash": { backgroundColor: "var(--ov-accent-soft)" },
       },
       { dark: theme === "dark" },
     ),
@@ -89,6 +120,7 @@ export function CodeEditor({ path, initial, theme, onChange, onSave }: CodeEdito
             ...historyKeymap,
             indentWithTab,
           ]),
+          flashLine,
           languageFor(path),
           themes.current.of(themeFor(theme)),
           EditorView.updateListener.of((update) => {
@@ -109,6 +141,14 @@ export function CodeEditor({ path, initial, theme, onChange, onSave }: CodeEdito
   useEffect(() => {
     view.current?.dispatch({ effects: themes.current.reconfigure(themeFor(theme)) });
   }, [theme]);
+
+  // After the editor is made: a line asked for this file is reached once, then forgotten.
+  const pending = useStudio((s) => (s.pendingLine?.path === path ? s.pendingLine : null));
+  useEffect(() => {
+    if (!pending || !view.current) return;
+    revealLine(view.current, pending.line, pending.column);
+    studioStore.setState({ pendingLine: undefined });
+  }, [pending, path]);
 
   return <div ref={host} data-editor={path} className="h-full min-h-0 overflow-hidden" />;
 }

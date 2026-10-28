@@ -64,6 +64,7 @@ describe("Navigation (spec fenêtre §7.3)", () => {
       "Masquer le panneau Agents",
       "Accueil",
       "Fermer le projet",
+      "Aller à la ligne…",
     ]);
   });
 

@@ -1,0 +1,32 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { workspacesStore } from "@/store/workspaces";
+import { goToLine, inCodeWorkspace } from "./GoToLine";
+import { studioStore } from "./studioStore";
+
+afterEach(() => {
+  studioStore.setState({ active: null, pendingLine: undefined });
+  workspacesStore.setState({ workspaces: [], activeId: null } as never);
+});
+
+describe("Ctrl+G, go to line", () => {
+  it("is for a Code workspace only, its kind read loosely", () => {
+    workspacesStore.setState({ workspaces: [{ id: "w1", kind: "code" }, { id: "w2" }], activeId: "w1" } as never);
+    expect(inCodeWorkspace()).toBe(true);
+    workspacesStore.setState({ activeId: "w2" } as never);
+    expect(inCodeWorkspace()).toBe(false);
+  });
+
+  it("asks the active file's editor for the line, and the column", () => {
+    studioStore.setState({ active: "src/App.tsx" });
+    expect(goToLine("42:7")).toBe(true);
+    expect(studioStore.getState().pendingLine).toEqual({ path: "src/App.tsx", line: 42, column: 7 });
+  });
+
+  it("refuses what is not a line, or when no file is open", () => {
+    studioStore.setState({ active: "src/App.tsx" });
+    expect(goToLine("abc")).toBe(false);
+    studioStore.setState({ active: null });
+    expect(goToLine("3")).toBe(false);
+    expect(studioStore.getState().pendingLine).toBeUndefined();
+  });
+});

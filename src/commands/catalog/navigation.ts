@@ -6,6 +6,7 @@ import { fitScene, zoomTo } from "@/canvas/viewActions";
 import { agentsPanelStore, setAgentsPanel } from "@/fleet/agentsPanelState";
 import { focusCommandBar } from "@/shell/commandBarFocus";
 import { projectsStore } from "@/store/projects";
+import { inCodeWorkspace, openGoToLine } from "@/studio/GoToLine";
 import type { Command, CommandContext } from "../command";
 import { command, sectionNamed } from "./define";
 import { catalog } from "./messages";
@@ -42,5 +43,6 @@ export const NAVIGATION: readonly Command[] = [
   }),
   command("project.home", { section: nav, available: inProject, run: () => projectsStore.getState().goHome() }),
   command("project.close", { section: nav, available: inProject, run: () => projectsStore.getState().close() }),
+  command("editor.goToLine", { section: nav, shortcut: "Ctrl+G", available: (ctx) => ctx.project && inCodeWorkspace(), run: () => openGoToLine() }),
   command("palette.functions", { section: nav, shortcut: "Ctrl+Maj+P", available: always, run: (ctx) => openPalette("functions", ctx) }),
 ];

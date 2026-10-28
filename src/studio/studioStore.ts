@@ -21,6 +21,8 @@ export interface StudioState {
   tabsFor: string | null;
   tabs: StudioTab[];
   active: string | null;
+  /** Where the editor puts its cursor once the file is shown (Ctrl+P `fichier:ligne`, Ctrl+G); it clears it. */
+  pendingLine?: { path: string; line: number; column?: number };
 }
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));

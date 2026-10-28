@@ -29,6 +29,9 @@ export const studioMessages = defineMessages(
     discard: "Fermer sans enregistrer",
     saveAndClose: "Enregistrer et fermer",
     cancel: "Annuler",
+    goToLine: "Aller à la ligne",
+    goToLinePlaceholder: "Ligne ou ligne:colonne",
+    goToLineInvalid: "Un numéro de ligne, ex. 42 ou 42:7",
   },
   {
     open: "Code Studio",
@@ -58,5 +61,8 @@ export const studioMessages = defineMessages(
     discard: "Close without saving",
     saveAndClose: "Save and close",
     cancel: "Cancel",
+    goToLine: "Go to line",
+    goToLinePlaceholder: "Line or line:column",
+    goToLineInvalid: "A line number, e.g. 42 or 42:7",
   },
 );
