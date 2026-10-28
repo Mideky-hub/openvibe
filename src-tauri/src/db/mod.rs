@@ -29,6 +29,7 @@ const MIGRATIONS: &[Step] = &[
     Step::Sql(include_str!("migrations/001_initial.sql")),
     Step::Rust(migrate_v2::run),
     Step::Sql(include_str!("migrations/003_file_nodes.sql")),
+    Step::Sql(include_str!("migrations/004_workspace_kind.sql")),
 ];
 
 /// The single SQLite connection shared by every command (spec V1 §8.1).
@@ -207,7 +208,7 @@ pub fn test_workspace(conn: &Connection, name: &str) -> AppResult<workspaces::Wo
             id
         }
     };
-    workspaces::create(conn, &project_id, name)
+    workspaces::create(conn, &project_id, name, "canvas")
 }
 
 #[cfg(test)]
@@ -231,16 +232,16 @@ mod tests {
         let mut conn = Connection::open_in_memory().unwrap();
         conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
         migrate_up_to(&mut conn, 2, "C:/home").unwrap();
-        let workspace = test_workspace(&conn, "w").unwrap();
+        let (_, workspace) = raw_workspace(&conn);
         conn.execute(
             "INSERT INTO nodes VALUES ('t1', ?1, 'terminal', '{}', 10), ('n2', ?1, 'note', '{}', 11)",
-            [&workspace.id],
+            [&workspace],
         )
         .unwrap();
         conn.execute_batch("INSERT INTO terminal_scrollback VALUES ('t1', x'41', 12);")
             .unwrap();
         assert!(conn
-            .execute("INSERT INTO nodes VALUES ('f0', ?1, 'file', '{}', 13)", [&workspace.id])
+            .execute("INSERT INTO nodes VALUES ('f0', ?1, 'file', '{}', 13)", [&workspace])
             .is_err());
 
         migrate_up_to(&mut conn, 3, "C:/home").unwrap();
@@ -254,12 +255,56 @@ mod tests {
         );
         conn.execute(
             "INSERT INTO nodes VALUES ('f1', ?1, 'file', '{\"path\":\"README.md\"}', 14)",
-            [&workspace.id],
+            [&workspace],
         )
         .unwrap();
         // The cascades still reach the rebuilt table.
         conn.execute("DELETE FROM nodes WHERE id = 't1'", []).unwrap();
         assert_eq!(count("SELECT COUNT(*) FROM terminal_scrollback"), 0);
+    }
+
+    /// A project and a workspace written with plain SQL, valid at any schema from v2 on.
+    fn raw_workspace(conn: &Connection) -> (String, String) {
+        conn.execute_batch(
+            "INSERT INTO projects (id, name, path, position, created_at, last_opened_at)
+               VALUES ('p1', 'p', 'C:/p', 0, 0, 0);
+             INSERT INTO workspaces (id, project_id, name, position, pantheon, created_at, updated_at)
+               VALUES ('w1', 'p1', 'W', 0, NULL, 0, 0);",
+        )
+        .unwrap();
+        ("p1".to_string(), "w1".to_string())
+    }
+
+    #[test]
+    fn migration_4_makes_existing_workspaces_canvases_and_allows_one_code_workspace() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        migrate_up_to(&mut conn, 3, "C:/home").unwrap();
+        let (project, _) = raw_workspace(&conn);
+
+        migrate_up_to(&mut conn, 4, "C:/home").unwrap();
+
+        let listed = workspaces::list(&conn, &project).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].kind, "canvas");
+        let insert_code = |id: &str| {
+            conn.execute(
+                "INSERT INTO workspaces (id, project_id, name, position, created_at, updated_at, kind)
+                 VALUES (?1, ?2, 'Code', 1, 0, 0, 'code')",
+                [id, project.as_str()],
+            )
+        };
+        insert_code("c1").unwrap();
+        assert!(insert_code("c2").is_err());
+        assert!(conn
+            .execute(
+                "INSERT INTO workspaces (id, project_id, name, position, created_at, updated_at, kind)
+                 VALUES ('x', ?1, 'X', 2, 0, 0, 'other')",
+                [&project],
+            )
+            .is_err());
+        let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version, 4);
     }
 
     fn base_at_version(path: &Path, version: usize) {

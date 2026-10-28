@@ -13,7 +13,7 @@ export const fileIndexStore = createStore<FileIndexState>()(() => ({ files: {} }
 export async function refreshFileIndex(project: string): Promise<void> {
   try {
     const entries = await studioTree(project);
-    const files = entries.filter((e) => e.kind === "file").map((e) => e.path.replaceAll("\\", "/"));
+    const files = entries.filter((e) => e.kind === "file").map((e) => e.path.split("\\").join("/"));
     fileIndexStore.setState((s) => ({ files: { ...s.files, [project]: files } }));
   } catch {
     // The palette lists the nodes anyway.

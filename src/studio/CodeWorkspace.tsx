@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Code2, Eye, File, Folder, PanelTopOpen, RotateCw, Save, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Code2, Eye, File, Folder, FolderTree, PanelTopOpen, RotateCw, Save, X } from "lucide-react";
 import { useTheme } from "@/app/theme";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useMessages } from "@/i18n";
 import { studioTree, type TreeEntry } from "@/ipc/studio";
 import { cn } from "@/lib/utils";
-import { AccentButton, IconButton } from "@/shell/buttons";
+import { AccentButton, IconButton, ToolButton } from "@/shell/buttons";
+import { TOP_ROW_HEIGHT } from "@/shell/layout";
 import { useProjects } from "@/store/projects";
 import { CodeEditor } from "./CodeEditor";
 import { insertFileNode } from "./insert";
 import { isMarkdown } from "./languages";
 import { renderMarkdown } from "./markdown";
 import { studioMessages } from "./messages";
-import { closeStudio, closeTab, editFile, isDirty, openFile, saveFile, useStudio, type StudioTab } from "./studioStore";
+import { closeStudio, closeTab, editFile, isDirty, openFile, openStudio, saveFile, useStudio, type StudioTab } from "./studioStore";
 import { ancestors, baseName, buildTree, toggle, visibleRows } from "./tree";
 
 /** The tree shows this many lines at most; the filter finds the others. */
@@ -20,14 +20,20 @@ const MAX_ROWS = 2000;
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** The Code Studio (issue #49): the project's files, browsed and edited in a modal. */
-export function StudioModal() {
-  const project = useStudio((s) => s.project);
-  return (
-    <Dialog open={project !== null} onOpenChange={(open) => !open && closeStudio()}>
-      {project && <StudioContent project={project} />}
-    </Dialog>
-  );
+/**
+ * The code workspace (issue #49): a workspace tab whose page is an IDE instead
+ * of a canvas. The files of the active project, browsed and edited; its open
+ * files stay when another tab is shown.
+ */
+export function CodeWorkspace() {
+  const project = useProjects((s) => s.projects.find((p) => p.id === s.activeId)?.path ?? null);
+  useEffect(() => {
+    if (!project) return;
+    openStudio(project);
+    return closeStudio;
+  }, [project]);
+  const open = useStudio((s) => s.project);
+  return open && open === project ? <StudioContent project={open} /> : null;
 }
 
 function StudioContent({ project }: { project: string }) {
@@ -37,6 +43,7 @@ function StudioContent({ project }: { project: string }) {
   const active = useStudio((s) => s.active);
   const tab = tabs.find((x) => x.path === active) ?? null;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [treeOpen, setTreeOpen] = useState(true);
 
   const open = (path: string) => {
     setExpanded((current) => new Set([...current, ...ancestors(path)]));
@@ -51,34 +58,26 @@ function StudioContent({ project }: { project: string }) {
     }
   };
 
+  // The rail on the right (activities) keeps its column.
   return (
-    <DialogContent
-      showCloseButton={false}
+    <div
+      data-code-workspace
+      aria-label={t.title(name)}
       onKeyDown={onKeyDown}
-      data-studio
-      className="ov-glass-strong flex h-[min(86vh,900px)] w-[min(1280px,calc(100vw-48px))] max-w-none flex-col gap-0 overflow-hidden rounded-[14px] p-0 text-ov-text sm:max-w-none"
+      className="absolute inset-0 flex gap-2.5 pb-3 pl-3 pr-[66px] text-ov-text"
+      style={{ paddingTop: TOP_ROW_HEIGHT + 12 }}
     >
-      <header className="flex h-10 shrink-0 items-center gap-2 border-b border-ov-line px-3">
-        <Code2 className="size-4 shrink-0 text-ov-accent" />
-        <DialogTitle className="shrink-0 text-[13px] font-semibold">{t.title(name)}</DialogTitle>
-        <DialogDescription className="sr-only">{t.description}</DialogDescription>
-        <span className="min-w-0 truncate font-mono text-[11px] text-ov-text-3" title={project}>
-          {project}
-        </span>
-        <span className="ml-auto">
-          <IconButton label={t.close} onClick={closeStudio}>
-            <X />
-          </IconButton>
-        </span>
-      </header>
-      <div className="flex min-h-0 flex-1">
-        <FileTree project={project} active={active} expanded={expanded} setExpanded={setExpanded} onOpen={open} />
-        <section className="flex min-w-0 flex-1 flex-col">
-          <Tabs tabs={tabs} active={active} />
-          {tab ? <FilePane key={tab.path} tab={tab} /> : <Message>{t.pickFile}</Message>}
-        </section>
-      </div>
-    </DialogContent>
+      <nav className="ov-glass z-30 flex shrink-0 flex-col items-center gap-0.5 self-center rounded-[14px] p-[5px]">
+        <ToolButton label={treeOpen ? t.hideFiles : t.showFiles} active={treeOpen} onClick={() => setTreeOpen(!treeOpen)}>
+          <FolderTree />
+        </ToolButton>
+      </nav>
+      {treeOpen && <FileTree project={project} active={active} expanded={expanded} setExpanded={setExpanded} onOpen={open} />}
+      <section className="ov-glass-strong flex min-w-0 flex-1 flex-col overflow-hidden rounded-[14px]">
+        <Tabs tabs={tabs} active={active} />
+        {tab ? <FilePane key={tab.path} tab={tab} /> : <Message>{t.pickFile}</Message>}
+      </section>
+    </div>
   );
 }
 
@@ -114,7 +113,7 @@ function FileTree({ project, active, expanded, setExpanded, onOpen }: FileTreePr
   const rows = useMemo(() => visibleRows(tree, expanded, query), [tree, expanded, query]);
 
   return (
-    <aside className="flex w-[280px] shrink-0 flex-col border-r border-ov-line">
+    <aside data-files className="ov-glass flex w-[280px] shrink-0 flex-col overflow-hidden rounded-[14px]">
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-ov-line px-2">
         <input
           aria-label={t.filterLabel}
@@ -269,7 +268,7 @@ function FilePane({ tab }: { tab: StudioTab }) {
               {previewing ? <Code2 /> : <Eye />}
             </ToolbarButton>
           )}
-          <ToolbarButton label={t.insert} title={t.insertTitle} onClick={() => insertFileNode(tab.path)}>
+          <ToolbarButton label={t.insert} title={t.insertTitle} onClick={() => void insertFileNode(tab.path)}>
             <PanelTopOpen />
           </ToolbarButton>
           <AccentButton className="h-7" disabled={!dirty || tab.saving} title={t.save} onClick={() => void saveFile(tab.path)}>

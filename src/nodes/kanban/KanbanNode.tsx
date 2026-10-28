@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
+import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
 import { cn } from "cn";
-import { Calendar, CircleDot, KanbanSquare, MoreHorizontal, Plus, RefreshCw } from "lucide-react";
+import { Bot, Calendar, CircleDot, KanbanSquare, MoreHorizontal, Plus, RefreshCw } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -27,6 +28,8 @@ import {
   type CardDraft,
   type DuePreset,
 } from "@/kanban/board";
+import { kanbanWidth } from "@/kanban/width";
+import { canvasStore, useCanvas } from "@/canvas/canvasStore";
 import { dropCardOutside, startCardDrag } from "@/kanban/dropOnTerminal";
 import { createIssueForCard, detectRepo, linkBoard, moveCardWithGithub, parseProject, syncBoard } from "@/kanban/github";
 import { useNativeKeyDown } from "@/lib/useNativeKeyDown";
@@ -34,6 +37,7 @@ import { nodesStore, useNodes } from "@/store/nodes";
 import { KANBAN_PRIORITIES, type KanbanBoardLink, type KanbanCard, type KanbanColumn, type KanbanPayload, type KanbanPriority } from "@/nodes/types";
 import { KANBAN_CARD_MIME } from "./drag";
 import { kanbanNodeMessages } from "./messages";
+import { PlanMenu } from "./PlanMenu";
 
 export { KANBAN_CARD_MIME } from "./drag";
 
@@ -68,6 +72,18 @@ function commit(nodeId: string, change: (board: KanbanPayload) => KanbanPayload)
   if (next !== board) nodesStore.getState().update(nodeId, { columns: next.columns, cards: next.cards });
 }
 
+/** The node grows (or shrinks) to the right so every column shows; its height stays the user's. Not an undo step. */
+function fitWidth(nodeId: string, columnCount: number) {
+  const api = canvasStore.getState().api;
+  const element = api?.getSceneElementsIncludingDeleted().find((e) => e.id === nodeId);
+  const width = kanbanWidth(columnCount);
+  if (!api || !element || element.isDeleted || element.width === width) return;
+  api.updateScene({
+    elements: api.getSceneElementsIncludingDeleted().map((e) => (e.id === nodeId ? newElementWith(e, { width }) : e)),
+    captureUpdate: CaptureUpdateAction.NEVER,
+  });
+}
+
 /** A Kanban board on the canvas (issue #29): columns of cards, dragged between them or onto a terminal. */
 export function KanbanNode({ nodeId }: { nodeId: string }) {
   const t = useMessages(kanbanNodeMessages);
@@ -90,6 +106,12 @@ export function KanbanNode({ nodeId }: { nodeId: string }) {
     element.addEventListener("wheel", listener);
     return () => element.removeEventListener("wheel", listener);
   }, [record?.kind]);
+
+  const api = useCanvas((s) => s.api);
+  const columnCount = record?.kind === "kanban" ? record.payload.columns.length : null;
+  useEffect(() => {
+    if (api && columnCount !== null) fitWidth(nodeId, columnCount);
+  }, [api, nodeId, columnCount]);
 
   if (record?.kind !== "kanban") return null;
   const board = record.payload;
@@ -213,6 +235,7 @@ export function KanbanNode({ nodeId }: { nodeId: string }) {
               <ColumnView
                 key={column.id}
                 t={t}
+                boardId={nodeId}
                 column={column}
                 cards={column.cardIds.map((id) => board.cards[id]).filter((c): c is KanbanCard => !!c)}
                 renaming={renaming === column.id}
@@ -377,6 +400,7 @@ function LinkDialog({
 
 interface ColumnViewProps {
   t: Messages;
+  boardId: string;
   column: KanbanColumn;
   cards: KanbanCard[];
   renaming: boolean;
@@ -439,6 +463,7 @@ function ColumnView(props: ColumnViewProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem onSelect={props.onRenameStart}>{t.rename}</DropdownMenuItem>
+              <PlanMenu boardId={props.boardId} columnId={column.id} />
               <DropdownMenuItem variant="destructive" onSelect={props.onRemove}>
                 {t.removeColumn}
               </DropdownMenuItem>
@@ -510,7 +535,7 @@ function CardView({
     >
       <span className="absolute inset-y-0 left-0 w-1" style={{ background: PRIORITY_BAR[card.priority] }} aria-label={t.priorities[card.priority]} />
       <p className="text-[13px] leading-snug font-medium break-words text-ov-text">{card.title}</p>
-      {(card.due || card.github) && (
+      {(card.due || card.github || card.agent) && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {card.due && (
             <span
@@ -539,6 +564,12 @@ function CardView({
             >
               <CircleDot className="size-3" />#{card.github.number}
             </button>
+          )}
+          {card.agent && (
+            <span title={t.agentChip(card.agent)} className="inline-flex items-center gap-1 rounded bg-ov-accent/15 px-1.5 py-0.5 text-[11px] text-ov-accent">
+              <Bot className="size-3" />
+              {card.agent}
+            </span>
           )}
         </div>
       )}

@@ -131,7 +131,7 @@ mod tests {
             .with(|conn| projects::create(conn, &dir.path().to_string_lossy()))
             .unwrap();
         let second = db
-            .with(|conn| workspaces::create(conn, &project.id, "B"))
+            .with(|conn| workspaces::create(conn, &project.id, "B", "canvas"))
             .unwrap();
         db.with(|conn| nodes::save(conn, "t", &second.id, nodes::NodeKind::Terminal, "{}"))
             .unwrap();

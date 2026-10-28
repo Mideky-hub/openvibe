@@ -43,6 +43,6 @@ export const NAVIGATION: readonly Command[] = [
   }),
   command("project.home", { section: nav, available: inProject, run: () => projectsStore.getState().goHome() }),
   command("project.close", { section: nav, available: inProject, run: () => projectsStore.getState().close() }),
-  command("editor.goToLine", { section: nav, shortcut: "Ctrl+G", available: (ctx) => ctx.project && inCodeWorkspace(), run: () => openGoToLine() }),
+  command("editor.goToLine", { section: nav, shortcut: "Ctrl+G", available: () => inCodeWorkspace(), run: () => openGoToLine() }),
   command("palette.functions", { section: nav, shortcut: "Ctrl+Maj+P", available: always, run: (ctx) => openPalette("functions", ctx) }),
 ];

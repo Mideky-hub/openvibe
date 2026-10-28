@@ -1,16 +1,18 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { projectsStore } from "@/store/projects";
 import { workspacesStore } from "@/store/workspaces";
 import { goToLine, inCodeWorkspace } from "./GoToLine";
 import { studioStore } from "./studioStore";
 
 afterEach(() => {
-  studioStore.setState({ active: null, pendingLine: undefined });
+  studioStore.setState({ active: null, pendingLine: null });
   workspacesStore.setState({ workspaces: [], activeId: null } as never);
 });
 
 describe("Ctrl+G, go to line", () => {
-  it("is for a Code workspace only, its kind read loosely", () => {
-    workspacesStore.setState({ workspaces: [{ id: "w1", kind: "code" }, { id: "w2" }], activeId: "w1" } as never);
+  it("is for a Code workspace only", () => {
+    projectsStore.setState({ view: "project" } as never);
+    workspacesStore.setState({ workspaces: [{ id: "w1", kind: "code" }, { id: "w2", kind: "canvas" }], activeId: "w1" } as never);
     expect(inCodeWorkspace()).toBe(true);
     workspacesStore.setState({ activeId: "w2" } as never);
     expect(inCodeWorkspace()).toBe(false);
@@ -27,6 +29,6 @@ describe("Ctrl+G, go to line", () => {
     expect(goToLine("abc")).toBe(false);
     studioStore.setState({ active: null });
     expect(goToLine("3")).toBe(false);
-    expect(studioStore.getState().pendingLine).toBeUndefined();
+    expect(studioStore.getState().pendingLine).toBeNull();
   });
 });

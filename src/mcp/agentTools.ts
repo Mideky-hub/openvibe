@@ -2,7 +2,8 @@ import { langStore, messages } from "@/i18n";
 import { declaredSteps, markedSteps, MAX_STEPS } from "@/nodes/steps";
 import { notify } from "@/mission/events";
 import { oneLine } from "@/mission/mission";
-import { isOrchestratorClosed, memberOf, updateMember } from "@/mission/store";
+import { finishMissionCard } from "@/kanban/orchestrate";
+import { isOrchestratorClosed, memberOf, missionOf, updateMember } from "@/mission/store";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { agentMessages } from "./messages";
@@ -84,6 +85,10 @@ export function report(nodeId: string, args: Record<string, unknown>): ToolResul
   if (status !== "termine" && status !== "bloque" && status !== "echec") return refused(t().agent.unknownStatus(String(status)));
   // `merge` merges every « done » branch again: a merged one stays so until then (final review H2).
   updateMember(found.orchestratorId, nodeId, { report: { summary, status, at: Date.now() } });
+  if (status === "termine") {
+    const mission = missionOf(nodesStore.getState().nodes[found.orchestratorId]);
+    void finishMissionCard(found.orchestratorId, mission?.plan, found.member.task).catch(() => undefined);
+  }
   // Queued even when nobody listens: a relaunched or restored orchestrator hears it then (final review R3).
   notify(found.orchestratorId, t().agent.reported(found.member.name, outReport(status), oneLine(summary)));
   if (isOrchestratorClosed(found.orchestratorId) || !isRunning(found.orchestratorId)) return said(t().agent.unheard);

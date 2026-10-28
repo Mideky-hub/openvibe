@@ -147,7 +147,7 @@ export function CodeEditor({ path, initial, theme, onChange, onSave }: CodeEdito
   useEffect(() => {
     if (!pending || !view.current) return;
     revealLine(view.current, pending.line, pending.column);
-    studioStore.setState({ pendingLine: undefined });
+    studioStore.setState({ pendingLine: null });
   }, [pending, path]);
 
   return <div ref={host} data-editor={path} className="h-full min-h-0 overflow-hidden" />;

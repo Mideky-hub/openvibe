@@ -26,6 +26,7 @@ const TOOLS: Record<string, string> = {
   merge: "fusionner",
   finish: "terminer",
   remote_control: "remote_control",
+  board: "board",
 };
 
 /** The former names, for the agent that still calls one: what it is called now. */

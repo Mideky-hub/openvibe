@@ -2,7 +2,8 @@ import { useState } from "react";
 import { createStore, useStore } from "zustand";
 import { useMessages } from "@/i18n";
 import { TITLE_BAR_HEIGHT } from "@/shell/layout";
-import { useWorkspaces, workspacesStore } from "@/store/workspaces";
+import { projectsStore } from "@/store/projects";
+import { isCode, useWorkspaces, workspacesStore } from "@/store/workspaces";
 import { parseLineTarget } from "./fileSearch";
 import { studioMessages } from "./messages";
 import { studioStore } from "./studioStore";
@@ -10,11 +11,10 @@ import { studioStore } from "./studioStore";
 /** Ctrl+G's field, and where the keyboard goes back when it closes. */
 const goToLineStore = createStore<{ open: boolean; returnFocus: HTMLElement | null }>()(() => ({ open: false, returnFocus: null }));
 
-/** The workspace on screen is a Code workspace; read loosely, its `kind` comes with it. */
+/** The workspace on screen is a Code workspace (it has no canvas: the command context does not tell it). */
 export function inCodeWorkspace(): boolean {
   const { workspaces, activeId } = workspacesStore.getState();
-  const active = workspaces.find((w) => w.id === activeId) as { kind?: unknown } | undefined;
-  return active?.kind === "code";
+  return projectsStore.getState().view === "project" && isCode(workspaces.find((w) => w.id === activeId));
 }
 
 export function openGoToLine() {

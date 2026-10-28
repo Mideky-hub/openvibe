@@ -91,7 +91,7 @@ pub fn create(conn: &Connection, path: &str) -> AppResult<Project> {
         "INSERT INTO projects (id, name, path, position, created_at, last_opened_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
         params![id, name_from_path(&path), path, position, now],
     )?;
-    workspaces::create(&tx, &id, "Workspace 1")?;
+    workspaces::create(&tx, &id, "Workspace 1", "canvas")?;
     tx.commit()?;
     get(conn, &id)
 }
