@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { installUpdate, updatesStore, useUpdates } from "@/app/updates";
 import { messages, useMessages } from "@/i18n";
-import { useNodes } from "@/store/nodes";
+import { nodeNameOf, useNodes } from "@/store/nodes";
 import { isRunning, terminalStatusStore } from "@/store/terminalStatus";
 import { shellMessages } from "./messages";
 
@@ -34,7 +34,7 @@ export function UpdateDialog() {
   useStore(terminalStatusStore, (s) => s.statuses);
   const running = Object.entries(nodes)
     .filter(([id]) => isRunning(id))
-    .map(([, record]) => record.payload.name || ("title" in record.payload ? record.payload.title : "") || "Agent");
+    .map(([, record]) => nodeNameOf(record) || ("title" in record.payload ? record.payload.title : "") || "Agent");
   const close = () => updatesStore.setState({ dialogOpen: false });
   const busy = progress !== null;
   const install = () =>

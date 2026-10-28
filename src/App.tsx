@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { boot } from "@/app/boot";
+import { GoToLine } from "@/studio/GoToLine";
 import { Palette } from "@/commands/Palette";
 import { appMessages } from "@/app/messages";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -33,6 +34,9 @@ export default function App() {
       {view === "error" && <StatusScreen message={t.projectsLoadFailed(String(error))} />}
       <ErrorBoundary scope="palette" fallback={() => null}>
         <Palette />
+      </ErrorBoundary>
+      <ErrorBoundary scope="go to line" fallback={() => null}>
+        <GoToLine />
       </ErrorBoundary>
       <ErrorBoundary scope="update dialog" fallback={() => null}>
         <UpdateDialog />

@@ -1,10 +1,12 @@
 pub mod agents;
 pub mod app;
 pub mod git;
+pub mod github;
 pub mod mission;
 pub mod project;
 pub mod pty;
 pub mod review;
+pub mod studio;
 #[cfg(all(test, windows))]
 mod test_support;
 pub mod workspace;

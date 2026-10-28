@@ -13,6 +13,9 @@ pub enum AppError {
     /// An orchestrator without OpenVibe's tools and guards does not start (spec première version §4.1).
     #[error("{0}")]
     ToolsUnavailable(String),
+    /// The `gh` CLI is missing, not logged in, or failed (Kanban GitHub sync).
+    #[error("{0}")]
+    Github(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
@@ -28,6 +31,7 @@ impl AppError {
             AppError::NotFound(_) => "notFound",
             AppError::Pty(_) => "pty",
             AppError::ToolsUnavailable(_) => "toolsUnavailable",
+            AppError::Github(_) => "github",
             AppError::Io(_) => "io",
             AppError::Db(_) => "db",
         }

@@ -4,7 +4,9 @@ import { messages } from "@/i18n";
 import { ptySendText } from "@/ipc/pty";
 import { endMission, mergeMission, reassignTask } from "@/mission/launch";
 import { budgetOf, memberTime, NEW_AGENT, oneLine, proposedPlan, remainingGlobal, sameName, spentMin, type Member, type Mission } from "@/mission/mission";
+import { boardView } from "@/kanban/missionLink";
 import { LEVELS, modelLabel } from "@/mission/router";
+import { linkedBoards } from "@/kanban/orchestrate";
 import { agentState, linkedClaudeAgents, missionOf, orchestratorShown, setMission, updateMember } from "@/mission/store";
 import { terminalText } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
@@ -41,6 +43,7 @@ export function orchestratorTools() {
                 agent: { type: "string", description: d.planAgent },
                 budget_min: { type: "integer", minimum: 1 },
                 level: { type: "string", enum: ["low", "medium", "high", "extreme"], description: d.planLevel },
+                card: { type: "string", description: d.planCard },
               },
               required: ["title", "brief", "agent", "budget_min"],
             },
@@ -49,6 +52,7 @@ export function orchestratorTools() {
         required: ["name", "task", "subtasks"],
       },
     },
+    { name: "board", description: d.board, inputSchema: NO_ARGS },
     { name: "team", description: d.team, inputSchema: NO_ARGS },
     {
       name: "read_output",
@@ -86,7 +90,7 @@ export function orchestratorTools() {
 }
 
 /** Internal names of the orchestrator's tools (`./protocol.ts`). */
-export const ORCHESTRATOR_ONLY = new Set(["mission", "proposer_plan", "equipe", "lire_sortie", "ecrire", "prolonger", "interrompre", "reattribuer", "fusionner", "terminer", "remote_control"]);
+export const ORCHESTRATOR_ONLY = new Set(["mission", "proposer_plan", "equipe", "lire_sortie", "ecrire", "prolonger", "interrompre", "reattribuer", "fusionner", "terminer", "remote_control", "board"]);
 
 const json = (value: unknown) => said(JSON.stringify(value, null, 2));
 const formed = (mission: Mission) => mission.state === "en_cours" || mission.state === "terminee";
@@ -115,6 +119,7 @@ function describeMission(orchestratorId: string, mission: Mission): ToolResult {
         budget_min: s.budgetMin,
         level: s.level ? outLevel(s.level) : null,
         model: mission.router && s.level ? LEVELS[s.level].modelLabel : null,
+        card: s.card ?? null,
       })) ?? null,
     linked_agents: orchestratorShown(orchestratorId)
       ? linkedClaudeAgents(orchestratorId)
@@ -132,13 +137,21 @@ function proposePlan(orchestratorId: string, mission: Mission, args: Record<stri
   if (mission.state === "terminee") return refused(t().orchestrator.finished);
   const named = Array.isArray(args.sous_taches) && args.sous_taches.some((s) => !sameName(String((s as Record<string, unknown> | null)?.agent ?? ""), NEW_AGENT));
   if (named && !orchestratorShown(orchestratorId)) return refused(t().orchestrator.hiddenWorkspace);
-  const result = proposedPlan(args, mission, linkedClaudeAgents(orchestratorId).map((a) => a.name));
+  const cards = linkedBoards(orchestratorId).flatMap(({ board }) => Object.keys(board.cards));
+  const result = proposedPlan(args, mission, linkedClaudeAgents(orchestratorId).map((a) => a.name), cards);
   if (typeof result === "string") return refused(result);
   setMission(orchestratorId, { state: "plan", ...result, error: undefined });
   return said(t().orchestrator.proposed(result.plan.length));
 }
 
 const timeText = (spent: number | undefined, budget: number) => (spent === undefined ? `? / ${budget} min` : `${Math.floor(spent)} / ${budget} min`);
+
+/** `board`: the Kanban boards handed to this orchestrator. */
+function describeBoards(orchestratorId: string): ToolResult {
+  const boards = linkedBoards(orchestratorId);
+  if (boards.length === 0) return said(t().orchestrator.noBoard);
+  return json(boards.map(({ nodeId, board }) => boardView(nodeId, board)));
+}
 
 function describeTeam(mission: Mission): ToolResult {
   if (!formed(mission)) return refused(t().orchestrator.notFormed);
@@ -296,6 +309,8 @@ export async function orchestratorTool(orchestratorId: string, name: string, arg
       return finish(orchestratorId, mission, args);
     case "remote_control":
       return remote(orchestratorId, mission, args);
+    case "board":
+      return describeBoards(orchestratorId);
     default:
       return refused(t().router.unknown(name));
   }
