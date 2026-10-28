@@ -3,6 +3,7 @@ import type { NonDeleted, ExcalidrawEmbeddableElement } from "@excalidraw/excali
 import { nodeKindOf } from "@/canvas/nodeElement";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { CrashNotice } from "@/shell/CrashNotice";
+import { KanbanNode } from "./kanban/KanbanNode";
 import { OrchestratorNode } from "./orchestrator/OrchestratorNode";
 import { TerminalNode } from "./terminal/TerminalNode";
 import { useMessages } from "@/i18n";
@@ -25,6 +26,8 @@ function NodeOfKind({ element }: { element: NonDeleted<ExcalidrawEmbeddableEleme
   switch (nodeKindOf(element)) {
     case "terminal":
       return <TerminalNode nodeId={element.id} />;
+    case "kanban":
+      return <KanbanNode nodeId={element.id} />;
     case "orchestrator":
       return <OrchestratorNode nodeId={element.id} />;
     default:
