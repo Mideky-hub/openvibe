@@ -3,6 +3,7 @@ import { agentsStore } from "@/fleet/agentsStore";
 import { pauseAll, resumeAll, workspaceTerminalIds } from "@/fleet/broadcast";
 import { AGENTS } from "@/fleet/catalog";
 import { launchAt, launchFour, newConsole, placeOrchestrator } from "@/fleet/quickActions";
+import { placeKanban } from "@/kanban/place";
 import type { AgentId } from "@/ipc/pty";
 import type { Command } from "../command";
 import { requestUi } from "../uiRequests";
@@ -49,6 +50,7 @@ export const AGENT_COMMANDS: readonly Command[] = [
   command("agent.console", { section, available: inProject, run: (ctx) => newConsole(ctx.at) }),
   command("agent.four", { section, available: inProject, run: (ctx) => launchFour(ctx.at) }),
   command("agent.orchestrator", { section, available: inProject, run: (ctx) => placeOrchestrator(ctx.at) }),
+  command("studio.kanban", { section, available: inProject, run: (ctx) => placeKanban(ctx.at) }),
   command("group.compose", {
     section,
     available: inProject,
