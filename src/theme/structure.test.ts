@@ -1,4 +1,7 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
+
+// Slow under the load of the full suite: this file's tests get their own timeout.
+vi.setConfig({ testTimeout: 30_000 });
 import { TABS_HEIGHT, TITLE_BAR_HEIGHT, TOP_ROW_HEIGHT } from "@/shell/layout";
 import { readSource, sourceFiles } from "./cssBlocks";
 

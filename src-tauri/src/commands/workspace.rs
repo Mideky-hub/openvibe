@@ -17,8 +17,10 @@ pub async fn create_workspace(
     db: State<'_, Db>,
     project_id: String,
     name: String,
+    kind: Option<String>,
 ) -> AppResult<Workspace> {
-    db.with(|conn| workspaces::create(conn, &project_id, &name))
+    let kind = kind.unwrap_or_else(|| "canvas".to_string());
+    db.with(|conn| workspaces::create(conn, &project_id, &name, &kind))
 }
 
 #[tauri::command]

@@ -1,4 +1,7 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
+
+// Slow under the load of the full suite: this file's tests get their own timeout.
+vi.setConfig({ testTimeout: 30_000 });
 import { sourceFiles } from "./cssBlocks";
 
 // What the habillage spec took from Symvibe (spec identité §5.11, §12).

@@ -63,8 +63,10 @@ export const catalogMessages = defineMessages(
       "project.home": e("Accueil", "projets", "accueil"),
       "project.close": e("Fermer le projet", "fermer", "projet"),
       "palette.functions": e("Rechercher une fonction…", "fonction", "commande", "action"),
+      "editor.goToLine": e("Aller à la ligne…", "ligne", "colonne", "code", "éditeur"),
 
       "workspace.new": e("Nouveau workspace", "onglet", "nouveau", "workspace"),
+      "workspace.code": e("Code Studio", "code", "ide", "éditeur", "fichiers", "workspace"),
       "workspace.rename": e("Renommer le workspace", "onglet", "nom", "workspace"),
       "workspace.delete": e("Supprimer le workspace", "onglet", "supprimer", "workspace"),
 
@@ -74,6 +76,7 @@ export const catalogMessages = defineMessages(
       "agent.console": e("Nouvelle console", "console", "terminal"),
       "agent.four": e("Lancer 4 agents", "quatre", "groupe", "agents"),
       "agent.orchestrator": e("Orchestrateur", "orchestrateur", "chef"),
+      "studio.kanban": e("Kanban", "kanban", "tableau", "tâches", "cartes", "colonnes"),
       "group.compose": e("Composer un groupe…", "groupe", "composer", "rôle"),
       "agents.pauseAll": e("Tout mettre en pause", "pause", "interrompre", "tout"),
       "agents.resumeAll": e("Tout reprendre", "reprendre", "continuer", "tout"),
@@ -184,8 +187,10 @@ export const catalogMessages = defineMessages(
       "project.home": e("Home", "projects", "home"),
       "project.close": e("Close the project", "close", "project"),
       "palette.functions": e("Search for a function…", "function", "command", "action"),
+      "editor.goToLine": e("Go to line…", "line", "column", "code", "editor"),
 
       "workspace.new": e("New workspace", "tab", "new", "workspace"),
+      "workspace.code": e("Code Studio", "code", "ide", "editor", "files", "workspace"),
       "workspace.rename": e("Rename workspace", "tab", "name", "workspace"),
       "workspace.delete": e("Delete the workspace", "tab", "delete", "remove", "workspace"),
 
@@ -195,6 +200,7 @@ export const catalogMessages = defineMessages(
       "agent.console": e("New console", "console", "terminal"),
       "agent.four": e("Launch 4 agents", "four", "group", "agents"),
       "agent.orchestrator": e("Orchestrator", "orchestrator", "lead"),
+      "studio.kanban": e("Kanban", "kanban", "board", "tasks", "cards", "columns"),
       "group.compose": e("Compose a group…", "group", "compose", "role"),
       "agents.pauseAll": e("Pause all", "pause", "interrupt", "all"),
       "agents.resumeAll": e("Resume all", "resume", "continue", "all"),

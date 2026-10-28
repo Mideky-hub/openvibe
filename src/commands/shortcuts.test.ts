@@ -21,6 +21,8 @@ describe("shortcutOf (spec fenêtre §6.1, §6.2)", () => {
     expect(shortcutOf(key({ key: "P", ctrlKey: true, shiftKey: true }))).toBe("Ctrl+Maj+P");
     expect(shortcutOf(key({ key: "Escape", shiftKey: true }))).toBe("Maj+Échap");
     expect(shortcutOf(key({ key: "A", ctrlKey: true, shiftKey: true }))).toBe("Ctrl+Maj+A");
+    expect(shortcutOf(key({ key: "g", ctrlKey: true }))).toBe("Ctrl+G");
+    expect(shortcutOf(key({ key: "G", ctrlKey: true, shiftKey: true }))).toBeNull();
   });
 
   it("reads the letter as printed: P on an AZERTY keyboard, whatever the case", () => {

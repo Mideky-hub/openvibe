@@ -46,6 +46,13 @@ export const nodesMessages = defineMessages(
       doubleClickRename: "Double-clic pour renommer",
       review: "Revue des changements",
     },
+    file: {
+      notFound: "Fichier introuvable",
+      refresh: "Rafraîchir",
+      loading: "Chargement…",
+      readFailed: (error: string) => `Lecture impossible : ${error}`,
+      empty: "Fichier vide",
+    },
     terminal: {
       notFound: "Terminal introuvable",
       duplicate: "Dupliquer",
@@ -125,6 +132,13 @@ export const nodesMessages = defineMessages(
       options: "Options…",
       doubleClickRename: "Double-click to rename",
       review: "Review changes",
+    },
+    file: {
+      notFound: "File not found",
+      refresh: "Refresh",
+      loading: "Loading…",
+      readFailed: (error: string) => `Could not read: ${error}`,
+      empty: "Empty file",
     },
     terminal: {
       notFound: "Terminal not found",

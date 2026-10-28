@@ -28,6 +28,15 @@ describe("proposedPlan (spec orchestrateur §7.2)", () => {
     expect(proposedPlan({ tache: "x", sous_taches: [task("nouveau")] }, NEW_MISSION, [])).toContain("nom");
     expect(proposedPlan(args(), NEW_MISSION, [])).toContain("au moins une");
   });
+
+  it("keeps the Kanban card of a sub-task, when its boards have it", () => {
+    const result = proposedPlan(args({ ...task("nouveau"), card: "c1" }), NEW_MISSION, [], ["c1"]);
+    expect(typeof result !== "string" && result.plan[0].card).toBe("c1");
+    expect(proposedPlan(args({ ...task("nouveau"), card: "zz" }), NEW_MISSION, [], ["c1"])).toContain("zz");
+    // Kept through a save; an unreadable card is dropped.
+    const plan = [{ title: "Login", brief: "b", agent: "nouveau", budgetMin: 5, card: "c1" }, { title: "API", brief: "b", agent: "nouveau", budgetMin: 5, card: 3 }];
+    expect(readMission({ ...NEW_MISSION, plan })!.plan!.map((s) => s.card)).toEqual(["c1", undefined]);
+  });
 });
 
 describe("a refused plan in English (spec première version §7.1)", () => {

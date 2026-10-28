@@ -141,7 +141,7 @@ describe("the palette component in English", () => {
   it("writes its placeholder, footer and empty state in English", async () => {
     await act(async () => openPalette("goTo", home));
     const input = document.querySelector<HTMLInputElement>("[cmdk-input]")!;
-    expect(input.placeholder).toBe("Go to a terminal, a group, a workspace… (> for functions)");
+    expect(input.placeholder).toBe("Go to a terminal, a workspace, a file (file:line)… (> for functions)");
     expect(document.body.textContent).toContain("↑↓ navigate · Enter open · Esc close");
     await act(async () => setPaletteQuery("zzzzzz"));
     expect(document.body.textContent).toContain("No results");

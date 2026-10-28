@@ -3,12 +3,14 @@ mod commands;
 mod db;
 mod error;
 mod git;
+mod github;
 mod i18n;
 mod logging;
 mod mission;
 mod process;
 mod pty;
 mod review;
+mod studio;
 mod sync;
 
 use std::time::Duration;
@@ -106,11 +108,21 @@ pub fn run() {
             commands::project::delete_project,
             commands::workspace::set_workspace_pantheon,
             commands::git::git_status,
+            commands::github::github_detect_repo,
+            commands::github::github_list_issues,
+            commands::github::github_list_project_items,
+            commands::github::github_project_statuses,
+            commands::github::github_create_issue,
+            commands::github::github_set_issue_state,
+            commands::github::github_move_project_item,
             commands::review::review_changes,
             commands::review::review_file_diff,
             commands::review::review_files,
             commands::review::review_read_file,
             commands::review::review_default_base,
+            commands::studio::studio_tree,
+            commands::studio::studio_read,
+            commands::studio::studio_write,
             commands::mission::mission_prepare,
             commands::mission::mission_add_agent,
             commands::mission::mission_merge,

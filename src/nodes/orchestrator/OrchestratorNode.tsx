@@ -103,7 +103,7 @@ export function OrchestratorNode({ nodeId }: { nodeId: string }) {
           <X />
         </HeaderButton>
       </header>
-      <div className="relative min-h-0 flex-1 bg-ov-terminal px-1 pt-1">
+      <div className="relative min-h-[120px] flex-1 bg-ov-terminal px-1 pt-1">
         <div ref={hostRef} className="relative h-full w-full overflow-hidden" />
         {session && <ResumeCard nodeId={nodeId} payload={session} status={status} />}
         {status.state === "error" && status.kind === "toolsUnavailable" && <ToolsUnavailable nodeId={nodeId} message={status.message} />}
