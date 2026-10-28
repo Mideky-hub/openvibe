@@ -93,9 +93,33 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
 
   it("lists them for the orchestrator only, and each side refuses the other's", async () => {
     const list = (await answer({ callId: 1, nodeId: "chef", method: "tools/list", params: {} })) as { tools: { name: string }[] };
-    expect(list.tools.map((t) => t.name)).toEqual(["mission", "propose_plan", "team", "read_output", "write", "extend", "interrupt", "reassign", "merge", "finish", "remote_control"]);
+    expect(list.tools.map((t) => t.name)).toEqual(["mission", "propose_plan", "board", "team", "read_output", "write", "extend", "interrupt", "reassign", "merge", "finish", "remote_control"]);
     expect(textOf(await call("isis", "propose_plan", plan))).toBe("Outil réservé à l'orchestrateur.");
     expect(textOf(await call("chef", "report", { summary: "x", status: "done" }))).toBe("Outil réservé aux agents.");
+    expect(textOf(await call("isis", "board", {}))).toBe("Outil réservé à l'orchestrateur.");
+  });
+
+  it("reads the Kanban boards handed to it with board", async () => {
+    expect(textOf(await call("chef", "board", {}))).toContain("Aucun board Kanban");
+    await nodesStore.getState().create("k1", {
+      workspaceId: "w1",
+      kind: "kanban",
+      payload: {
+        columns: [{ id: "todo", title: "À faire", cardIds: ["c1"] }],
+        cards: { c1: { id: "c1", title: "Login", notes: "", priority: "none" } },
+        orchestrator: { nodeId: "chef", columnId: "todo" },
+      },
+    });
+    try {
+      const boards = JSON.parse(textOf(await call("chef", "board", {})));
+      expect(boards).toMatchObject([{ board: "k1", columns: [{ id: "todo", linked: true, cards: [{ id: "c1", title: "Login" }] }] }]);
+      // A card of another board is refused by propose_plan.
+      const wrong = await call("chef", "propose_plan", { name: "K", task: "t", subtasks: [{ title: "Login", brief: "b", agent: "new", budget_min: 5, card: "zz" }] });
+      expect(textOf(wrong)).toContain("zz");
+    } finally {
+      // Unlinked: the next tests see no board.
+      nodesStore.getState().update("k1", { orchestrator: undefined });
+    }
   });
 
   it("takes a plan that waits for the go-ahead, and describes it in mission()", async () => {

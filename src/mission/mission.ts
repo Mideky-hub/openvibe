@@ -14,6 +14,8 @@ export interface SubTask {
   budgetMin: number;
   /** Its difficulty: with the router, its agent's model (spec maj §3). */
   level?: Level;
+  /** The Kanban card it handles (`board`): it follows the sub-task on its board. */
+  card?: string;
 }
 
 export interface Report {
@@ -129,8 +131,11 @@ function isSubTask(raw: unknown): raw is SubTask {
 
 function readSubTask(task: SubTask): SubTask {
   const { title, brief, agent, budgetMin } = task;
+  const read: SubTask = { title, brief, agent, budgetMin };
   const level = readLevel(task.level);
-  return level ? { title, brief, agent, budgetMin, level } : { title, brief, agent, budgetMin };
+  if (level) read.level = level;
+  if (typeof task.card === "string" && task.card) read.card = task.card;
+  return read;
 }
 
 /** A saved mission; undefined when absent or unreadable. A launch cut short by a restart is back to its plan. */
@@ -155,11 +160,15 @@ export function readMission(raw: unknown): Mission | undefined {
   return mission;
 }
 
-/** `propose_plan`'s arguments (internal names, `@/mcp/protocol`) as a plan, or what is wrong (spec §7.2). `linked`: names of the linked Claude agents. */
+/**
+ * `propose_plan`'s arguments (internal names, `@/mcp/protocol`) as a plan, or what is wrong (spec §7.2).
+ * `linked`: names of the linked Claude agents; `cards`: ids of the cards of its linked boards.
+ */
 export function proposedPlan(
   args: Record<string, unknown>,
   mission: Mission,
   linked: readonly string[],
+  cards: readonly string[] = [],
 ): { name: string; task: string; plan: SubTask[] } | string {
   const e = messages(agentMessages).plan;
   const name = text(args.nom);
@@ -187,7 +196,12 @@ export function proposedPlan(
     const level = readLevel(r.niveau);
     if (given && !level) return e.level(n);
     if (mission.router && !level) return e.levelRouter(n);
-    plan.push(level ? { title, brief, agent: known, budgetMin: budget, level } : { title, brief, agent: known, budgetMin: budget });
+    const card = r.card === undefined || r.card === null ? "" : text(r.card);
+    if (r.card !== undefined && r.card !== null && !cards.includes(card)) return e.card(n, String(r.card));
+    const task: SubTask = { title, brief, agent: known, budgetMin: budget };
+    if (level) task.level = level;
+    if (card) task.card = card;
+    plan.push(task);
   }
   const total = plan.reduce((sum, s) => sum + s.budgetMin, 0);
   if (mission.budgetMin !== undefined && total > mission.budgetMin) {

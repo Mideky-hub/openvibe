@@ -13,6 +13,7 @@ import { missionAddAgent, missionCleanup, missionDiscard, missionMerge, missionP
 import { ptySendText, ptyWrite } from "@/ipc/pty";
 import { newConversation, newTerminalPayload } from "@/nodes/terminal/launch";
 import { freshText, quietFor, relaunchTerminal, stopTerminal } from "@/nodes/terminal/registry";
+import { startMissionCards } from "@/kanban/orchestrate";
 import { agentMessages } from "@/mcp/messages";
 import { outReport } from "@/mcp/protocol";
 import { nodesStore, sessionOf, terminalOf } from "@/store/nodes";
@@ -185,6 +186,7 @@ export async function launchMission(orchestratorId: string): Promise<void> {
   const names = team.members.map((m) => `${m.name} (${m.task})`).join(", ");
   notify(orchestratorId, t().lines.goAhead(names, team.branch));
   const plan = mission.plan;
+  void startMissionCards(orchestratorId, team.members, plan).catch(() => undefined);
   team.members.forEach((member, i) => void assign(orchestratorId, member, mission.name ?? "", plan[i], restarts.get(member.nodeId)));
 }
 

@@ -33,6 +33,8 @@ export const kanbanNodeMessages = defineMessages<{
   remove: string;
   overdue: string;
   githubIssue: (repo: string, number: number) => string;
+  agentChip: (name: string) => string;
+  orchestrator: { plan: string; create: string; linked: (name: string) => string };
   github: {
     boardMenu: string;
     link: string;
@@ -65,6 +67,8 @@ export const kanbanNodeMessages = defineMessages<{
     columnMenu: (title) => `Menu de la colonne ${title}`,
     rename: "Renommer",
     removeColumn: "Supprimer la colonne",
+    agentChip: (name) => `${name} y travaille`,
+    orchestrator: { plan: "Planifier avec l'orchestrateur", create: "Nouvel orchestrateur", linked: (name) => `${name} (relié)` },
     doubleClickRename: "Double-clic pour renommer",
     cardCount: (count) => `${count} carte${count > 1 ? "s" : ""}`,
     newCard: "Nouvelle carte",
@@ -119,6 +123,8 @@ export const kanbanNodeMessages = defineMessages<{
     columnMenu: (title) => `${title} column menu`,
     rename: "Rename",
     removeColumn: "Delete the column",
+    agentChip: (name) => `${name} is working on it`,
+    orchestrator: { plan: "Plan with the orchestrator", create: "New orchestrator", linked: (name) => `${name} (linked)` },
     doubleClickRename: "Double-click to rename",
     cardCount: (count) => `${count} card${count === 1 ? "" : "s"}`,
     newCard: "New card",

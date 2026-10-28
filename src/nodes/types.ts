@@ -72,6 +72,8 @@ export interface KanbanCard {
   due?: string;
   priority: KanbanPriority;
   github?: KanbanGithubLink;
+  /** The mission agent working on it: shown as a chip. */
+  agent?: string;
 }
 
 export interface KanbanColumn {
@@ -93,6 +95,14 @@ export interface KanbanPayload {
   cards: Record<string, KanbanCard>;
   /** Set by « Lier à GitHub ». */
   github?: KanbanBoardLink;
+  /** Set by « Planifier avec l'orchestrateur »: the orchestrator node planning one of its columns. */
+  orchestrator?: KanbanOrchestratorLink;
+}
+
+/** A board's column handed to an orchestrator node. */
+export interface KanbanOrchestratorLink {
+  nodeId: string;
+  columnId: string;
 }
 
 
@@ -165,6 +175,7 @@ function readKanbanCard(id: string, raw: unknown): KanbanCard | null {
   if (typeof r.due === "string" && ISO_DATE.test(r.due)) card.due = r.due;
   const github = readGithubLink(r.github);
   if (github) card.github = github;
+  if (typeof r.agent === "string" && r.agent.trim()) card.agent = r.agent;
   return card;
 }
 
@@ -199,6 +210,10 @@ export function readKanbanPayload(raw: unknown): KanbanPayload {
   const payload: KanbanPayload = { columns, cards };
   const github = readBoardLink(r.github);
   if (github) payload.github = github;
+  const orchestrator = r.orchestrator as Record<string, unknown> | undefined;
+  if (orchestrator && typeof orchestrator.nodeId === "string" && orchestrator.nodeId && typeof orchestrator.columnId === "string") {
+    payload.orchestrator = { nodeId: orchestrator.nodeId, columnId: orchestrator.columnId };
+  }
   return payload;
 }
 
