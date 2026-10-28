@@ -49,16 +49,17 @@ export async function orchestrateGroup(groupId: string) {
   });
 }
 
-/** The menu's "Orchestrateur", placed with a click like an agent (spec habillage §10.1). */
-export async function addOrchestrator(workspaceId: string, center: Point) {
+/** The menu's "Orchestrateur", placed with a click like an agent (spec habillage §10.1). Its id, null when none was made. */
+export async function addOrchestrator(workspaceId: string, center: Point): Promise<string | null> {
   const api = canvasStore.getState().api;
-  if (!api || (await refusedWithoutClaude())) return;
+  if (!api || (await refusedWithoutClaude())) return null;
   const element = createNodeElement("orchestrator", center);
   await createOrchestrator(element.id, workspaceId);
   api.updateScene({
     elements: [...api.getSceneElementsIncludingDeleted(), element],
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
+  return element.id;
 }
 
 /** One click of "Relier" (spec habillage §13). */

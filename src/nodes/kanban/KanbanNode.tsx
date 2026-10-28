@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { cn } from "cn";
-import { Calendar, CircleDot, KanbanSquare, MoreHorizontal, Plus, RefreshCw } from "lucide-react";
+import { Bot, Calendar, CircleDot, KanbanSquare, MoreHorizontal, Plus, RefreshCw } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -34,6 +34,7 @@ import { nodesStore, useNodes } from "@/store/nodes";
 import { KANBAN_PRIORITIES, type KanbanBoardLink, type KanbanCard, type KanbanColumn, type KanbanPayload, type KanbanPriority } from "@/nodes/types";
 import { KANBAN_CARD_MIME } from "./drag";
 import { kanbanNodeMessages } from "./messages";
+import { PlanMenu } from "./PlanMenu";
 
 export { KANBAN_CARD_MIME } from "./drag";
 
@@ -213,6 +214,7 @@ export function KanbanNode({ nodeId }: { nodeId: string }) {
               <ColumnView
                 key={column.id}
                 t={t}
+                boardId={nodeId}
                 column={column}
                 cards={column.cardIds.map((id) => board.cards[id]).filter((c): c is KanbanCard => !!c)}
                 renaming={renaming === column.id}
@@ -377,6 +379,7 @@ function LinkDialog({
 
 interface ColumnViewProps {
   t: Messages;
+  boardId: string;
   column: KanbanColumn;
   cards: KanbanCard[];
   renaming: boolean;
@@ -439,6 +442,7 @@ function ColumnView(props: ColumnViewProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem onSelect={props.onRenameStart}>{t.rename}</DropdownMenuItem>
+              <PlanMenu boardId={props.boardId} columnId={column.id} />
               <DropdownMenuItem variant="destructive" onSelect={props.onRemove}>
                 {t.removeColumn}
               </DropdownMenuItem>
@@ -510,7 +514,7 @@ function CardView({
     >
       <span className="absolute inset-y-0 left-0 w-1" style={{ background: PRIORITY_BAR[card.priority] }} aria-label={t.priorities[card.priority]} />
       <p className="text-[13px] leading-snug font-medium break-words text-ov-text">{card.title}</p>
-      {(card.due || card.github) && (
+      {(card.due || card.github || card.agent) && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {card.due && (
             <span
@@ -539,6 +543,12 @@ function CardView({
             >
               <CircleDot className="size-3" />#{card.github.number}
             </button>
+          )}
+          {card.agent && (
+            <span title={t.agentChip(card.agent)} className="inline-flex items-center gap-1 rounded bg-ov-accent/15 px-1.5 py-0.5 text-[11px] text-ov-accent">
+              <Bot className="size-3" />
+              {card.agent}
+            </span>
           )}
         </div>
       )}
