@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readKanbanPayload, type KanbanPayload } from "@/nodes/types";
-import { boardView, doneTarget, inProgressColumn, linkedTo, linkOrchestrator, planRequest, startCard, withInProgressColumn, type RequestTexts } from "./missionLink";
+import { boardView, doneTarget, flagCard, inProgressColumn, setCardAgent, linkedTo, linkOrchestrator, planRequest, startCard, withInProgressColumn, type RequestTexts } from "./missionLink";
 
 const ids = () => {
   let n = 0;
@@ -55,6 +55,17 @@ describe("linkOrchestrator", () => {
     expect(read.cards.a.agent).toBe("Amon");
     expect(read.cards.b.agent).toBeUndefined();
   });
+
+  it("reads a chip's alert, never without an agent", () => {
+    const raw = JSON.parse(JSON.stringify(board()));
+    raw.cards.a = { ...raw.cards.a, agent: "Amon", agentStatus: "blocked" };
+    raw.cards.b = { ...raw.cards.b, agentStatus: "failed" };
+    const read = readKanbanPayload(raw);
+    expect(read.cards.a.agentStatus).toBe("blocked");
+    expect(read.cards.b.agentStatus).toBeUndefined();
+    raw.cards.a.agentStatus = "weird";
+    expect(readKanbanPayload(raw).cards.a.agentStatus).toBeUndefined();
+  });
 });
 
 describe("planRequest", () => {
@@ -104,6 +115,37 @@ describe("startCard", () => {
   });
 });
 
+describe("the agent chip", () => {
+  it("names the agent a sub-task went to, its alert cleared", () => {
+    const flagged = flagCard(setCardAgent(board(), "a", "Amon"), "a", "failed");
+    expect(flagged.cards.a).toMatchObject({ agent: "Amon", agentStatus: "failed" });
+    const handed = setCardAgent(flagged, "a", "Thot");
+    expect(handed.cards.a.agent).toBe("Thot");
+    expect(handed.cards.a).not.toHaveProperty("agentStatus");
+    expect(setCardAgent(board(), "zzz", "Thot").cards).toEqual(board().cards);
+  });
+
+  it("goes on alert for blocked or failed, the card staying in its column", () => {
+    const started = startCard(board(), "a", "Amon", "En cours", ids())!.board;
+    const blocked = flagCard(started, "a", "blocked");
+    expect(blocked.cards.a.agentStatus).toBe("blocked");
+    expect(blocked.columns).toBe(started.columns);
+    expect(flagCard(blocked, "a", "blocked")).toBe(blocked);
+    expect(flagCard(blocked, "a", "failed").cards.a.agentStatus).toBe("failed");
+  });
+
+  it("flags only a card with an agent", () => {
+    const b = board();
+    expect(flagCard(b, "a", "blocked")).toBe(b);
+    expect(flagCard(b, "zzz", "blocked")).toBe(b);
+  });
+
+  it("is cleared when the card starts again", () => {
+    const flagged = flagCard(setCardAgent(board(), "a", "Amon"), "a", "blocked");
+    expect(startCard(flagged, "a", "Amon", "En cours", ids())!.board.cards.a).not.toHaveProperty("agentStatus");
+  });
+});
+
 describe("doneTarget", () => {
   it("is the done column, until the card is in it", () => {
     const b = board();
@@ -129,6 +171,7 @@ describe("boardView", () => {
       due: "2026-11-02",
       github: { repo: "me/app", number: 12, url: "u", state: "open" },
       agent: null,
+      agent_status: null,
     });
     expect(view.columns[0].cards[1].github).toBeNull();
   });

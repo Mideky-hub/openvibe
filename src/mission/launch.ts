@@ -13,7 +13,7 @@ import { missionAddAgent, missionCleanup, missionDiscard, missionMerge, missionP
 import { ptySendText, ptyWrite } from "@/ipc/pty";
 import { newConversation, newTerminalPayload } from "@/nodes/terminal/launch";
 import { freshText, quietFor, relaunchTerminal, stopTerminal } from "@/nodes/terminal/registry";
-import { startMissionCards } from "@/kanban/orchestrate";
+import { reassignMissionCard, startMissionCards } from "@/kanban/orchestrate";
 import { agentMessages } from "@/mcp/messages";
 import { outReport } from "@/mcp/protocol";
 import { nodesStore, sessionOf, terminalOf } from "@/store/nodes";
@@ -325,6 +325,7 @@ export async function reassignTask(orchestratorId: string, fromNodeId: string, t
   const latest = missionOf(nodesStore.getState().nodes[orchestratorId]) ?? mission;
   const members = latest.members.map((m) => (m.nodeId === from.nodeId ? { ...m, handedTo: to.name } : m.nodeId === to.nodeId ? to : m));
   setMission(orchestratorId, { members: members.some((m) => m.nodeId === to.nodeId) ? members : [...members, to] });
+  reassignMissionCard(orchestratorId, latest.plan, task.title, to.name);
   // The previous agent stops: its sub-task is another's now (final review H3).
   await pauseAgents([from.nodeId]).catch(() => 0);
   if (isRunning(from.nodeId)) {

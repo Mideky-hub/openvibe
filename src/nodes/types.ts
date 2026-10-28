@@ -74,7 +74,11 @@ export interface KanbanCard {
   github?: KanbanGithubLink;
   /** The mission agent working on it: shown as a chip. */
   agent?: string;
+  /** Its agent reported it blocked or failed: the chip turns to an alert. */
+  agentStatus?: KanbanAgentStatus;
 }
+
+export type KanbanAgentStatus = "blocked" | "failed";
 
 export interface KanbanColumn {
   id: string;
@@ -175,7 +179,10 @@ function readKanbanCard(id: string, raw: unknown): KanbanCard | null {
   if (typeof r.due === "string" && ISO_DATE.test(r.due)) card.due = r.due;
   const github = readGithubLink(r.github);
   if (github) card.github = github;
-  if (typeof r.agent === "string" && r.agent.trim()) card.agent = r.agent;
+  if (typeof r.agent === "string" && r.agent.trim()) {
+    card.agent = r.agent;
+    if (r.agentStatus === "blocked" || r.agentStatus === "failed") card.agentStatus = r.agentStatus;
+  }
   return card;
 }
 

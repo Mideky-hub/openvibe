@@ -52,6 +52,7 @@ export function updateCard(board: KanbanPayload, cardId: string, patch: Partial<
   if (!card) return board;
   const next: KanbanCard = { ...card, ...patch };
   if (!next.due) delete next.due;
+  if (!next.agentStatus) delete next.agentStatus;
   return { ...board, cards: { ...board.cards, [cardId]: next } };
 }
 
