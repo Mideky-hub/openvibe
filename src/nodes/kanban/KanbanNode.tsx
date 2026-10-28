@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
+import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
 import { cn } from "cn";
 import { Calendar, CircleDot, KanbanSquare, MoreHorizontal, Plus, RefreshCw } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -27,6 +28,8 @@ import {
   type CardDraft,
   type DuePreset,
 } from "@/kanban/board";
+import { kanbanWidth } from "@/kanban/width";
+import { canvasStore, useCanvas } from "@/canvas/canvasStore";
 import { dropCardOutside, startCardDrag } from "@/kanban/dropOnTerminal";
 import { createIssueForCard, detectRepo, linkBoard, moveCardWithGithub, parseProject, syncBoard } from "@/kanban/github";
 import { useNativeKeyDown } from "@/lib/useNativeKeyDown";
@@ -68,6 +71,18 @@ function commit(nodeId: string, change: (board: KanbanPayload) => KanbanPayload)
   if (next !== board) nodesStore.getState().update(nodeId, { columns: next.columns, cards: next.cards });
 }
 
+/** The node grows (or shrinks) to the right so every column shows; its height stays the user's. Not an undo step. */
+function fitWidth(nodeId: string, columnCount: number) {
+  const api = canvasStore.getState().api;
+  const element = api?.getSceneElementsIncludingDeleted().find((e) => e.id === nodeId);
+  const width = kanbanWidth(columnCount);
+  if (!api || !element || element.isDeleted || element.width === width) return;
+  api.updateScene({
+    elements: api.getSceneElementsIncludingDeleted().map((e) => (e.id === nodeId ? newElementWith(e, { width }) : e)),
+    captureUpdate: CaptureUpdateAction.NEVER,
+  });
+}
+
 /** A Kanban board on the canvas (issue #29): columns of cards, dragged between them or onto a terminal. */
 export function KanbanNode({ nodeId }: { nodeId: string }) {
   const t = useMessages(kanbanNodeMessages);
@@ -90,6 +105,12 @@ export function KanbanNode({ nodeId }: { nodeId: string }) {
     element.addEventListener("wheel", listener);
     return () => element.removeEventListener("wheel", listener);
   }, [record?.kind]);
+
+  const api = useCanvas((s) => s.api);
+  const columnCount = record?.kind === "kanban" ? record.payload.columns.length : null;
+  useEffect(() => {
+    if (api && columnCount !== null) fitWidth(nodeId, columnCount);
+  }, [api, nodeId, columnCount]);
 
   if (record?.kind !== "kanban") return null;
   const board = record.payload;
