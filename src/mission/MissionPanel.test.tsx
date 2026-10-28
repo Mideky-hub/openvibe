@@ -121,3 +121,21 @@ it("shows the team and the cleanup in English", async () => {
   await act(async () => button("Clean up the mission").click());
   expect(toast.success).toHaveBeenCalledWith("Worktrees removed: auth-isis, auth");
 });
+
+it("keeps the go-ahead and cleanup buttons outside the scrolling body", async () => {
+  await show({ state: "plan", name: "Auth", plan: [{ title: "Login", brief: "Fais le login", agent: "Isis", budgetMin: 20 }] });
+  const body = host.querySelector("[data-mission-body]")!;
+  expect(body.className).toContain("overflow-y-auto");
+  expect(body.className).toContain("min-h-0");
+  const launch = button("Lancer la mission");
+  expect(body.contains(launch)).toBe(false);
+  expect(launch.closest("[data-mission-actions]")?.className).toContain("shrink-0");
+  expect(host.querySelector("[data-mission]")?.className).not.toContain("overflow-y-auto");
+});
+
+it("keeps the cleanup button outside the scrolling body once the mission is over", async () => {
+  await show({ state: "terminee", name: "Auth", summary: "Fini.", members: [] });
+  const body = host.querySelector("[data-mission-body]")!;
+  expect(body.textContent).toContain("Fini.");
+  expect(body.contains(button("Nettoyer la mission"))).toBe(false);
+});
