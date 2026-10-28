@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { cn } from "cn";
-import { Calendar, CircleDot, KanbanSquare, MoreHorizontal, Plus } from "lucide-react";
+import { Calendar, CircleDot, KanbanSquare, MoreHorizontal, Plus, RefreshCw } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -18,7 +20,6 @@ import {
   cardText,
   dueOf,
   dueState,
-  moveCard,
   removeCard,
   removeColumn,
   renameColumn,
@@ -27,9 +28,10 @@ import {
   type DuePreset,
 } from "@/kanban/board";
 import { dropCardOutside, startCardDrag } from "@/kanban/dropOnTerminal";
+import { createIssueForCard, detectRepo, linkBoard, moveCardWithGithub, parseProject, syncBoard } from "@/kanban/github";
 import { useNativeKeyDown } from "@/lib/useNativeKeyDown";
 import { nodesStore, useNodes } from "@/store/nodes";
-import { KANBAN_PRIORITIES, type KanbanCard, type KanbanColumn, type KanbanPayload, type KanbanPriority } from "@/nodes/types";
+import { KANBAN_PRIORITIES, type KanbanBoardLink, type KanbanCard, type KanbanColumn, type KanbanPayload, type KanbanPriority } from "@/nodes/types";
 import { KANBAN_CARD_MIME } from "./drag";
 import { kanbanNodeMessages } from "./messages";
 
@@ -74,6 +76,8 @@ export function KanbanNode({ nodeId }: { nodeId: string }) {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [dragged, setDragged] = useState<string | null>(null);
   const [spot, setSpot] = useState<DropSpot | null>(null);
+  const [linking, setLinking] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
 
   // The wheel scrolls the board, not the canvas (Excalidraw listens below React's root).
@@ -89,6 +93,15 @@ export function KanbanNode({ nodeId }: { nodeId: string }) {
 
   if (record?.kind !== "kanban") return null;
   const board = record.payload;
+
+  const sync = async () => {
+    setSyncing(true);
+    try {
+      await syncBoard(nodeId);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const newColumn = () => {
     commit(nodeId, (b) => addColumn(b, t.newColumn));
@@ -134,7 +147,8 @@ export function KanbanNode({ nodeId }: { nodeId: string }) {
     e.preventDefault();
     const { index } = spotIn(e, columnId);
     const cardId = dragged;
-    commit(nodeId, (b) => moveCard(b, cardId, columnId, index));
+    // A linked card's issue follows on GitHub; the card moves locally either way.
+    void moveCardWithGithub(nodeId, cardId, columnId, index);
     setSpot(null);
   };
 
@@ -146,7 +160,43 @@ export function KanbanNode({ nodeId }: { nodeId: string }) {
       <header className="flex h-10 shrink-0 items-center gap-2 border-b border-ov-line px-3">
         <KanbanSquare className="size-4 shrink-0 text-ov-accent" />
         <span className="truncate text-[13px] font-semibold text-ov-text">{t.title}</span>
-        <span className="ml-auto font-mono text-[11px] text-muted-foreground">{t.cardCount(Object.keys(board.cards).length)}</span>
+        {board.github && (
+          <span className="truncate font-mono text-[11px] text-muted-foreground" title={t.github.linkedTo(board.github.repo)}>
+            {board.github.repo}
+          </span>
+        )}
+        <span className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground">{t.cardCount(Object.keys(board.cards).length)}</span>
+        {board.github && (
+          <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[12px]" disabled={syncing} onClick={() => void sync()}>
+            <RefreshCw className={cn("size-3.5", syncing && "animate-spin")} />
+            {syncing ? t.github.syncing : t.github.sync}
+          </Button>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={t.github.boardMenu}
+              className="grid size-7 shrink-0 place-items-center rounded text-muted-foreground hover:bg-ov-hover hover:text-ov-text"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem onSelect={() => setLinking(true)}>{board.github ? t.github.editLink : t.github.link}</DropdownMenuItem>
+            {board.github && (
+              <>
+                <DropdownMenuItem onSelect={() => void sync()}>{t.github.sync}</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onSelect={() => linkBoard(nodeId, null)}>
+                  {t.github.unlink}
+                </DropdownMenuItem>
+              </>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={newColumn}>{t.addColumn}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </header>
       <div ref={scroller} className="flex min-h-0 flex-1 gap-3 overflow-x-auto overflow-y-hidden p-3">
         {board.columns.length === 0 ? (
@@ -202,6 +252,7 @@ export function KanbanNode({ nodeId }: { nodeId: string }) {
         open={editing !== null && (editedCard !== undefined || editedColumn !== undefined)}
         title={editedCard ? t.editCard : t.addCardTo(editedColumn?.title ?? "")}
         initial={editedCard}
+        onCreateIssue={editedCard && !editedCard.github && board.github ? () => createIssueForCard(nodeId, editedCard.id) : undefined}
         onClose={() => setEditing(null)}
         onSave={(draft) => {
           if (editing?.mode === "new") commit(nodeId, (b) => addCard(b, editing.columnId, draft));
@@ -217,7 +268,110 @@ export function KanbanNode({ nodeId }: { nodeId: string }) {
             : undefined
         }
       />
+      {linking && (
+        <LinkDialog
+          t={t}
+          initial={board.github}
+          onClose={() => setLinking(false)}
+          onLink={(link) => {
+            linkBoard(nodeId, link);
+            setLinking(false);
+            void sync();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+const REPO = /^[\w.-]+\/[\w.-]+$/;
+
+/** « Lier à GitHub »: the repository, detected from the project's origin, and optionally a Project (v2). */
+function LinkDialog({
+  t,
+  initial,
+  onClose,
+  onLink,
+}: {
+  t: Messages;
+  initial?: KanbanBoardLink;
+  onClose: () => void;
+  onLink: (link: KanbanBoardLink) => void;
+}) {
+  const [repo, setRepo] = useState(initial?.repo ?? "");
+  const [project, setProject] = useState(initial?.project ? `${initial.project.owner}/${initial.project.number}` : "");
+  const [detecting, setDetecting] = useState(!initial);
+  const [notDetected, setNotDetected] = useState(false);
+
+  useEffect(() => {
+    if (initial) return;
+    let live = true;
+    void detectRepo()
+      .catch(() => null)
+      .then((found) => {
+        if (!live) return;
+        setDetecting(false);
+        if (found) setRepo((typed) => typed || found);
+        else setNotDetected(true);
+      });
+    return () => {
+      live = false;
+    };
+  }, [initial]);
+
+  const repoValid = REPO.test(repo.trim());
+  const parsedProject = project.trim() ? parseProject(project) : undefined;
+  const projectValid = parsedProject !== null;
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!repoValid || !projectValid) return;
+    const link: KanbanBoardLink = { repo: repo.trim() };
+    if (parsedProject) link.project = parsedProject;
+    onLink(link);
+  };
+
+  return (
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <form onSubmit={submit} className="grid gap-4">
+          <DialogHeader>
+            <DialogTitle>{t.github.linkTitle}</DialogTitle>
+          </DialogHeader>
+          <p className="text-[12px] text-muted-foreground">{t.github.linkHint}</p>
+          <div className="grid gap-1.5">
+            <Label htmlFor="kanban-github-repo">{t.github.repo}</Label>
+            <Input
+              id="kanban-github-repo"
+              autoFocus
+              value={repo}
+              placeholder={detecting ? t.github.detecting : t.github.repoPlaceholder}
+              onChange={(e) => setRepo(e.target.value)}
+            />
+            {repo.trim() && !repoValid && <p className="text-[12px] text-ov-danger">{t.github.repoInvalid}</p>}
+            {notDetected && !repo.trim() && <p className="text-[12px] text-muted-foreground">{t.github.notDetected}</p>}
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="kanban-github-project">{t.github.project}</Label>
+            <Input
+              id="kanban-github-project"
+              value={project}
+              placeholder={t.github.projectPlaceholder}
+              onChange={(e) => setProject(e.target.value)}
+            />
+            {!projectValid && <p className="text-[12px] text-ov-danger">{t.github.projectInvalid}</p>}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              {t.cancel}
+            </Button>
+            <Button type="submit" disabled={!repoValid || !projectValid}>
+              {t.github.confirm}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -371,16 +525,20 @@ function CardView({
             </span>
           )}
           {card.github && (
-            <a
-              href={card.github.url}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
               title={t.githubIssue(card.github.repo, card.github.number)}
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 rounded bg-ov-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground hover:text-ov-text"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (card.github?.url) void openUrl(card.github.url).catch(() => undefined);
+              }}
+              className={cn(
+                "inline-flex items-center gap-1 rounded bg-ov-surface-2 px-1.5 py-0.5 font-mono text-[11px] hover:text-ov-text",
+                card.github.state === "closed" ? "text-ov-accent" : "text-muted-foreground",
+              )}
             >
               <CircleDot className="size-3" />#{card.github.number}
-            </a>
+            </button>
           )}
         </div>
       )}
@@ -433,11 +591,14 @@ function CardDialog({
   onClose,
   onSave,
   onDelete,
+  onCreateIssue,
 }: {
   t: Messages;
   open: boolean;
   title: string;
   initial?: KanbanCard;
+  /** For a saved card not linked yet, on a linked board. */
+  onCreateIssue?: () => Promise<boolean>;
   onClose: () => void;
   onSave: (draft: CardDraft) => void;
   onDelete?: () => void;
@@ -446,6 +607,7 @@ function CardDialog({
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [due, setDue] = useState<string | undefined>(initial?.due);
   const [priority, setPriority] = useState<KanbanPriority>(initial?.priority ?? "none");
+  const [creating, setCreating] = useState(false);
   const presetLabel: Record<DuePreset, string> = { today: t.dueToday, tomorrow: t.dueTomorrow, nextWeek: t.dueNextWeek };
   const presets = DUE_PRESETS.map((preset) => ({ preset, date: dueOf(preset) }));
   const custom = due !== undefined && !presets.some((p) => p.date === due);
@@ -529,6 +691,22 @@ function CardDialog({
             {onDelete && (
               <Button type="button" variant="destructive" className="sm:mr-auto" onClick={onDelete}>
                 {t.remove}
+              </Button>
+            )}
+            {onCreateIssue && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={creating}
+                onClick={async () => {
+                  // The issue is made from what the dialog shows: typed changes are saved first.
+                  if (name.trim()) onSave({ title: name.trim(), notes, due, priority });
+                  setCreating(true);
+                  await onCreateIssue();
+                  setCreating(false);
+                }}
+              >
+                {creating ? t.github.creatingIssue : t.github.createIssue}
               </Button>
             )}
             <Button type="button" variant="outline" onClick={onClose}>

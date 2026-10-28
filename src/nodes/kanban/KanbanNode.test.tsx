@@ -9,6 +9,10 @@ import { KanbanNode } from "./KanbanNode";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
 vi.mock("@/kanban/dropOnTerminal", () => ({ dropCardOutside: vi.fn(), startCardDrag: vi.fn() }));
+const opened = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: opened }));
+const github = vi.hoisted(() => ({ syncBoard: vi.fn(() => Promise.resolve(true)) }));
+vi.mock("@/kanban/github", async (importOriginal) => ({ ...(await importOriginal<object>()), syncBoard: github.syncBoard }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -70,4 +74,35 @@ it("renders nothing for a node that is not a board", async () => {
   await act(async () => root.render(<KanbanNode nodeId="chef" />));
   expect(host.innerHTML).toBe("");
   await act(async () => root.unmount());
+});
+
+it("opens a linked card's issue from its chip, and syncs a linked board (issue #29)", async () => {
+  mockIPC(() => undefined);
+  langStore.setState({ choice: "fr", lang: "fr" });
+  const url = "https://github.com/o/r/issues/7";
+  await nodesStore.getState().create("linked", {
+    workspaceId: "w1",
+    kind: "kanban",
+    payload: {
+      columns: [{ id: "todo", title: "À faire", cardIds: ["c1"] }],
+      cards: { c1: { id: "c1", title: "Bug", notes: "", priority: "none", github: { repo: "o/r", number: 7, url, state: "open" } } },
+      github: { repo: "o/r" },
+    },
+  });
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  await act(async () => root.render(<KanbanNode nodeId="linked" />));
+
+  const chip = [...host.querySelectorAll("button")].find((b) => b.textContent === "#7")!;
+  await act(async () => chip.click());
+  expect(opened).toHaveBeenCalledWith(url);
+  // The chip opens the issue, not the card's dialog.
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+
+  await act(async () => button("Synchroniser").click());
+  expect(github.syncBoard).toHaveBeenCalledWith("linked");
+
+  await act(async () => root.unmount());
+  document.body.replaceChildren();
 });

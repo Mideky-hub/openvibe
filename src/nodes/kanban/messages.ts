@@ -33,6 +33,28 @@ export const kanbanNodeMessages = defineMessages<{
   remove: string;
   overdue: string;
   githubIssue: (repo: string, number: number) => string;
+  github: {
+    boardMenu: string;
+    link: string;
+    editLink: string;
+    unlink: string;
+    sync: string;
+    syncing: string;
+    linkTitle: string;
+    linkHint: string;
+    repo: string;
+    repoPlaceholder: string;
+    detecting: string;
+    notDetected: string;
+    repoInvalid: string;
+    project: string;
+    projectPlaceholder: string;
+    projectInvalid: string;
+    confirm: string;
+    createIssue: string;
+    creatingIssue: string;
+    linkedTo: (repo: string) => string;
+  };
 }>(
   {
     notFound: "Tableau introuvable",
@@ -65,6 +87,28 @@ export const kanbanNodeMessages = defineMessages<{
     remove: "Supprimer",
     overdue: "En retard",
     githubIssue: (repo, number) => `Issue ${repo}#${number}`,
+    github: {
+      boardMenu: "Menu du tableau",
+      link: "Lier à GitHub…",
+      editLink: "Modifier la liaison GitHub…",
+      unlink: "Délier de GitHub",
+      sync: "Synchroniser",
+      syncing: "Synchronisation…",
+      linkTitle: "Lier à GitHub",
+      linkHint: "Les issues du dépôt deviennent des cartes ; déplacer une carte ferme, rouvre ou change le Status sur GitHub (via gh).",
+      repo: "Dépôt",
+      repoPlaceholder: "propriétaire/nom",
+      detecting: "Détection du dépôt…",
+      notDetected: "Aucun dépôt GitHub trouvé dans le remote origin du projet : saisis-le.",
+      repoInvalid: "Format attendu : propriétaire/nom",
+      project: "Project v2 (facultatif)",
+      projectPlaceholder: "propriétaire/numéro ou URL du Project",
+      projectInvalid: "Format attendu : propriétaire/numéro ou https://github.com/orgs/…/projects/N",
+      confirm: "Lier et synchroniser",
+      createIssue: "Créer l'issue sur GitHub",
+      creatingIssue: "Création…",
+      linkedTo: (repo) => `Lié à ${repo}`,
+    },
   },
   {
     notFound: "Board not found",
@@ -97,5 +141,27 @@ export const kanbanNodeMessages = defineMessages<{
     remove: "Delete",
     overdue: "Overdue",
     githubIssue: (repo, number) => `Issue ${repo}#${number}`,
+    github: {
+      boardMenu: "Board menu",
+      link: "Link to GitHub…",
+      editLink: "Edit the GitHub link…",
+      unlink: "Unlink from GitHub",
+      sync: "Sync",
+      syncing: "Syncing…",
+      linkTitle: "Link to GitHub",
+      linkHint: "The repository's issues become cards; moving a card closes, reopens or changes the Status on GitHub (through gh).",
+      repo: "Repository",
+      repoPlaceholder: "owner/name",
+      detecting: "Detecting the repository…",
+      notDetected: "No GitHub repository in the project's origin remote: type it in.",
+      repoInvalid: "Expected: owner/name",
+      project: "Project v2 (optional)",
+      projectPlaceholder: "owner/number or Project URL",
+      projectInvalid: "Expected: owner/number or https://github.com/orgs/…/projects/N",
+      confirm: "Link and sync",
+      createIssue: "Create the issue on GitHub",
+      creatingIssue: "Creating…",
+      linkedTo: (repo) => `Linked to ${repo}`,
+    },
   },
 );

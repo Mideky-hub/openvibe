@@ -1,36 +1,15 @@
 import type { GithubIssue, GithubProjectItem, IssueState } from "../ipc/github";
+import type { KanbanCard, KanbanColumn, KanbanGithubLink, KanbanPayload, KanbanPriority } from "../nodes/types";
 
 // Pure GitHub <-> Kanban sync logic: merging remote issues / project items into a board,
 // and deciding which remote calls a local column move implies. No IO here.
 
-export type Priority = "none" | "low" | "medium" | "high";
-
-export interface GithubLink {
-  repo: string;
-  number: number;
-  url: string;
-  state: IssueState;
-}
-
-export interface Card {
-  id: string;
-  title: string;
-  notes: string;
-  due?: string;
-  priority: Priority;
-  github?: GithubLink;
-}
-
-export interface Column {
-  id: string;
-  title: string;
-  cardIds: string[];
-}
-
-export interface Board {
-  columns: Column[];
-  cards: Record<string, Card>;
-}
+// The board's types are the Kanban node's own (src/nodes/types.ts): one source.
+export type Priority = KanbanPriority;
+export type GithubLink = KanbanGithubLink;
+export type Card = KanbanCard;
+export type Column = KanbanColumn;
+export type Board = KanbanPayload;
 
 export type RemoteAction =
   | { type: "moveProjectItem"; itemId: string; status: string }
@@ -107,7 +86,7 @@ export function mergeGithub(board: Board, options: MergeOptions): Board {
   const newId = options.newId ?? (() => crypto.randomUUID());
   const columns = board.columns.map((c) => ({ ...c, cardIds: [...c.cardIds] }));
   const cards = { ...board.cards };
-  const next: Board = { columns, cards };
+  const next: Board = { ...board, columns, cards };
   const statusOptions = options.projectStatuses?.map(normalize);
 
   const linked = new Map<string, string>();

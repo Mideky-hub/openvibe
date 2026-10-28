@@ -1,3 +1,4 @@
+import type { IssueState } from "@/ipc/github";
 import { AGENT_IDS, type AgentId, type OllamaLaunch, type ShellKind } from "@/ipc/pty";
 import { readMission, type Mission } from "@/mission/mission";
 import { readSteps, type Step } from "./steps";
@@ -46,7 +47,7 @@ export interface KanbanGithubLink {
   repo: string;
   number: number;
   url: string;
-  state: "open" | "closed";
+  state: IssueState;
 }
 
 export interface KanbanCard {
@@ -65,10 +66,19 @@ export interface KanbanColumn {
   cardIds: string[];
 }
 
+/** The GitHub repository a board syncs with, and optionally one of its owner's Projects (v2). */
+export interface KanbanBoardLink {
+  /** "owner/name". */
+  repo: string;
+  project?: { owner: string; number: number };
+}
+
 /** Content of a Kanban node (issue #29). */
 export interface KanbanPayload {
   columns: KanbanColumn[];
   cards: Record<string, KanbanCard>;
+  /** Set by « Lier à GitHub ». */
+  github?: KanbanBoardLink;
 }
 
 export type NodePayload = TerminalPayload | OrchestratorPayload | KanbanPayload;
@@ -172,5 +182,22 @@ export function readKanbanPayload(raw: unknown): KanbanPayload {
     }
     columns.push({ id: c.id, title: typeof c.title === "string" ? c.title : "", cardIds });
   }
-  return { columns, cards };
+  const payload: KanbanPayload = { columns, cards };
+  const github = readBoardLink(r.github);
+  if (github) payload.github = github;
+  return payload;
+}
+
+const REPO = /^[\w.-]+\/[\w.-]+$/;
+
+function readBoardLink(raw: unknown): KanbanBoardLink | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.repo !== "string" || !REPO.test(r.repo)) return undefined;
+  const link: KanbanBoardLink = { repo: r.repo };
+  const project = r.project as Record<string, unknown> | undefined;
+  if (project && typeof project.owner === "string" && project.owner && typeof project.number === "number" && Number.isInteger(project.number) && project.number > 0) {
+    link.project = { owner: project.owner, number: project.number };
+  }
+  return link;
 }
