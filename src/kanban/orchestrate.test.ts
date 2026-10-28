@@ -6,7 +6,7 @@ import type { Member, SubTask } from "@/mission/mission";
 import type { KanbanPayload } from "@/nodes/types";
 import { nodesStore } from "@/store/nodes";
 import { moveCardWithGithub } from "./github";
-import { finishMissionCard, linkedBoards, planWithOrchestrator, startMissionCards } from "./orchestrate";
+import { finishMissionCard, flagMissionCard, linkedBoards, planWithOrchestrator, reassignMissionCard, startMissionCards } from "./orchestrate";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
 vi.mock("@/mission/events", () => ({ notify: vi.fn() }));
@@ -67,7 +67,16 @@ describe("the Kanban handed to an orchestrator", () => {
     expect(started.columns.map((c) => c.title)).toEqual(["À faire", "En cours", "Fait"]);
     expect(started.columns[1].cardIds).toEqual(["c1"]);
     expect(started.cards.c1.agent).toBe("Amon");
+    // Blocked: it stays « En cours », on alert; handed over: the new agent, the alert gone.
+    flagMissionCard("chef", plan, "Login", "blocked");
+    expect(boardOf().cards.c1.agentStatus).toBe("blocked");
+    expect(boardOf().columns[1].cardIds).toEqual(["c1"]);
+    reassignMissionCard("chef", plan, "Login", "Horus");
+    expect(boardOf().cards.c1).toMatchObject({ agent: "Horus" });
+    expect(boardOf().cards.c1.agentStatus).toBeUndefined();
+    flagMissionCard("chef", plan, "Login", "failed");
     await finishMissionCard("chef", plan, "Login");
+    expect(boardOf().cards.c1.agentStatus).toBeUndefined();
     expect(boardOf().columns[2].cardIds).toEqual(["c1"]);
     expect(moveCardWithGithub).toHaveBeenLastCalledWith("k1", "c1", "done");
     // Nothing for a sub-task without a card.

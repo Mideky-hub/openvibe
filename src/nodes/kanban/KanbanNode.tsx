@@ -545,7 +545,14 @@ function CardView({
             </button>
           )}
           {card.agent && (
-            <span title={t.agentChip(card.agent)} className="inline-flex items-center gap-1 rounded bg-ov-accent/15 px-1.5 py-0.5 text-[11px] text-ov-accent">
+            <span
+              title={card.agentStatus ? t.agentAlert[card.agentStatus](card.agent) : t.agentChip(card.agent)}
+              data-agent-status={card.agentStatus}
+              className={cn(
+                "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px]",
+                card.agentStatus ? "bg-destructive/15 text-ov-danger" : "bg-ov-accent/15 text-ov-accent",
+              )}
+            >
               <Bot className="size-3" />
               {card.agent}
             </span>

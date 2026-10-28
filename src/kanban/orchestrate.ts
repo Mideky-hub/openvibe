@@ -4,11 +4,11 @@ import { addOrchestrator } from "@/fleet/orchestrators";
 import { messages } from "@/i18n";
 import { notify } from "@/mission/events";
 import type { Member, SubTask } from "@/mission/mission";
-import type { KanbanPayload } from "@/nodes/types";
+import type { KanbanAgentStatus, KanbanPayload } from "@/nodes/types";
 import { nodesStore } from "@/store/nodes";
 import { moveCardWithGithub } from "./github";
 import { kanbanMessages } from "./messages";
-import { doneTarget, linkedTo, linkOrchestrator, planRequest, startCard } from "./missionLink";
+import { doneTarget, flagCard, linkedTo, linkOrchestrator, planRequest, setCardAgent, startCard } from "./missionLink";
 
 // The Kanban node's orchestrator wiring: « Planifier avec l'orchestrateur », and its cards following the mission.
 
@@ -79,11 +79,36 @@ export async function startMissionCards(orchestratorId: string, members: readonl
   }
 }
 
-/** A member reported done: its sub-task's card goes to the done column, and its issue follows on GitHub. */
-export async function finishMissionCard(orchestratorId: string, plan: readonly SubTask[] | undefined, task: string) {
+/** The card of a sub-task, by its title, and the board holding it. */
+function taskCard(orchestratorId: string, plan: readonly SubTask[] | undefined, task: string): { boardId: string; board: KanbanPayload; card: string } | null {
   const card = plan?.find((s) => s.title === task)?.card;
   const boardId = card ? boardWithCard(orchestratorId, card) : null;
   const board = boardId ? boardOf(boardId) : null;
-  const target = board && card ? doneTarget(board, card) : null;
-  if (boardId && card && target) await moveCardWithGithub(boardId, card, target);
+  return card && boardId && board ? { boardId, board, card } : null;
+}
+
+function saveCards(boardId: string, before: KanbanPayload, after: KanbanPayload) {
+  if (after !== before) nodesStore.getState().update(boardId, { cards: after.cards });
+}
+
+/** A member reported done: its sub-task's card goes to the done column, its alert cleared, and its issue follows on GitHub. */
+export async function finishMissionCard(orchestratorId: string, plan: readonly SubTask[] | undefined, task: string) {
+  const found = taskCard(orchestratorId, plan, task);
+  if (!found) return;
+  const agent = found.board.cards[found.card].agent;
+  if (agent) saveCards(found.boardId, found.board, setCardAgent(found.board, found.card, agent));
+  const target = doneTarget(boardOf(found.boardId) ?? found.board, found.card);
+  if (target) await moveCardWithGithub(found.boardId, found.card, target);
+}
+
+/** A member reported blocked or failed: its card stays « En cours », its chip on alert. */
+export function flagMissionCard(orchestratorId: string, plan: readonly SubTask[] | undefined, task: string, status: KanbanAgentStatus) {
+  const found = taskCard(orchestratorId, plan, task);
+  if (found) saveCards(found.boardId, found.board, flagCard(found.board, found.card, status));
+}
+
+/** `reassign`: the card's chip names the agent it went to. */
+export function reassignMissionCard(orchestratorId: string, plan: readonly SubTask[] | undefined, task: string, agent: string) {
+  const found = taskCard(orchestratorId, plan, task);
+  if (found) saveCards(found.boardId, found.board, setCardAgent(found.board, found.card, agent));
 }

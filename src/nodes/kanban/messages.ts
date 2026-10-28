@@ -34,6 +34,7 @@ export const kanbanNodeMessages = defineMessages<{
   overdue: string;
   githubIssue: (repo: string, number: number) => string;
   agentChip: (name: string) => string;
+  agentAlert: Record<"blocked" | "failed", (name: string) => string>;
   orchestrator: { plan: string; create: string; linked: (name: string) => string };
   github: {
     boardMenu: string;
@@ -68,6 +69,7 @@ export const kanbanNodeMessages = defineMessages<{
     rename: "Renommer",
     removeColumn: "Supprimer la colonne",
     agentChip: (name) => `${name} y travaille`,
+    agentAlert: { blocked: (name) => `${name} est bloqué`, failed: (name) => `${name} a échoué` },
     orchestrator: { plan: "Planifier avec l'orchestrateur", create: "Nouvel orchestrateur", linked: (name) => `${name} (relié)` },
     doubleClickRename: "Double-clic pour renommer",
     cardCount: (count) => `${count} carte${count > 1 ? "s" : ""}`,
@@ -124,6 +126,7 @@ export const kanbanNodeMessages = defineMessages<{
     rename: "Rename",
     removeColumn: "Delete the column",
     agentChip: (name) => `${name} is working on it`,
+    agentAlert: { blocked: (name) => `${name} is blocked`, failed: (name) => `${name} failed` },
     orchestrator: { plan: "Plan with the orchestrator", create: "New orchestrator", linked: (name) => `${name} (linked)` },
     doubleClickRename: "Double-click to rename",
     cardCount: (count) => `${count} card${count === 1 ? "" : "s"}`,

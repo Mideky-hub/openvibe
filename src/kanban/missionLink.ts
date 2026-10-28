@@ -1,4 +1,4 @@
-import type { KanbanColumn, KanbanPayload, KanbanPriority } from "@/nodes/types";
+import type { KanbanAgentStatus, KanbanColumn, KanbanPayload, KanbanPriority } from "@/nodes/types";
 import { addColumn, columnOf, updateCard, type NewId } from "./board";
 import { doneColumn } from "./githubSync";
 
@@ -47,7 +47,19 @@ export function withInProgressColumn(board: KanbanPayload, title: string, newId?
 export function startCard(board: KanbanPayload, cardId: string, agent: string, title: string, newId?: NewId): { board: KanbanPayload; columnId: string } | null {
   if (!board.cards[cardId]) return null;
   const placed = withInProgressColumn(board, title, newId);
-  return { board: updateCard(placed.board, cardId, { agent }), columnId: placed.columnId };
+  return { board: setCardAgent(placed.board, cardId, agent), columnId: placed.columnId };
+}
+
+/** The card's chip names `agent` (a sub-task handed over), its alert cleared; an unknown card leaves the board as it is. */
+export function setCardAgent(board: KanbanPayload, cardId: string, agent: string): KanbanPayload {
+  return updateCard(board, cardId, { agent, agentStatus: undefined });
+}
+
+/** Its agent reported blocked or failed: the card stays where it is, its chip on alert. Only a card with an agent is flagged. */
+export function flagCard(board: KanbanPayload, cardId: string, status: KanbanAgentStatus): KanbanPayload {
+  const card = board.cards[cardId];
+  if (!card?.agent || card.agentStatus === status) return board;
+  return updateCard(board, cardId, { agentStatus: status });
 }
 
 /** Where a card goes when its agent reports done (see `doneColumn`); null when it is already there or unknown. */
@@ -106,6 +118,7 @@ export function boardView(nodeId: string, board: KanbanPayload) {
             due: card.due ?? null,
             github: card.github ? { repo: card.github.repo, number: card.github.number, url: card.github.url, state: card.github.state } : null,
             agent: card.agent ?? null,
+            agent_status: card.agentStatus ?? null,
           },
         ];
       }),
