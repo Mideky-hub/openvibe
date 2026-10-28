@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-export type AppErrorKind = "invalidInput" | "notFound" | "pty" | "io" | "db" | "toolsUnavailable";
+export type AppErrorKind = "invalidInput" | "notFound" | "pty" | "io" | "db" | "toolsUnavailable" | "github";
 
 /** Error raised by a Tauri command; mirrors Rust's `AppError` (`{ kind, message }`). */
 export class AppError extends Error {

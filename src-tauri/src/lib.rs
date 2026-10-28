@@ -3,6 +3,7 @@ mod commands;
 mod db;
 mod error;
 mod git;
+mod github;
 mod i18n;
 mod logging;
 mod mission;
@@ -106,6 +107,13 @@ pub fn run() {
             commands::project::delete_project,
             commands::workspace::set_workspace_pantheon,
             commands::git::git_status,
+            commands::github::github_detect_repo,
+            commands::github::github_list_issues,
+            commands::github::github_list_project_items,
+            commands::github::github_project_statuses,
+            commands::github::github_create_issue,
+            commands::github::github_set_issue_state,
+            commands::github::github_move_project_item,
             commands::review::review_changes,
             commands::review::review_file_diff,
             commands::review::review_files,
