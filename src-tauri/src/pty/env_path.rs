@@ -55,6 +55,15 @@ fn same_folder(entry: &str) -> String {
     entry.trim_end_matches(['\\', '/']).to_lowercase()
 }
 
+/// A quoted entry (`"C:\Program Files\x"`) names the same folder as its
+/// unquoted form; the quotes must go, or the folder is not found.
+fn unquote(entry: &str) -> &str {
+    entry
+        .strip_prefix('"')
+        .and_then(|entry| entry.strip_suffix('"'))
+        .unwrap_or(entry)
+}
+
 /// This process's PATH in its order, then the registry's entries it lacks,
 /// machine then user (as Windows orders them): a new install is found and
 /// what OpenVibe was started with still comes first (final review R5d).
@@ -65,7 +74,7 @@ pub fn merge(machine: &str, user: &str, process: &str) -> String {
         .into_iter()
         .flat_map(|list| list.split(';'))
     {
-        let entry = entry.trim();
+        let entry = unquote(entry.trim());
         if !entry.is_empty() && seen.insert(same_folder(entry)) {
             entries.push(entry);
         }
@@ -181,6 +190,15 @@ mod tests {
             merge(r"C:\m1;C:\m2", r"C:\u1;C:\u2", r"C:\p0;C:\m2;C:\u1"),
             r"C:\p0;C:\m2;C:\u1;C:\m1;C:\u2"
         );
+    }
+
+    #[test]
+    fn merge_drops_the_quotes_of_a_quoted_entry() {
+        assert_eq!(
+            merge(r#""C:\Program Files\x""#, "", r""),
+            r"C:\Program Files\x"
+        );
+        assert_eq!(merge(r#""C:\Bin""#, "", r"C:\Bin"), r"C:\Bin");
     }
 
     #[test]
