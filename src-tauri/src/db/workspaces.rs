@@ -224,7 +224,10 @@ mod tests {
             .unwrap()
             .with(|conn| {
                 let p = project(conn, "C:/p");
-                assert_eq!(create(conn, &p, "   ", CANVAS).unwrap_err().kind(), "invalidInput");
+                assert_eq!(
+                    create(conn, &p, "   ", CANVAS).unwrap_err().kind(),
+                    "invalidInput"
+                );
                 let w = create(conn, &p, "A", CANVAS)?;
                 assert_eq!(rename(conn, &w.id, " ").unwrap_err().kind(), "invalidInput");
                 Ok(())
@@ -318,7 +321,10 @@ mod tests {
                 let p = project(conn, "C:/p");
                 let canvas = create(conn, &p, "A", CANVAS)?;
                 let code = create(conn, &p, "Code", CODE)?;
-                assert_eq!((canvas.kind.as_str(), code.kind.as_str()), ("canvas", "code"));
+                assert_eq!(
+                    (canvas.kind.as_str(), code.kind.as_str()),
+                    ("canvas", "code")
+                );
                 let kinds: Vec<String> = list(conn, &p)?.into_iter().map(|w| w.kind).collect();
                 assert_eq!(kinds, vec!["canvas", "code"]);
                 let json = serde_json::to_value(&code).unwrap();

@@ -31,7 +31,13 @@ fn entry(path: &str, kind: &'static str) -> TreeEntry {
 fn git_tree(project: &Path) -> Option<Vec<TreeEntry>> {
     let listed = review::git(
         project,
-        &["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+        &[
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "-z",
+        ],
     )
     .ok()?;
     let files: BTreeSet<&str> = listed.split('\0').filter(|p| !p.is_empty()).collect();
@@ -86,7 +92,10 @@ fn walk(dir: &Path, prefix: &str, depth: usize, out: &mut Vec<TreeEntry>) {
 pub fn tree(project: &Path) -> Result<Vec<TreeEntry>, String> {
     if !project.is_dir() {
         let shown = project.display();
-        return Err(tr!("dossier introuvable : {shown}", "folder not found: {shown}"));
+        return Err(tr!(
+            "dossier introuvable : {shown}",
+            "folder not found: {shown}"
+        ));
     }
     if let Some(entries) = git_tree(project) {
         return Ok(entries);
@@ -113,10 +122,7 @@ pub fn read(project: &Path, path: &str) -> Result<String, String> {
     }
     let bytes = std::fs::read(&real).map_err(|err| err.to_string())?;
     if review::is_binary(&bytes) {
-        return Err(tr!(
-            "fichier binaire : {path}",
-            "binary file: {path}"
-        ));
+        return Err(tr!("fichier binaire : {path}", "binary file: {path}"));
     }
     String::from_utf8(bytes)
         .map_err(|_| tr!("fichier non UTF-8 : {path}", "file is not UTF-8: {path}"))
@@ -220,11 +226,7 @@ mod tests {
         let got = tree(&dir).unwrap();
         assert_eq!(
             paths(&got),
-            [
-                (".gitignore", "file"),
-                ("src", "dir"),
-                ("src/a.ts", "file")
-            ]
+            [(".gitignore", "file"), ("src", "dir"), ("src/a.ts", "file")]
         );
     }
 
@@ -235,10 +237,15 @@ mod tests {
         std::fs::write(dir.join("img.bin"), [0u8, 1, 2]).unwrap();
         std::fs::write(dir.join("big.txt"), "x".repeat(MAX_BYTES + 1)).unwrap();
         assert_eq!(read(&dir, "a.txt").unwrap(), "salut\n");
-        assert!(read(&dir, "img.bin").unwrap_err().contains("binaire")
-            || read(&dir, "img.bin").unwrap_err().contains("binary"));
+        assert!(
+            read(&dir, "img.bin").unwrap_err().contains("binaire")
+                || read(&dir, "img.bin").unwrap_err().contains("binary")
+        );
         let big = read(&dir, "big.txt").unwrap_err();
-        assert!(big.contains("trop gros") || big.contains("too big"), "{big}");
+        assert!(
+            big.contains("trop gros") || big.contains("too big"),
+            "{big}"
+        );
         assert!(read(&dir, "missing.txt").is_err());
     }
 
@@ -260,7 +267,13 @@ mod tests {
         let (outer, dir) = project();
         let secret = outer.path().join("secret.txt");
         let absolute = secret.to_string_lossy().into_owned();
-        for bad in ["../secret.txt", "a/../../secret.txt", absolute.as_str(), "/etc/passwd", ""] {
+        for bad in [
+            "../secret.txt",
+            "a/../../secret.txt",
+            absolute.as_str(),
+            "/etc/passwd",
+            "",
+        ] {
             assert!(read(&dir, bad).is_err(), "read {bad}");
             assert!(write(&dir, bad, "pwn").is_err(), "write {bad}");
         }

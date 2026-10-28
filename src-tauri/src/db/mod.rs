@@ -240,17 +240,26 @@ mod tests {
         .unwrap();
         conn.execute_batch("INSERT INTO terminal_scrollback VALUES ('t1', x'41', 12);")
             .unwrap();
-        assert!(conn
-            .execute("INSERT INTO nodes VALUES ('f0', ?1, 'file', '{}', 13)", [&workspace])
-            .is_err());
+        assert!(
+            conn.execute(
+                "INSERT INTO nodes VALUES ('f0', ?1, 'file', '{}', 13)",
+                [&workspace]
+            )
+            .is_err()
+        );
 
         migrate_up_to(&mut conn, 3, "C:/home").unwrap();
 
         let count = |sql: &str| -> i64 { conn.query_row(sql, [], |row| row.get(0)).unwrap() };
         assert_eq!(count("SELECT COUNT(*) FROM nodes"), 2);
-        assert_eq!(count("SELECT COUNT(*) FROM terminal_scrollback WHERE node_id = 't1'"), 1);
         assert_eq!(
-            count("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'nodes_workspace'"),
+            count("SELECT COUNT(*) FROM terminal_scrollback WHERE node_id = 't1'"),
+            1
+        );
+        assert_eq!(
+            count(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'nodes_workspace'"
+            ),
             1
         );
         conn.execute(
@@ -259,7 +268,8 @@ mod tests {
         )
         .unwrap();
         // The cascades still reach the rebuilt table.
-        conn.execute("DELETE FROM nodes WHERE id = 't1'", []).unwrap();
+        conn.execute("DELETE FROM nodes WHERE id = 't1'", [])
+            .unwrap();
         assert_eq!(count("SELECT COUNT(*) FROM terminal_scrollback"), 0);
     }
 
@@ -303,7 +313,9 @@ mod tests {
                 [&project],
             )
             .is_err());
-        let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(version, 4);
     }
 

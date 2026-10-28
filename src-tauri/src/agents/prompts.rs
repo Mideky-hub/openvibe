@@ -126,7 +126,15 @@ mod tests {
             for tool in ORCHESTRATOR_TOOLS {
                 assert!(prompt.contains(tool), "{tool}");
             }
-            for arg in ["budget_min", "subtasks", "low", "medium", "high", "extreme", "card"] {
+            for arg in [
+                "budget_min",
+                "subtasks",
+                "low",
+                "medium",
+                "high",
+                "extreme",
+                "card",
+            ] {
                 assert!(prompt.contains(arg), "{arg}");
             }
         }
