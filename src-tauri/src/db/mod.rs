@@ -28,6 +28,7 @@ enum Step {
 const MIGRATIONS: &[Step] = &[
     Step::Sql(include_str!("migrations/001_initial.sql")),
     Step::Rust(migrate_v2::run),
+    Step::Sql(include_str!("migrations/003_file_nodes.sql")),
 ];
 
 /// The single SQLite connection shared by every command (spec V1 §8.1).
@@ -223,6 +224,42 @@ mod tests {
             Ok(())
         })
         .unwrap();
+    }
+
+    #[test]
+    fn migration_3_keeps_the_nodes_and_their_scrollback_and_accepts_file_nodes() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        migrate_up_to(&mut conn, 2, "C:/home").unwrap();
+        let workspace = test_workspace(&conn, "w").unwrap();
+        conn.execute(
+            "INSERT INTO nodes VALUES ('t1', ?1, 'terminal', '{}', 10), ('n2', ?1, 'note', '{}', 11)",
+            [&workspace.id],
+        )
+        .unwrap();
+        conn.execute_batch("INSERT INTO terminal_scrollback VALUES ('t1', x'41', 12);")
+            .unwrap();
+        assert!(conn
+            .execute("INSERT INTO nodes VALUES ('f0', ?1, 'file', '{}', 13)", [&workspace.id])
+            .is_err());
+
+        migrate_up_to(&mut conn, 3, "C:/home").unwrap();
+
+        let count = |sql: &str| -> i64 { conn.query_row(sql, [], |row| row.get(0)).unwrap() };
+        assert_eq!(count("SELECT COUNT(*) FROM nodes"), 2);
+        assert_eq!(count("SELECT COUNT(*) FROM terminal_scrollback WHERE node_id = 't1'"), 1);
+        assert_eq!(
+            count("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'nodes_workspace'"),
+            1
+        );
+        conn.execute(
+            "INSERT INTO nodes VALUES ('f1', ?1, 'file', '{\"path\":\"README.md\"}', 14)",
+            [&workspace.id],
+        )
+        .unwrap();
+        // The cascades still reach the rebuilt table.
+        conn.execute("DELETE FROM nodes WHERE id = 't1'", []).unwrap();
+        assert_eq!(count("SELECT COUNT(*) FROM terminal_scrollback"), 0);
     }
 
     fn base_at_version(path: &Path, version: usize) {
