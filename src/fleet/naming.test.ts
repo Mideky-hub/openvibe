@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { nodeNameOf } from "@/nodes/types";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { canvasStore } from "@/canvas/canvasStore";
@@ -36,7 +37,7 @@ afterEach(async () => {
   clearMocks();
 });
 
-const nameOf = (id: string) => nodesStore.getState().nodes[id].payload.name;
+const nameOf = (id: string) => nodeNameOf(nodesStore.getState().nodes[id].payload);
 
 it("names the terminals saved before names existed, in scene order", async () => {
   await assignMissingNames("w1", ["c", "b", "a"]);

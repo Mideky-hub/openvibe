@@ -3,11 +3,12 @@ import { saveNode, type StoredNode } from "@/ipc/db";
 import { debounce, type Debounced } from "@/lib/debounce";
 import { onFlushAll } from "@/lib/flush";
 import { rebasePath } from "@/lib/paths";
-import { readOrchestratorPayload, readTerminalPayload, type OrchestratorPayload, type TerminalPayload } from "@/nodes/types";
+import { readFilePayload, readOrchestratorPayload, readTerminalPayload, type FilePayload, type OrchestratorPayload, type TerminalPayload } from "@/nodes/types";
 
 export type NodeRecord =
   | { workspaceId: string; kind: "terminal"; payload: TerminalPayload }
-  | { workspaceId: string; kind: "orchestrator"; payload: OrchestratorPayload };
+  | { workspaceId: string; kind: "orchestrator"; payload: OrchestratorPayload }
+  | { workspaceId: string; kind: "file"; payload: FilePayload };
 
 export interface NodesState {
   nodes: Record<string, NodeRecord>;
@@ -16,7 +17,7 @@ export interface NodesState {
   /** Adds a node and saves it at once (its row must exist before its scrollback). */
   create: (id: string, record: NodeRecord) => Promise<void>;
   /** Changes a node; the save waits 500 ms for further changes. */
-  update: (id: string, patch: Partial<TerminalPayload> | Partial<OrchestratorPayload>) => void;
+  update: (id: string, patch: Partial<TerminalPayload> | Partial<OrchestratorPayload> | Partial<FilePayload>) => void;
   /** Saves a node now, e.g. when an undo brings back a node purged from SQLite. */
   persist: (id: string) => Promise<void>;
   /** Drops the nodes of a deleted workspace and returns their ids. */
@@ -101,6 +102,10 @@ function readRecord(workspaceId: string, node: StoredNode): NodeRecord | null {
     return null;
   }
   if (node.kind === "orchestrator") return { workspaceId, kind: "orchestrator", payload: readOrchestratorPayload(raw) };
+  if (node.kind === "file") {
+    const file = readFilePayload(raw);
+    return file ? { workspaceId, kind: "file", payload: file } : null;
+  }
   if (node.kind !== "terminal") return null;
   const payload = readTerminalPayload(raw);
   return payload ? { workspaceId, kind: "terminal", payload } : null;

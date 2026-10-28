@@ -82,6 +82,10 @@ export async function adoptCopies(workspaceId: string, copies: readonly { id: st
       await nodesStore.getState().create(id, { workspaceId, kind: "orchestrator", payload: { name: source.payload.name } });
       continue;
     }
+    if (source.kind === "file") {
+      await nodesStore.getState().create(id, { workspaceId, kind: "file", payload: { ...source.payload } });
+      continue;
+    }
     markForAutostart(id);
     const frameId = api.getSceneElementsIncludingDeleted().find((e) => e.id === id)?.frameId;
     const group = canvasStore.getState().frames.find((f) => f.id === frameId);

@@ -28,6 +28,7 @@ enum Step {
 const MIGRATIONS: &[Step] = &[
     Step::Sql(include_str!("migrations/001_initial.sql")),
     Step::Rust(migrate_v2::run),
+    Step::Sql(include_str!("migrations/003_file_nodes.sql")),
 ];
 
 /// The single SQLite connection shared by every command (spec V1 §8.1).

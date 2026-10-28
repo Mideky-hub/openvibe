@@ -37,7 +37,20 @@ export interface OrchestratorPayload {
 
 export const ORCHESTRATOR_NAME = "Orchestrateur";
 
-export type NodePayload = TerminalPayload | OrchestratorPayload;
+/** Content of a file node (issue #49): a file of the project, shown read-only. */
+export interface FilePayload {
+  /** Relative to the project's folder. */
+  path: string;
+}
+
+export type NodePayload = TerminalPayload | OrchestratorPayload | FilePayload;
+
+/** Reads a stored file payload; null without a usable path. */
+export function readFilePayload(raw: unknown): FilePayload | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const path = (raw as Record<string, unknown>).path;
+  return typeof path === "string" && path.trim() ? { path } : null;
+}
 
 /** Reads a stored orchestrator payload; a missing or blank name becomes "Orchestrateur". */
 export function readOrchestratorPayload(raw: unknown): OrchestratorPayload {
@@ -83,4 +96,9 @@ export function readTerminalPayload(raw: unknown): TerminalPayload | null {
   if (r.remoteControl === true) payload.remoteControl = true;
   if (typeof r.model === "string" && r.model) payload.model = r.model;
   return payload;
+}
+
+/** The name an agent node shows; empty for a node that has none (a file). */
+export function nodeNameOf(payload: NodePayload | undefined): string {
+  return payload && "name" in payload ? payload.name : "";
 }

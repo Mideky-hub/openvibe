@@ -1,3 +1,4 @@
+import { nodeNameOf } from "@/nodes/types";
 import { useStore } from "zustand";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,7 +26,7 @@ export function CloseGroupDialog() {
   const nodes = useNodes((s) => s.nodes);
   const statuses = useStore(terminalStatusStore, (s) => s.statuses);
   const living = group
-    ? livingAgents(group.memberIds, (id) => nodes[id]?.payload.name || "Agent", (id) => statuses[id]?.state === "running")
+    ? livingAgents(group.memberIds, (id) => nodeNameOf(nodes[id]?.payload) || "Agent", (id) => statuses[id]?.state === "running")
     : [];
   const close = () => uiStore.getState().setClosingGroup(null);
 

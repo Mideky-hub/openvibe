@@ -1,3 +1,4 @@
+import { nodeNameOf } from "@/nodes/types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,7 +24,7 @@ export function CloseAgentDialog() {
   const t = useMessages(shellMessages).closeAgent;
   const closing = useUi((s) => s.closing);
   const nodes = useNodes((s) => s.nodes);
-  const names = (closing?.agents ?? []).map((id) => nodes[id]?.payload.name || "Agent");
+  const names = (closing?.agents ?? []).map((id) => nodeNameOf(nodes[id]?.payload) || "Agent");
   const close = () => uiStore.getState().setClosing(null);
   const one = names.length <= 1;
   const name = names[0] ?? t.fallbackName;
