@@ -16,11 +16,11 @@ export async function openCodeWorkspace(): Promise<void> {
   openStudio(project);
 }
 
-/** Opens `path` (relative to the project) in the code workspace; `line` waits for the editor. */
-export async function openInCodeStudio(path: string, line?: number): Promise<void> {
+/** Opens `path` (relative to the project) in the code workspace; `line` (and `column`) wait for the editor. */
+export async function openInCodeStudio(path: string, line?: number, column?: number): Promise<void> {
   await openCodeWorkspace();
   if (!studioStore.getState().project) return;
   const opened = openFile(path);
-  if (line !== undefined) studioStore.setState({ pendingLine: { path, line } });
+  if (line !== undefined) studioStore.setState({ pendingLine: { path, line, ...(column !== undefined ? { column } : {}) } });
   await opened;
 }
