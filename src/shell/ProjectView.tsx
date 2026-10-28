@@ -8,6 +8,7 @@ import { agentsStore } from "@/fleet/agentsStore";
 import { LinkMode } from "@/fleet/LinkMode";
 import { RadialMenu } from "@/radial/RadialMenu";
 import { ReviewPanel } from "@/review/ReviewPanel";
+import { StudioModal } from "@/studio/StudioModal";
 import { PlacementGhost } from "@/fleet/PlacementGhost";
 import { useWorkspaces } from "@/store/workspaces";
 import { ActivityRail } from "./ActivityRail";
@@ -87,6 +88,9 @@ export function ProjectView() {
           <RadialMenu />
           <ErrorBoundary scope="review" fallback={panelCrash}>
             <ReviewPanel />
+          </ErrorBoundary>
+          <ErrorBoundary scope="code studio" fallback={panelCrash}>
+            <StudioModal />
           </ErrorBoundary>
         </>
       ) : (
