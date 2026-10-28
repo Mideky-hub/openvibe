@@ -4,8 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { insertFileNode } from "./insert";
-import { StudioModal } from "./StudioModal";
-import { editFile, openStudio, studioStore } from "./studioStore";
+import { projectsStore, type Project } from "@/store/projects";
+import { CodeWorkspace } from "./CodeWorkspace";
+import { editFile, studioStore } from "./studioStore";
 
 vi.mock("./insert", () => ({ insertFileNode: vi.fn() }));
 
@@ -28,12 +29,22 @@ beforeEach(async () => {
     if (cmd === "studio_read") return "# Guide\n<script>alert(1)</script>\n";
     return undefined;
   });
-  studioStore.setState({ project: null, tabsFor: null, tabs: [], active: null });
+  studioStore.setState({ project: null, tabsFor: null, tabs: [], active: null, pendingLine: null });
+  const project: Project = {
+    id: "p1",
+    name: "proj",
+    path: "C:/code/proj",
+    position: 0,
+    lastOpenedAt: 0,
+    workspaceCount: 1,
+    missing: false,
+    liveAgents: 0,
+  };
+  projectsStore.setState({ projects: [project], activeId: "p1" });
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  await act(async () => root.render(<StudioModal />));
-  await act(async () => openStudio("C:/code/proj"));
+  await act(async () => root.render(<CodeWorkspace />));
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -41,7 +52,7 @@ afterEach(async () => {
   clearMocks();
 });
 
-const modal = () => document.querySelector<HTMLElement>("[data-studio]")!;
+const modal = () => document.querySelector<HTMLElement>("[data-code-workspace]")!;
 const click = (el: Element | null) => act(async () => (el as HTMLElement).click());
 
 it("browses the tree, edits a file, saves it with Ctrl+S and previews Markdown safely", async () => {
@@ -79,4 +90,15 @@ it("asks before closing a tab with unsaved changes", async () => {
   expect(studioStore.getState().tabs).toHaveLength(1);
   await click([...modal().querySelectorAll("button")].find((b) => b.textContent === "Fermer sans enregistrer")!);
   expect(studioStore.getState().tabs).toHaveLength(0);
+});
+
+it("shows the project's files in a panel the bar folds, and closes the studio when it goes", async () => {
+  expect(studioStore.getState().project).toBe("C:/code/proj");
+  await vi.waitFor(() => expect(modal().querySelector("[data-files]")).not.toBeNull());
+  await click(modal().querySelector('nav [aria-label="Masquer les fichiers"]'));
+  expect(modal().querySelector("[data-files]")).toBeNull();
+  await click(modal().querySelector('nav [aria-label="Afficher les fichiers"]'));
+  expect(modal().querySelector("[data-files]")).not.toBeNull();
+  await act(async () => root.render(<></>));
+  expect(studioStore.getState().project).toBeNull();
 });

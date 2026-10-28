@@ -11,7 +11,10 @@ const api = {
 vi.mock("@excalidraw/excalidraw", () => ({ CaptureUpdateAction: { IMMEDIATELY: "immediately" } }));
 vi.mock("@/canvas/canvasStore", () => ({ canvasStore: { getState: () => ({ api }) } }));
 vi.mock("@/store/nodes", () => ({ nodesStore: { getState: () => ({ create }) } }));
-vi.mock("@/store/workspaces", () => ({ workspacesStore: { getState: () => ({ activeId: "w1" }) } }));
+vi.mock("@/store/workspaces", () => ({
+  isCode: (w?: { kind: string }) => w?.kind === "code",
+  workspacesStore: { getState: () => ({ activeId: "w1", workspaces: [{ id: "w1", kind: "canvas" }] }) },
+}));
 
 import { insertFileNode } from "./insert";
 
@@ -19,7 +22,7 @@ describe("insertFileNode", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("saves a file node then puts it at the center of the view", async () => {
-    insertFileNode("docs/a.md");
+    await insertFileNode("docs/a.md");
     expect(create).toHaveBeenCalledWith(expect.any(String), { workspaceId: "w1", kind: "file", payload: { path: "docs/a.md" } });
     await Promise.resolve();
     await Promise.resolve();

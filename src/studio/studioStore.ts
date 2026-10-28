@@ -21,14 +21,25 @@ export interface StudioState {
   tabsFor: string | null;
   tabs: StudioTab[];
   active: string | null;
+  /** A line to show once its file is in the editor (Ctrl+G, go-to-file). */
+  pendingLine: { path: string; line: number } | null;
+  /** Same as the exported `openFile`. */
+  openFile: (path: string) => Promise<void>;
 }
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export const isDirty = (tab: StudioTab) => tab.status === "ready" && tab.content !== tab.saved;
 
-/** The Code Studio (issue #49): one project at a time; its open files stay through a close. */
-export const studioStore = createStore<StudioState>()(() => ({ project: null, tabsFor: null, tabs: [], active: null }));
+/** The Code Studio (issue #49), shown by the code workspace: one project at a time; its open files stay through a close. */
+export const studioStore = createStore<StudioState>()(() => ({
+  project: null,
+  tabsFor: null,
+  tabs: [],
+  active: null,
+  pendingLine: null,
+  openFile: (path) => openFile(path),
+}));
 
 export function useStudio<T>(selector: (state: StudioState) => T): T {
   return useStore(studioStore, selector);
@@ -41,7 +52,7 @@ const tabOf = (path: string) => studioStore.getState().tabs.find((t) => t.path =
 
 export function openStudio(project: string) {
   if (studioStore.getState().tabsFor === project) studioStore.setState({ project });
-  else studioStore.setState({ project, tabsFor: project, tabs: [], active: null });
+  else studioStore.setState({ project, tabsFor: project, tabs: [], active: null, pendingLine: null });
 }
 
 export const closeStudio = () => studioStore.setState({ project: null });

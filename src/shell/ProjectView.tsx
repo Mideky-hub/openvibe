@@ -8,9 +8,9 @@ import { agentsStore } from "@/fleet/agentsStore";
 import { LinkMode } from "@/fleet/LinkMode";
 import { RadialMenu } from "@/radial/RadialMenu";
 import { ReviewPanel } from "@/review/ReviewPanel";
-import { StudioModal } from "@/studio/StudioModal";
+import { CodeWorkspace } from "@/studio/CodeWorkspace";
 import { PlacementGhost } from "@/fleet/PlacementGhost";
-import { useWorkspaces } from "@/store/workspaces";
+import { isCode, useWorkspaces } from "@/store/workspaces";
 import { ActivityRail } from "./ActivityRail";
 import { AgentCounts } from "./AgentCounts";
 import { CommandBar, CommandHint } from "./CommandBar";
@@ -45,6 +45,7 @@ export function ProjectView() {
   const status = useWorkspaces((s) => s.status);
   const error = useWorkspaces((s) => s.error);
   const activeId = useWorkspaces((s) => s.activeId);
+  const code = useWorkspaces((s) => isCode(s.workspaces.find((w) => w.id === s.activeId)));
   const panelOpen = useAgentsPanel((s) => s.open);
 
   useEffect(() => {
@@ -57,40 +58,42 @@ export function ProjectView() {
         <>
           <ErrorBoundary
             key={activeId}
-            scope="canvas"
+            scope={code ? "code workspace" : "canvas"}
             fallback={(error, retry) => (
               <div className="absolute inset-0 px-6 pb-6 pt-[104px]">
                 <CrashNotice error={error} retry={retry} />
               </div>
             )}
           >
-            <Canvas workspaceId={activeId} />
+            {code ? <CodeWorkspace /> : <Canvas workspaceId={activeId} />}
           </ErrorBoundary>
-          <ToolRail />
+          {!code && <ToolRail />}
           <ActivityRail />
           {panelOpen && (
             <ErrorBoundary scope="agents panel" fallback={panelCrash}>
               <AgentsPanel />
             </ErrorBoundary>
           )}
-          <div className="absolute bottom-[14px] left-3 z-30">
-            <GitChip />
-          </div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-[14px] z-30 flex flex-col items-center gap-2">
-            <CommandHint />
-            <CommandBar />
-          </div>
-          <div className="absolute bottom-[14px] right-3 z-30">
-            <ZoomControl />
-          </div>
-          <PlacementGhost />
-          <LinkMode />
-          <RadialMenu />
+          {/* The canvas's floating bars: the code workspace has its own. */}
+          {!code && (
+            <>
+              <div className="absolute bottom-[14px] left-3 z-30">
+                <GitChip />
+              </div>
+              <div className="pointer-events-none absolute inset-x-0 bottom-[14px] z-30 flex flex-col items-center gap-2">
+                <CommandHint />
+                <CommandBar />
+              </div>
+              <div className="absolute bottom-[14px] right-3 z-30">
+                <ZoomControl />
+              </div>
+              <PlacementGhost />
+              <LinkMode />
+              <RadialMenu />
+            </>
+          )}
           <ErrorBoundary scope="review" fallback={panelCrash}>
             <ReviewPanel />
-          </ErrorBoundary>
-          <ErrorBoundary scope="code studio" fallback={panelCrash}>
-            <StudioModal />
           </ErrorBoundary>
         </>
       ) : (
