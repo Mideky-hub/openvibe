@@ -37,6 +37,20 @@ export interface OrchestratorPayload {
 
 export const ORCHESTRATOR_NAME = "Orchestrateur";
 
+/** Content of a file node (issue #49): a file of the project, shown read-only. */
+export interface FilePayload {
+  /** Relative to the project's folder. */
+  path: string;
+}
+
+export type NodePayload = TerminalPayload | OrchestratorPayload | KanbanPayload | FilePayload;
+
+/** Reads a stored file payload; null without a usable path. */
+export function readFilePayload(raw: unknown): FilePayload | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const path = (raw as Record<string, unknown>).path;
+  return typeof path === "string" && path.trim() ? { path } : null;
+}
 export type KanbanPriority = "none" | "low" | "medium" | "high";
 
 export const KANBAN_PRIORITIES: readonly KanbanPriority[] = ["none", "low", "medium", "high"];
@@ -71,7 +85,7 @@ export interface KanbanPayload {
   cards: Record<string, KanbanCard>;
 }
 
-export type NodePayload = TerminalPayload | OrchestratorPayload | KanbanPayload;
+
 
 /** Reads a stored orchestrator payload; a missing or blank name becomes "Orchestrateur". */
 export function readOrchestratorPayload(raw: unknown): OrchestratorPayload {

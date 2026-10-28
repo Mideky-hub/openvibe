@@ -12,6 +12,7 @@ pub enum NodeKind {
     Note,
     Kanban,
     Git,
+    File,
 }
 
 impl NodeKind {
@@ -22,6 +23,7 @@ impl NodeKind {
             NodeKind::Note => "note",
             NodeKind::Kanban => "kanban",
             NodeKind::Git => "git",
+            NodeKind::File => "file",
         }
     }
 }
@@ -127,6 +129,21 @@ mod tests {
                     serde_json::from_str::<NodeKind>(r#""kanban""#).unwrap(),
                     NodeKind::Kanban
                 );
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn stores_file_nodes() {
+        Db::open_in_memory()
+            .unwrap()
+            .with(|conn| {
+                let w = test_workspace(conn, "A")?;
+                save(conn, "f1", &w.id, NodeKind::File, r#"{"path":"README.md"}"#)?;
+                let kind: String =
+                    conn.query_row("SELECT kind FROM nodes WHERE id = 'f1'", [], |r| r.get(0))?;
+                assert_eq!(kind, "file");
                 Ok(())
             })
             .unwrap();

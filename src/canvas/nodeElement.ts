@@ -1,8 +1,8 @@
 import type { ExcalidrawElement, ExcalidrawEmbeddableElement } from "@excalidraw/excalidraw/element/types";
 
-export type NodeKind = "terminal" | "orchestrator" | "note" | "kanban" | "git";
+export type NodeKind = "terminal" | "orchestrator" | "note" | "kanban" | "git" | "file";
 
-const NODE_KINDS: readonly NodeKind[] = ["terminal", "orchestrator", "note", "kanban", "git"];
+const NODE_KINDS: readonly NodeKind[] = ["terminal", "orchestrator", "note", "kanban", "git", "file"];
 
 export const NODE_SIZE: Record<NodeKind, { width: number; height: number }> = {
   terminal: { width: 720, height: 440 },
@@ -10,9 +10,10 @@ export const NODE_SIZE: Record<NodeKind, { width: number; height: number }> = {
   note: { width: 320, height: 240 },
   kanban: { width: 640, height: 400 },
   git: { width: 360, height: 320 },
+  file: { width: 520, height: 420 },
 };
 
-const LINK_PATTERN = /^openvibe:\/\/(terminal|orchestrator|note|kanban|git)\/[\w-]+$/;
+const LINK_PATTERN = /^openvibe:\/\/(terminal|orchestrator|note|kanban|git|file)\/[\w-]+$/;
 
 /** Only our own nodes may be embedded: no arbitrary iframes on the canvas. */
 export function isOpenVibeLink(link: string): boolean {

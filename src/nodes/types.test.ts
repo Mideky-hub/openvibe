@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readOrchestratorPayload, readTerminalPayload } from "./types";
+import { readFilePayload, readOrchestratorPayload, readTerminalPayload } from "./types";
 
 describe("readTerminalPayload", () => {
   it("reads a payload saved before agents and names existed", () => {
@@ -72,4 +72,17 @@ it("reads an orchestrator's mission with it (spec orchestrateur §7)", () => {
   const mission = { state: "plan", maxAgents: 4, name: "Auth", members: [] };
   expect(readOrchestratorPayload({ name: "Chef", mission })).toEqual({ name: "Chef", mission });
   expect(readOrchestratorPayload({ name: "Chef", mission: { state: "?" } })).toEqual({ name: "Chef" });
+});
+
+describe("readFilePayload", () => {
+  it("keeps a usable path", () => {
+    expect(readFilePayload({ path: "docs/a.md", extra: 1 })).toEqual({ path: "docs/a.md" });
+  });
+
+  it("refuses a missing, blank or non-text path", () => {
+    expect(readFilePayload(null)).toBeNull();
+    expect(readFilePayload({})).toBeNull();
+    expect(readFilePayload({ path: "  " })).toBeNull();
+    expect(readFilePayload({ path: 3 })).toBeNull();
+  });
 });
