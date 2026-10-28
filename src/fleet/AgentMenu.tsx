@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
-import { Check, Layers, Network, SquareTerminal } from "lucide-react";
+import { Check, Kanban, Layers, Network, SquareTerminal } from "lucide-react";
 import { toast } from "sonner";
 import { useUiRequest } from "@/commands/uiRequests";
+import { placeKanban } from "@/kanban/place";
 import { messages, useMessages } from "@/i18n";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { AgentId } from "@/ipc/pty";
@@ -151,6 +152,22 @@ export function AgentMenu({
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13px] font-medium text-ov-text">{t.agentMenu.orchestrator}</span>
                   <span className="block text-[11px] text-ov-text-2">{t.agentMenu.orchestratorHint}</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  placeKanban(placeAt ?? undefined);
+                }}
+                className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-ov-hover"
+              >
+                <span className="grid size-7 place-items-center rounded-md bg-ov-field text-ov-text-2">
+                  <Kanban className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-medium text-ov-text">{t.agentMenu.kanban}</span>
+                  <span className="block text-[11px] text-ov-text-2">{t.agentMenu.kanbanHint}</span>
                 </span>
               </button>
             </div>

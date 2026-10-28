@@ -6,9 +6,8 @@ import { nextName, nextPantheon } from "./names";
 
 /** Names already carried by the terminals of a workspace. */
 export function namesInWorkspace(workspaceId: string): string[] {
-  return Object.values(nodesStore.getState().nodes).flatMap((node) =>
-    node.workspaceId === workspaceId && node.kind === "terminal" && node.payload.name ? [node.payload.name] : [],
-  );
+  return Object.values(nodesStore.getState().nodes)
+    .flatMap((node) => (node.workspaceId === workspaceId && node.kind === "terminal" && node.payload.name ? [node.payload.name] : []));
 }
 
 /** The pantheon of the agents outside groups; it avoids those of the groups on screen. */

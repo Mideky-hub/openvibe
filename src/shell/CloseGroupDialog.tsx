@@ -1,4 +1,3 @@
-import { nodeNameOf } from "@/nodes/types";
 import { useStore } from "zustand";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,7 +12,7 @@ import { useCanvas } from "@/canvas/canvasStore";
 import { useMessages } from "@/i18n";
 import { closeGroup } from "@/fleet/groups";
 import { livingAgents } from "@/fleet/groupSummary";
-import { useNodes } from "@/store/nodes";
+import { nodeNameOf, useNodes } from "@/store/nodes";
 import { terminalStatusStore } from "@/store/terminalStatus";
 import { uiStore, useUi } from "@/store/ui";
 import { shellMessages } from "./messages";
@@ -26,7 +25,7 @@ export function CloseGroupDialog() {
   const nodes = useNodes((s) => s.nodes);
   const statuses = useStore(terminalStatusStore, (s) => s.statuses);
   const living = group
-    ? livingAgents(group.memberIds, (id) => nodeNameOf(nodes[id]?.payload) || "Agent", (id) => statuses[id]?.state === "running")
+    ? livingAgents(group.memberIds, (id) => nodeNameOf(nodes[id]) || "Agent", (id) => statuses[id]?.state === "running")
     : [];
   const close = () => uiStore.getState().setClosingGroup(null);
 

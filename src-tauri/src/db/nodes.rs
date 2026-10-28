@@ -111,6 +111,30 @@ mod tests {
     }
 
     #[test]
+    fn stores_kanban_nodes() {
+        Db::open_in_memory()
+            .unwrap()
+            .with(|conn| {
+                let w = test_workspace(conn, "A")?;
+                let board = r#"{"columns":[{"id":"c1","title":"To do","cardIds":["k1"]}],"cards":{"k1":{"id":"k1","title":"t","notes":"","priority":"high"}}}"#;
+                save(conn, "k1", &w.id, NodeKind::Kanban, board)?;
+                let (kind, payload): (String, String) = conn.query_row(
+                    "SELECT kind, payload_json FROM nodes WHERE id = 'k1'",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )?;
+                assert_eq!(kind, "kanban");
+                assert_eq!(payload, board);
+                assert_eq!(
+                    serde_json::from_str::<NodeKind>(r#""kanban""#).unwrap(),
+                    NodeKind::Kanban
+                );
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
     fn stores_file_nodes() {
         Db::open_in_memory()
             .unwrap()

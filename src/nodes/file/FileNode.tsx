@@ -3,13 +3,12 @@ import { RefreshCw } from "lucide-react";
 import { studioRead } from "@/ipc/studio";
 import { useMessages } from "@/i18n";
 import { useNodes } from "@/store/nodes";
-import { workspacesStore } from "@/store/workspaces";
+import { projectsStore } from "@/store/projects";
+import { isMarkdown } from "@/studio/languages";
+import { renderMarkdown } from "@/studio/markdown";
 import { nodesMessages } from "../messages";
-import { Markdown } from "./markdown";
 
 type Content = { state: "loading" } | { state: "ready"; text: string } | { state: "error"; message: string };
-
-const isMarkdown = (path: string) => /\.(md|markdown)$/i.test(path);
 
 /** A file of the project on the canvas: read-only, Markdown rendered, code in mono (issue #49). */
 export function FileNode({ nodeId }: { nodeId: string }) {
@@ -19,7 +18,9 @@ export function FileNode({ nodeId }: { nodeId: string }) {
   const [content, setContent] = useState<Content>({ state: "loading" });
 
   const load = useCallback(() => {
-    const project = workspacesStore.getState().projectId;
+    // The backend wants the project folder, as Code Studio passes it.
+    const { projects, activeId } = projectsStore.getState();
+    const project = projects.find((p) => p.id === activeId)?.path;
     if (!project || !path) return;
     setContent({ state: "loading" });
     studioRead(project, path).then(
@@ -49,7 +50,7 @@ export function FileNode({ nodeId }: { nodeId: string }) {
         {content.state === "error" && <p className="text-sm text-destructive">{t.file.readFailed(content.message)}</p>}
         {content.state === "ready" && content.text === "" && <p className="text-sm text-muted-foreground">{t.file.empty}</p>}
         {content.state === "ready" && content.text !== "" &&
-          (isMarkdown(path) ? <Markdown source={content.text} /> : <pre className="font-mono text-xs whitespace-pre">{content.text}</pre>)}
+          (isMarkdown(path) ? renderMarkdown(content.text) : <pre className="font-mono text-xs whitespace-pre">{content.text}</pre>)}
       </div>
     </div>
   );
