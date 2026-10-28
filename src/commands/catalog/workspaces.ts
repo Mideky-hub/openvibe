@@ -2,7 +2,8 @@ import { removeWorkspace } from "@/shell/workspaceActions";
 import { nodesStore } from "@/store/nodes";
 import { countRunning } from "@/store/running";
 import { terminalStatusStore } from "@/store/terminalStatus";
-import { workspacesStore } from "@/store/workspaces";
+import { canRemove, workspacesStore } from "@/store/workspaces";
+import { openCodeWorkspace } from "@/studio/navigate";
 import type { Command } from "../command";
 import { requestUi } from "../uiRequests";
 import { command, sectionNamed } from "./define";
@@ -23,6 +24,11 @@ export const WORKSPACES: readonly Command[] = [
       await workspacesStore.getState().create();
     },
   }),
+  command("workspace.code", {
+    section,
+    available: inProject,
+    run: openCodeWorkspace,
+  }),
   command("workspace.rename", {
     section,
     available: inProject,
@@ -33,7 +39,10 @@ export const WORKSPACES: readonly Command[] = [
   command("workspace.delete", {
     section,
     // Never the last one (spec fenêtre §7.3), like the tab's ×.
-    available: (ctx) => ctx.project && workspacesStore.getState().workspaces.length > 1,
+    available: (ctx) => {
+      const workspace = onScreen();
+      return ctx.project && !!workspace && canRemove(workspacesStore.getState().workspaces, workspace);
+    },
     run: async () => {
       const workspace = onScreen();
       if (!workspace) return;

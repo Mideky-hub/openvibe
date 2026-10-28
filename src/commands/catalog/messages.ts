@@ -65,6 +65,7 @@ export const catalogMessages = defineMessages(
       "palette.functions": e("Rechercher une fonction…", "fonction", "commande", "action"),
 
       "workspace.new": e("Nouveau workspace", "onglet", "nouveau", "workspace"),
+      "workspace.code": e("Code Studio", "code", "ide", "éditeur", "fichiers", "workspace"),
       "workspace.rename": e("Renommer le workspace", "onglet", "nom", "workspace"),
       "workspace.delete": e("Supprimer le workspace", "onglet", "supprimer", "workspace"),
 
@@ -187,6 +188,7 @@ export const catalogMessages = defineMessages(
       "palette.functions": e("Search for a function…", "function", "command", "action"),
 
       "workspace.new": e("New workspace", "tab", "new", "workspace"),
+      "workspace.code": e("Code Studio", "code", "ide", "editor", "files", "workspace"),
       "workspace.rename": e("Rename workspace", "tab", "name", "workspace"),
       "workspace.delete": e("Delete the workspace", "tab", "delete", "remove", "workspace"),
 
