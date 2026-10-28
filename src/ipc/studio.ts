@@ -1,10 +1,11 @@
 import { call } from "./invoke";
 
-/** A path of the repository, from its root, with `/` separators. */
+/** An entry of the project's tree (Code Studio); `path` from the project folder, with `/`. */
 export type TreeEntry = { path: string; kind: "file" | "dir" };
 
-/** Stub of the Code Studio contract (issue #49); the backend replaces it at merge. */
-export const studioTree = (project: string): Promise<TreeEntry[]> => call<TreeEntry[]>("studio_tree", { project });
-export const studioRead = (project: string, path: string): Promise<string> => call<string>("studio_read", { project, path });
-export const studioWrite = (project: string, path: string, content: string): Promise<void> =>
-  call<void>("studio_write", { project, path, content });
+/** The project folder's tree, `.gitignore` respected. */
+export const studioTree = (project: string) => call<TreeEntry[]>("studio_tree", { project });
+/** A text file of the project; refused when binary or too big. */
+export const studioRead = (project: string, path: string) => call<string>("studio_read", { project, path });
+/** Writes a file of the project, creating its folders; never outside the project. */
+export const studioWrite = (project: string, path: string, content: string) => call<void>("studio_write", { project, path, content });

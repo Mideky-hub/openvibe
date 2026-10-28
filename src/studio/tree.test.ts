@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { TreeEntry } from "@/ipc/studio";
 import { ancestors, baseName, buildTree, filterTree, toggle, visibleRows } from "./tree";
 import { extensionOf, isMarkdown } from "./languages";
 
@@ -20,6 +21,20 @@ describe("buildTree", () => {
     const src = tree[1];
     expect(src.children.map((n) => `${n.kind}:${n.path}`)).toEqual(["dir:src/lib", "file:src/a.ts", "file:src/b.ts"]);
     expect(src.children[0].children.map((n) => n.path)).toEqual(["src/lib/util.ts"]);
+  });
+
+  it("gives the same tree with or without the folder entries, in any order, each folder once", () => {
+    const files = ENTRIES.filter((e) => e.kind === "file");
+    const dirs = [
+      { path: "src/lib", kind: "dir" as const },
+      { path: "src", kind: "dir" as const },
+    ];
+    const sorted = [...files, ...dirs].sort((a, b) => a.path.localeCompare(b.path));
+    const shape = (entries: TreeEntry[]) => JSON.stringify(buildTree(entries));
+    expect(shape([...dirs, ...files])).toBe(shape(files));
+    expect(shape([...files, ...dirs])).toBe(shape(files));
+    expect(shape(sorted)).toBe(shape(files));
+    expect(buildTree([{ path: "empty", kind: "dir" }])).toEqual([{ name: "empty", path: "empty", kind: "dir", children: [] }]);
   });
 
   it("takes Windows separators and stray slashes", () => {
