@@ -7,7 +7,6 @@ import { useProjects } from "@/store/projects";
 import { useFileIndex } from "@/studio/fileIndex";
 import { parseFileQuery, rankFiles } from "@/studio/fileSearch";
 import { openInCodeStudio } from "@/studio/navigate";
-import { studioStore } from "@/studio/studioStore";
 import { runCommand } from "./command";
 import { functionSections, recentSection } from "./functions";
 import { goToSections } from "./goTo";
@@ -163,11 +162,7 @@ function FileSection({ files, line, column }: { files: readonly string[]; line?:
             className={ITEM}
             onSelect={() => {
               closePalette();
-              // The navigation takes a line only: a column is asked for once the file is shown.
-              const withColumn = line !== undefined && column !== undefined;
-              void openInCodeStudio(path, withColumn ? undefined : line).then(() => {
-                if (withColumn) studioStore.setState({ pendingLine: { path, line, column } });
-              });
+              void openInCodeStudio(path, line, column);
             }}
           >
             <FileText className="size-3.5 shrink-0 text-ov-text-3" />

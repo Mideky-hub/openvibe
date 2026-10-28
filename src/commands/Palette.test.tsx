@@ -195,6 +195,6 @@ describe("the palette (spec fenêtre §7.1, §7.2)", () => {
     expect(selected()!.textContent).toBe("App.tsxsrcligne 42");
     await act(async () => press("Enter"));
     expect(paletteStore.getState().open).toBe(false);
-    expect(openInCodeStudio).toHaveBeenCalledWith("src/App.tsx", 42);
+    expect(openInCodeStudio).toHaveBeenCalledWith("src/App.tsx", 42, undefined);
   });
 });
