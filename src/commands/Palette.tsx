@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { Command } from "cmdk";
+import { FileText } from "lucide-react";
 import { useMessages } from "@/i18n";
 import { TITLE_BAR_HEIGHT } from "@/shell/layout";
+import { useProjects } from "@/store/projects";
+import { useFileIndex } from "@/studio/fileIndex";
+import { parseFileQuery, rankFiles } from "@/studio/fileSearch";
+import { openInCodeStudio } from "@/studio/navigate";
+import { studioStore } from "@/studio/studioStore";
 import { runCommand } from "./command";
 import { functionSections, recentSection } from "./functions";
 import { goToSections } from "./goTo";
@@ -35,10 +41,17 @@ function PaletteBody() {
   const goToData = useGoToData();
   const recent = useRecentFunctions();
   const goToList = mode === "goTo" ? goToSections(goToData.items, search) : [];
+  const projectPath = useProjects((s) => (s.view === "project" ? (s.projects.find((p) => p.id === s.activeId)?.path ?? null) : null));
+  const fileIndex = useFileIndex(mode === "goTo" ? projectPath : null);
+  const fileQuery = parseFileQuery(search);
+  // Files only while searching: the project's whole tree would bury the nodes.
+  const files = mode === "goTo" && fileQuery.text ? rankFiles(fileIndex.files, fileQuery.text, FILE_LIMIT) : [];
+  // `App.tsx:42`, a dot or a slash: a file is sought, its section comes first.
+  const filesFirst = fileQuery.line !== undefined || /[./]/.test(fileQuery.text);
   const functionList = mode === "functions" && context ? functionSections(COMMANDS, context, search, recent) : [];
   const keys =
     mode === "goTo"
-      ? goToList.flatMap((s) => s.items.map((i) => i.key))
+      ? (filesFirst ? [...files.map(fileKey), ...goToList.flatMap((s) => s.items.map((i) => i.key))] : [...goToList.flatMap((s) => s.items.map((i) => i.key)), ...files.map(fileKey)])
       : functionList.flatMap((s) => s.items.filter((l) => l.disabled === null).map((l) => l.command.id));
   const [chosen, setChosen] = useState("");
   // The first line is chosen when it opens and after each keystroke (spec fenêtre §7.1).
@@ -74,6 +87,7 @@ function PaletteBody() {
             className="h-11 w-full border-b border-ov-line bg-transparent px-3.5 text-[13.5px] text-ov-text outline-none placeholder:text-ov-text-3"
           />
           <Command.List className={`max-h-[420px] overflow-y-auto p-1.5 ${HEADING}`}>
+            {filesFirst && <FileSection files={files} line={fileQuery.line} column={fileQuery.column} />}
             {mode === "goTo" &&
               goToList.map((section) => (
                 <Command.Group key={section.kind} heading={section.label}>
@@ -92,6 +106,7 @@ function PaletteBody() {
                   ))}
                 </Command.Group>
               ))}
+            {!filesFirst && <FileSection files={files} line={fileQuery.line} column={fileQuery.column} />}
             {mode === "functions" &&
               context &&
               functionList.map((section) => (
@@ -120,12 +135,48 @@ function PaletteBody() {
                   ))}
                 </Command.Group>
               ))}
-            {mode === "goTo" && goToData.loading && <div className="px-2.5 py-1.5 text-[11.5px] text-ov-text-3">{t.loading}</div>}
+            {mode === "goTo" && (goToData.loading || (fileIndex.loading && fileQuery.text !== "")) && <div className="px-2.5 py-1.5 text-[11.5px] text-ov-text-3">{t.loading}</div>}
             <Command.Empty className="px-2.5 py-3 text-[12.5px] text-ov-text-3">{t.empty}</Command.Empty>
           </Command.List>
           <footer className="border-t border-ov-line px-3.5 py-1.5 text-[11px] text-ov-text-2">{t.footer}</footer>
         </Command>
       </div>
     </div>
+  );
+}
+
+const FILE_LIMIT = 30;
+const fileKey = (path: string) => `file:${path}`;
+
+/** The project's files matching the search (Ctrl+P `fichier:ligne`): one opens in the Code Studio, at its line. */
+function FileSection({ files, line, column }: { files: readonly string[]; line?: number; column?: number }) {
+  const t = useMessages(commandsMessages).goTo;
+  if (files.length === 0) return null;
+  return (
+    <Command.Group heading={t.sections.file}>
+      {files.map((path) => {
+        const cut = path.lastIndexOf("/");
+        return (
+          <Command.Item
+            key={path}
+            value={fileKey(path)}
+            className={ITEM}
+            onSelect={() => {
+              closePalette();
+              // The navigation takes a line only: a column is asked for once the file is shown.
+              const withColumn = line !== undefined && column !== undefined;
+              void openInCodeStudio(path, withColumn ? undefined : line).then(() => {
+                if (withColumn) studioStore.setState({ pendingLine: { path, line, column } });
+              });
+            }}
+          >
+            <FileText className="size-3.5 shrink-0 text-ov-text-3" />
+            <span className="truncate font-medium text-ov-text">{path.slice(cut + 1)}</span>
+            {cut > 0 && <span className="truncate text-ov-text-3">{path.slice(0, cut)}</span>}
+            {line !== undefined && <span className="ml-auto shrink-0 font-mono text-[11px] text-ov-text-3">{t.atLine(line)}</span>}
+          </Command.Item>
+        );
+      })}
+    </Command.Group>
   );
 }

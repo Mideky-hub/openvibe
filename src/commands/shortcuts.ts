@@ -1,5 +1,5 @@
 /** The application's shortcuts (spec fenêtre §6.1), as the interface writes them. */
-export type Shortcut = "Ctrl+Tab" | "Ctrl+Maj+Tab" | "Ctrl+P" | "Ctrl+Maj+P" | "Maj+Échap" | "Ctrl+Maj+A";
+export type Shortcut = "Ctrl+Tab" | "Ctrl+Maj+Tab" | "Ctrl+P" | "Ctrl+Maj+P" | "Maj+Échap" | "Ctrl+Maj+A" | "Ctrl+G";
 
 /** The part of a keydown event the shortcuts read. */
 export type KeyLike = Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey" | "repeat" | "isComposing">;
@@ -11,6 +11,7 @@ function match(key: string, ctrl: boolean, shift: boolean): Shortcut | null {
   if (ctrl && key === "Tab") return shift ? "Ctrl+Maj+Tab" : "Ctrl+Tab";
   if (ctrl && key === "p") return shift ? "Ctrl+Maj+P" : "Ctrl+P";
   if (ctrl && shift && key === "a") return "Ctrl+Maj+A";
+  if (ctrl && !shift && key === "g") return "Ctrl+G";
   if (!ctrl && shift && key === "Escape") return "Maj+Échap";
   return null;
 }

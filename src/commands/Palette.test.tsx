@@ -16,10 +16,12 @@ import { goTo } from "./goToRun";
 import { openPalette, paletteStore, setPaletteQuery } from "./paletteState";
 import { Palette } from "./Palette";
 import { recentStore } from "./recent";
+import { openInCodeStudio } from "@/studio/navigate";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
 vi.mock("@/nodes/terminal/registry", () => ({ focusTerminal: vi.fn(), terminalSelection: vi.fn(() => "") }));
 vi.mock("./goToRun", () => ({ goTo: vi.fn() }));
+vi.mock("@/studio/navigate", () => ({ openInCodeStudio: vi.fn(async () => undefined), openCodeWorkspace: vi.fn(async () => undefined) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -58,7 +60,7 @@ const press = (key: string) => input().dispatchEvent(new KeyboardEvent("keydown"
 describe("the palette (spec fenêtre §7.1, §7.2)", () => {
   it("opens on « Aller à », the first line chosen; at home, the projects, most recent first", async () => {
     await act(async () => openPalette("goTo", home));
-    expect(input().placeholder).toBe("Aller à un terminal, un groupe, un workspace… (> pour les fonctions)");
+    expect(input().placeholder).toBe("Aller à un terminal, un workspace, un fichier (fichier:ligne)… (> pour les fonctions)");
     expect(items().map((i) => i.textContent)).toEqual(["apiC:/code/api", "mk-webappC:/code/mk-webapp"]);
     expect(selected()).toBe(items()[0]);
     expect(document.body.textContent).toContain("↑↓ naviguer · Entrée ouvrir · Échap fermer");
@@ -178,5 +180,21 @@ describe("the palette (spec fenêtre §7.1, §7.2)", () => {
     expect(first.textContent).toContain("Masquer le panneau Agents");
     expect(first.textContent).toContain("Navigation");
     expect(selected()).toBe(first);
+  });
+
+  it("lists the project's files while searching; `App.tsx:42` opens the file at line 42 in the Code Studio", async () => {
+    mockIPC((cmd) => (cmd === "studio_tree" ? [{ path: "src", kind: "dir" }, { path: "src/App.tsx", kind: "file" }, { path: "src/app/AppShell.tsx", kind: "file" }] : undefined));
+    canvasStore.setState({ api: { getSceneElements: () => [], getAppState: () => ({ selectedElementIds: {} }) } as unknown as ExcalidrawImperativeAPI });
+    projectsStore.setState({ view: "project", activeId: "p1" } as never);
+    workspacesStore.setState({ workspaces: [{ id: "w1", projectId: "p1", name: "Workspace 1", position: 0, pantheon: null }], activeId: "w1" } as never);
+    await act(async () => openPalette("goTo", busy));
+    await act(async () => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+    expect(document.body.textContent).not.toContain("Fichiers");
+    await act(async () => setPaletteQuery("App.tsx:42"));
+    expect(document.body.textContent).toContain("Fichiers");
+    expect(selected()!.textContent).toBe("App.tsxsrcligne 42");
+    await act(async () => press("Enter"));
+    expect(paletteStore.getState().open).toBe(false);
+    expect(openInCodeStudio).toHaveBeenCalledWith("src/App.tsx", 42);
   });
 });

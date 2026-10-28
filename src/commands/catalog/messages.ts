@@ -63,6 +63,7 @@ export const catalogMessages = defineMessages(
       "project.home": e("Accueil", "projets", "accueil"),
       "project.close": e("Fermer le projet", "fermer", "projet"),
       "palette.functions": e("Rechercher une fonction…", "fonction", "commande", "action"),
+      "editor.goToLine": e("Aller à la ligne…", "ligne", "colonne", "code", "éditeur"),
 
       "workspace.new": e("Nouveau workspace", "onglet", "nouveau", "workspace"),
       "workspace.code": e("Code Studio", "code", "ide", "éditeur", "fichiers", "workspace"),
@@ -186,6 +187,7 @@ export const catalogMessages = defineMessages(
       "project.home": e("Home", "projects", "home"),
       "project.close": e("Close the project", "close", "project"),
       "palette.functions": e("Search for a function…", "function", "command", "action"),
+      "editor.goToLine": e("Go to line…", "line", "column", "code", "editor"),
 
       "workspace.new": e("New workspace", "tab", "new", "workspace"),
       "workspace.code": e("Code Studio", "code", "ide", "editor", "files", "workspace"),

@@ -22,7 +22,7 @@ export interface StudioState {
   tabs: StudioTab[];
   active: string | null;
   /** A line to show once its file is in the editor (Ctrl+G, go-to-file). */
-  pendingLine: { path: string; line: number } | null;
+  pendingLine: { path: string; line: number; column?: number } | null;
   /** Same as the exported `openFile`. */
   openFile: (path: string) => Promise<void>;
 }
