@@ -100,10 +100,10 @@ With the **model router**, each sub-task's level picks the model its agent runs 
 
 | Level | Model |
 |---|---|
-| `faible` (low) | Claude Haiku 5.5 |
-| `moyen` (medium) | Claude Sonnet 5.5 |
-| `élevé` (high) | Claude Opus 5.5 |
-| `extrême` (extreme) | Claude Fable 5.1 |
+| `low` | Claude Haiku 5.5 |
+| `medium` | Claude Sonnet 5.5 |
+| `high` | Claude Opus 5.5 |
+| `extreme` | Claude Fable 5.1 |
 
 The orchestrator talks to OpenVibe through a local MCP server, with tools such as `propose_plan`, `team`, `read_output`, `extend`, `reassign`, `merge` and `remote_control`. It can read the repository, but it is denied `Edit`, `Write` and `NotebookEdit`: the agents write the code.
 
