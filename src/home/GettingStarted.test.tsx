@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { clearMocks, mockIPC, mockWindows } from "@tauri-apps/api/mocks";
+import { toast } from "sonner";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { agentsStore } from "@/fleet/agentsStore";
 import { langStore } from "@/i18n";
@@ -12,6 +13,7 @@ import { HomeScreen } from "./HomeScreen";
 
 // Excalidraw does not load under Vitest (roughjs); the search field reaches it through the command registry.
 vi.mock("@excalidraw/excalidraw", () => ({}));
+vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(() => Promise.resolve()) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -120,4 +122,30 @@ it("speaks English when the interface does", async () => {
   expect(panel()?.textContent).toContain("Getting started");
   expect(host.querySelector("[data-no-agent]")!.textContent).toContain("No coding agent found");
   expect(button("Check again")).toBeTruthy();
+});
+
+it("says so when listing the agents fails, instead of silently hiding the panel", async () => {
+  mockIPC((cmd) => {
+    if (cmd === "list_projects") return [];
+    if (cmd === "list_agents") throw new Error("boom");
+    if (cmd === "list_shells") return [];
+    if (cmd === "plugin:window|is_maximized") return false;
+  });
+  await render();
+  expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("boom"));
+});
+
+it("tells screen readers a step is done, with text instead of an aria-label on a span", async () => {
+  agents = only("claude");
+  await render();
+  const done = panel()!.querySelector<HTMLElement>("li[data-step='agent']")!;
+  expect(done.querySelector(".sr-only")?.textContent).toBe("fait");
+  expect(done.querySelector("[aria-label]")).toBeNull();
+});
+
+it("tells the user when the clipboard refuses the install command", async () => {
+  Object.defineProperty(navigator, "clipboard", { value: { writeText: vi.fn(() => Promise.reject(new Error("denied"))) }, configurable: true });
+  await render();
+  await act(async () => button("Copier").click());
+  expect(toast.error).toHaveBeenCalled();
 });

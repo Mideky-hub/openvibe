@@ -32,7 +32,11 @@ export function NoAgent() {
   const [checking, setChecking] = useState(false);
   const claude = AGENTS.claude;
 
-  const copy = () => void navigator.clipboard.writeText(CLAUDE_INSTALL).then(() => toast(t.copied));
+  const copy = () =>
+    void navigator.clipboard.writeText(CLAUDE_INSTALL).then(
+      () => toast(t.copied),
+      () => toast.error(t.copyFailed),
+    );
   const recheck = async () => {
     setChecking(true);
     try {

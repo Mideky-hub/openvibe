@@ -12,6 +12,7 @@ import { nodesStore } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { uiStore } from "@/store/ui";
 import { workspacesStore } from "@/store/workspaces";
+import { readableTargets } from "./groupView";
 import { clearSpot, groupGrid } from "./groupLayout";
 import { defaultLaunchOptions, type LaunchOptions } from "./launchAgent";
 import { nextName } from "./names";
@@ -86,7 +87,15 @@ export async function launchGroup(
     elements: [...api.getSceneElementsIncludingDeleted(), ...terminals, frame],
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
-  api.scrollToContent(frame, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true, duration: 300, maxZoom: 1 });
+  // 4 terminals fitted at once end up at 40 %, unreadable: the first ones are enough.
+  const { width, height } = api.getAppState();
+  api.scrollToContent(readableTargets(frame, terminals, { width, height }), {
+    fitToViewport: true,
+    viewportZoomFactor: 0.9,
+    animate: true,
+    duration: 300,
+    maxZoom: 1,
+  });
   return { frameId: frame.id, nodeIds };
 }
 

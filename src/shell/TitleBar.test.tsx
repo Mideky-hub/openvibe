@@ -23,7 +23,7 @@ it("moves the window from its empty space only, with the logo, its content and t
   expect(bar.style.height).toBe(`${TITLE_BAR_HEIGHT}px`);
   // Bare attributes: Tauri drags only on clicks aimed at the bar or its spacers.
   const regions = [...host.querySelectorAll("[data-tauri-drag-region]")];
-  expect(regions.map((r) => r.getAttribute("data-tauri-drag-region"))).toEqual(["", "", ""]);
+  expect(regions.map((r) => r.getAttribute("data-tauri-drag-region"))).toEqual(["", "", "", ""]);
   expect(regions[0]).toBe(bar);
   for (const spacer of regions.slice(1)) expect(spacer.querySelector("button")).toBeNull();
   expect(bar.querySelector("svg path")!.getAttribute("stroke")).toBe("#D97757");

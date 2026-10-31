@@ -19,6 +19,7 @@ export const homeMessages = defineMessages(
       launch: "Lancer un agent",
       launchHint: (keys: string) => `Clic droit sur le canvas, ou ${keys}.`,
       done: "fait",
+      agentsFailed: (error: string) => `Impossible de chercher les agents : ${error}`,
     },
     troubleshoot: "Un souci ? Dépannage",
     noAgent: {
@@ -29,6 +30,7 @@ export const homeMessages = defineMessages(
       claudeHow: "Dans PowerShell :",
       copy: "Copier",
       copied: "Commande copiée.",
+      copyFailed: "Copie impossible : sélectionne la commande et copie-la à la main.",
       guide: "Guide d'installation",
       others: "Les autres agents, depuis leur page officielle :",
       recheck: "Vérifier à nouveau",
@@ -72,6 +74,7 @@ export const homeMessages = defineMessages(
       launch: "Launch an agent",
       launchHint: (keys: string) => `Right-click the canvas, or ${keys}.`,
       done: "done",
+      agentsFailed: (error: string) => `Could not look for the agents: ${error}`,
     },
     troubleshoot: "Something wrong? Troubleshooting",
     noAgent: {
@@ -82,6 +85,7 @@ export const homeMessages = defineMessages(
       claudeHow: "In PowerShell:",
       copy: "Copy",
       copied: "Command copied.",
+      copyFailed: "Could not copy: select the command and copy it by hand.",
       guide: "Installation guide",
       others: "The other agents, from their official page:",
       recheck: "Check again",
