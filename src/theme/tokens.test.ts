@@ -94,7 +94,7 @@ describe("design tokens (spec identité §4.2)", () => {
 
   it("turns every glass opaque without transparency, from Windows or from the setting", () => {
     expect(tokens).toContain("@media (prefers-reduced-transparency: reduce)");
-    expect(cssBlock(tokens, ':root[data-theme="dark"], :root[data-theme="light"]')).toMatchObject(OPAQUE);
+    expect(cssBlock(tokens, ':root[data-theme="dark"], :root[data-theme="light"]', "@media (prefers-reduced-transparency: reduce)")).toMatchObject(OPAQUE);
     expect(cssBlock(tokens, ':root[data-theme][data-transparency="off"]')).toMatchObject(OPAQUE);
   });
 
