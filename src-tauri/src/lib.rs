@@ -6,6 +6,7 @@ mod git;
 mod i18n;
 mod logging;
 mod mission;
+mod notes;
 mod process;
 mod pty;
 mod review;
@@ -121,6 +122,12 @@ pub fn run() {
             commands::mission::mission_merge,
             commands::mission::mission_cleanup,
             commands::mission::mission_discard,
+            commands::notes::notes_all,
+            commands::notes::notes_read,
+            commands::notes::notes_version,
+            commands::notes::notes_write,
+            commands::notes::notes_agent_list,
+            commands::notes::notes_agent_read,
             commands::agents::agent_activity_snapshot,
             commands::agents::mcp_reply,
         ])
