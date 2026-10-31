@@ -118,6 +118,23 @@ describe("workspaces store", () => {
     expect(names()).toEqual(["A", "FRONT"]);
   });
 
+  it("moves a tab to a place, and remembers the order for the next start", async () => {
+    const db = fakeBackend(["A", "B", "C"]);
+    await state().load("p1");
+    await state().move("w3", 0);
+    expect(names()).toEqual(["C", "A", "B"]);
+    expect(db.settings.get("ui.workspaceOrder.p1")).toEqual(["w3", "w1", "w2"]);
+    await state().move("w3", 99);
+    expect(names()).toEqual(["A", "B", "C"]);
+    store = createWorkspacesStore();
+    await state().load("p1");
+    expect(names()).toEqual(["A", "B", "C"]);
+    await state().move("w2", 0);
+    store = createWorkspacesStore();
+    await state().load("p1");
+    expect(names()).toEqual(["B", "A", "C"]);
+  });
+
   it("never removes the last workspace", async () => {
     const db = fakeBackend(["A"]);
     await state().load("p1");
