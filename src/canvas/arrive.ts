@@ -52,8 +52,8 @@ export function arrivalView(rect: Rect, viewport: { width: number; height: numbe
   };
 }
 
-/** How many frames the keyboard is offered to an arriving node (plan F1, décision 3). */
-const FOCUS_FRAMES = 10;
+/** How many frames (about two seconds) the keyboard is offered to an arriving node: after a workspace switch its terminal mounts late (plan E1, J8). */
+export const FOCUS_FRAMES = 120;
 
 /**
  * Offers the keyboard on each of the next frames until `focus` succeeds:

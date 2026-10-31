@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { focusTerminal } from "@/nodes/terminal/registry";
 import { arrivalStore } from "./arrivalSignal";
-import { arrivalView, arrive, arrivingNode, needsMove, revealNode, showNode } from "./arrive";
+import { arrivalView, arrive, FOCUS_FRAMES, arrivingNode, needsMove, revealNode, showNode } from "./arrive";
 import { canvasStore } from "./canvasStore";
 
 vi.mock("@/nodes/terminal/registry", () => ({ focusTerminal: vi.fn() }));
@@ -106,14 +106,17 @@ describe("arrive", () => {
     expect(focusTerminal).toHaveBeenCalledWith("isis");
   });
 
-  it("keeps trying to give the keyboard for a few frames: a node shown late still gets it", () => {
+  it("keeps trying to give the keyboard for a while: a terminal mounted late, after a workspace switch, still gets it", () => {
     withScene(at100);
     expect(arrive("isis")).toBe(true);
     for (let i = 0; i < 3; i++) frames.shift()!(0);
     expect(vi.mocked(focusTerminal).mock.calls.length).toBe(3);
+    // About a second on, the terminal is finally mounted.
+    for (let i = 0; i < 40; i++) frames.shift()!(0);
+    expect(frames.length).toBeGreaterThan(0);
     // Then it stops trying.
     while (frames.length > 0) frames.shift()!(0);
-    expect(vi.mocked(focusTerminal).mock.calls.length).toBe(10);
+    expect(vi.mocked(focusTerminal).mock.calls.length).toBe(FOCUS_FRAMES);
   });
 
   it("stops trying once the terminal has the keyboard", () => {
@@ -144,7 +147,7 @@ describe("arrive", () => {
     while (frames.length > 0) frames.shift()!(0);
     // The first loop stopped at its first frame; the second ran its ten.
     expect(vi.mocked(focusTerminal).mock.calls.filter(([id]) => id === "isis")).toHaveLength(0);
-    expect(vi.mocked(focusTerminal).mock.calls.filter(([id]) => id === "chef")).toHaveLength(10);
+    expect(vi.mocked(focusTerminal).mock.calls.filter(([id]) => id === "chef")).toHaveLength(FOCUS_FRAMES);
     expect(arrivingNode()).toBeNull();
   });
 
