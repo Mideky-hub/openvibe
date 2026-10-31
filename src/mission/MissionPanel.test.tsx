@@ -77,6 +77,13 @@ it("shows the group a new agent will join (spec groupes spécialisés §3)", asy
   expect(host.textContent).toContain("nouveau → Interface · 20 min");
 });
 
+it("shows the tasks waiting in the queue (spec mission de nuit §4)", async () => {
+  await show({ state: "plan", name: "Auth", plan: [{ title: "Login", brief: "Fais le login", agent: "Isis", budgetMin: 20 }], queue: [{ title: "API", brief: "b", budgetMin: 30 }, { title: "Docs", brief: "b", budgetMin: 10 }] });
+  expect(host.querySelector("[data-queue]")?.textContent).toContain("En attente (2)");
+  expect(host.querySelector("[data-queue]")?.textContent).toContain("API");
+  expect(host.querySelector("[data-queue]")?.textContent).toContain("Docs");
+});
+
 it("shows no runaway time for a mission ended before end times were kept", async () => {
   await show({
     state: "terminee",
