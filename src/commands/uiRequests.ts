@@ -1,13 +1,14 @@
 import { useEffect, useRef } from "react";
 import { createStore } from "zustand";
 import type { Point } from "@/fleet/terminals";
+import type { AgentId } from "@/ipc/pty";
 
 /** Something a command asks a component on screen to do: edit a name, open its menu (plan F2). */
 export type UiRequest =
   | { kind: "renameWorkspace"; id: string }
   | { kind: "renameTerminal"; id: string }
   | { kind: "renameOrchestrator"; id: string }
-  | { kind: "agentMenu"; view: "agents" | "options" | "ollama"; at?: Point }
+  | { kind: "agentMenu"; view: "agents" | "options" | "ollama" | { install: AgentId }; at?: Point }
   | { kind: "composeGroup" }
   | { kind: "groupMenu"; id: string };
 

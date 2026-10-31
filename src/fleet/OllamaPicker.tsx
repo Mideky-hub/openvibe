@@ -19,20 +19,25 @@ export function OllamaPicker(props: { aiderAvailable: boolean; onBack: () => voi
   const [name, setName] = useState("");
   const [invalid, setInvalid] = useState(false);
 
-  useEffect(() => {
+  const read = () =>
     listOllamaModels().then(
       (list) => setModels({ models: list }),
       (error: unknown) => setModels({ error: String(error) }),
     );
+
+  useEffect(() => {
+    void read();
   }, []);
 
   const installed = models && "models" in models ? models.models : [];
-  const suggestions = OLLAMA_SUGGESTIONS.filter((s) => !installed.some((model) => sameOllamaModel(model, s.model)));
+  // `ollama pull` needs the server too: better said here than failed in a terminal.
+  const down = models !== null && "error" in models;
+  const suggestions = down ? [] : OLLAMA_SUGGESTIONS.filter((s) => !installed.some((model) => sameOllamaModel(model, s.model)));
 
   const pull = (event: FormEvent) => {
     event.preventDefault();
     const model = name.trim();
-    if (!model) return;
+    if (!model || down) return;
     if (validOllamaModel(model)) onPull(model);
     else setInvalid(true);
   };
@@ -63,7 +68,16 @@ export function OllamaPicker(props: { aiderAvailable: boolean; onBack: () => voi
       </div>
       <div className="grid max-h-40 gap-0.5 overflow-auto">
         {models === null && <p className="px-2 py-1 text-xs text-ov-text-2">{t.reading}</p>}
-        {models && "error" in models && <p className="px-2 py-1 text-xs text-ov-danger">{t.unreachable(models.error)}</p>}
+        {models && "error" in models && (
+          <div className="grid justify-items-start gap-1 px-2 py-1">
+            <p title={models.error} className="text-xs text-ov-danger">
+              {t.serverDown}
+            </p>
+            <button type="button" onClick={() => void read()} className="text-xs text-ov-accent hover:underline">
+              {t.retry}
+            </button>
+          </div>
+        )}
         {models && "models" in models && models.models.length === 0 && <p className="px-2 py-1 text-xs text-ov-text-2">{t.noModels}</p>}
         {installed.map((model) => (
           <button
@@ -90,7 +104,7 @@ export function OllamaPicker(props: { aiderAvailable: boolean; onBack: () => voi
             }}
             className="h-8 min-w-0 font-mono text-xs"
           />
-          <AccentButton type="submit" className="px-3 text-xs">
+          <AccentButton type="submit" disabled={down} className="px-3 text-xs">
             {t.pull}
           </AccentButton>
         </div>

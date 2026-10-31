@@ -43,7 +43,7 @@ describe("the palette's catalogs in English", () => {
     expect(labelOf(find("terminal.next"), busy)).toBe("Next terminal");
     expect(labelOf(find("agent.nextWaiting"), busy)).toBe("Go to the next waiting agent");
     expect(labelOf(find("agent.launch.claude"), busy)).toBe("Launch Claude");
-    expect(labelOf(find("agent.launch.ollama"), busy)).toBe("Launch Ollama…");
+    expect(labelOf(find("agent.launch.ollama"), busy)).toBe("Install Ollama…");
     expect(labelOf(find("tool.rectangle"), busy)).toBe("Rectangle");
     expect(labelOf(find("tool.freedraw"), busy)).toBe("Pen");
     expect(sectionOf(find("app.logs"), busy)).toBe("Help");
@@ -71,9 +71,9 @@ describe("the palette's catalogs in English", () => {
     expect(lines("undo")).not.toContain("edit.undo");
   });
 
-  it("greys an agent that is missing, in English", () => {
-    const codex = functionSections(COMMANDS, busy, "codex").flatMap((s) => s.items).find((l) => l.command.id === "agent.launch.codex");
-    expect(codex?.disabled).toMatch(/not found in PATH$/);
+  it("greys what cannot be installed, in English", () => {
+    const shell = functionSections(COMMANDS, busy, "launch shell").flatMap((s) => s.items).find((l) => l.command.id === "agent.launch.shell");
+    expect(shell?.disabled).toMatch(/not found in PATH$/);
   });
 
   it("shows the shortcuts with English key names", () => {

@@ -15,9 +15,9 @@ const frame = (id: string, memberIds: string[], role: "backend" | "docs" | null 
 });
 
 describe("fleetStateOf", () => {
-  it("takes the activity of a running agent, idle while unknown", () => {
+  it("takes the activity of a running agent, active (like its pill) while unknown", () => {
     expect(fleetStateOf({ state: "running" }, { activity: "waiting", since: 1 })).toBe("waiting");
-    expect(fleetStateOf({ state: "running" })).toBe("idle");
+    expect(fleetStateOf({ state: "running" })).toBe("active");
     expect(fleetStateOf({ state: "starting" })).toBe("idle");
   });
 
@@ -55,6 +55,7 @@ describe("filterCounts", () => {
       all: 3,
       working: 2,
       waiting: 0,
+      active: 0,
       idle: 0,
       stopped: 1,
     });

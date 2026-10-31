@@ -77,10 +77,10 @@ describe("goTo (spec fenêtre §7.2)", () => {
     expect(error).toHaveBeenLastCalledWith("Serveurs n'existe plus");
   });
 
-  it("says so in the interface's language when a target of another workspace is gone", () => {
+  it("says so in English too", () => {
     const error = vi.spyOn(toast, "error").mockImplementation(() => "");
-    vi.mocked(arrive).mockReturnValue(false);
     langStore.setState({ lang: "en" });
+    vi.mocked(arrive).mockReturnValue(false);
     goTo(item({ workspaceId: "w2", targetId: "isis", label: "Isis" }));
     completeArrival("w2");
     langStore.setState({ lang: "fr" });

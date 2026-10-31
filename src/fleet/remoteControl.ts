@@ -326,3 +326,14 @@ agentActivityStore.subscribe((state, previous) => {
   }
 });
 
+
+const KNOWN_ERRORS = ["consent", "notConfirmed", "menuNotOpened", "menuUnreadable", "disconnectNotConfirmed"] as const;
+
+/** An error stored as text keeps the language of its moment: a known one is said again in the current language. */
+export function remoteErrorText(error: string): string {
+  const now = messages(fleetMessages).remote;
+  for (const key of KNOWN_ERRORS) {
+    if (fleetMessages.fr.remote[key] === error || fleetMessages.en.remote[key] === error) return now[key];
+  }
+  return error;
+}

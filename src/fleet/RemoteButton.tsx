@@ -11,7 +11,7 @@ import {
 import { messages, useMessages } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { fleetMessages } from "./messages";
-import { setRemoteControl, useRemoteLink, type RemoteLink } from "./remoteControl";
+import { remoteErrorText, setRemoteControl, useRemoteLink, type RemoteLink } from "./remoteControl";
 
 /** What the phone icon says. */
 export function remoteLabel(link: RemoteLink | undefined, wanted: boolean, running: boolean): string {
@@ -19,7 +19,7 @@ export function remoteLabel(link: RemoteLink | undefined, wanted: boolean, runni
   if (link?.state === "on") return t.on;
   if (link?.state === "connecting") return t.connecting;
   if (link?.state === "pending") return t.pending;
-  if (link?.state === "error") return t.error(link.error ?? t.failed);
+  if (link?.state === "error") return t.error(link.error ? remoteErrorText(link.error) : t.failed);
   if (wanted) return running ? t.requested : t.nextStart;
   return t.label;
 }

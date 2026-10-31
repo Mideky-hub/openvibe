@@ -3,13 +3,18 @@ import { History, X } from "lucide-react";
 import { toast } from "sonner";
 import { canvasStore } from "@/canvas/canvasStore";
 import { liveNodeIds } from "@/canvas/sceneSync";
-import { useStore } from "zustand";
+import { createStore, useStore } from "zustand";
 import { isLiveInRust, resumeTerminal } from "@/nodes/terminal/registry";
 import { nodesStore, useNodes } from "@/store/nodes";
 import { terminalStatusStore } from "@/store/terminalStatus";
 import { useMessages } from "@/i18n";
 import { fleetMessages } from "./messages";
 import { resumableTerminals } from "./resumable";
+
+/** The offer sits bottom-right, where the agents panel may reach: the panel stops above it. */
+export const resumeOfferStore = createStore<{ open: boolean }>()(() => ({ open: false }));
+/** The room the offer takes from the window's bottom edge, in px (zoom control, margin, the toast). */
+export const RESUME_OFFER_ROOM = 170;
 
 /** Workspaces whose offer was answered: it does not come back before the next launch. */
 const answered = new Set<string>();
@@ -32,12 +37,16 @@ function ResumeAllToast({ workspaceId }: { workspaceId: string }) {
   const ids = resumableTerminals(nodes, statuses, workspaceId, liveSet(Object.keys(nodes)), sceneSet());
 
   useEffect(() => {
-    if (ids.length === 0) toast.dismiss(toastId(workspaceId));
+    if (ids.length === 0) {
+      toast.dismiss(toastId(workspaceId));
+      resumeOfferStore.setState({ open: false });
+    }
   }, [ids.length, workspaceId]);
 
   const answer = () => {
     answered.add(workspaceId);
     toast.dismiss(toastId(workspaceId));
+    resumeOfferStore.setState({ open: false });
   };
   const resumeAll = () => {
     answer();
@@ -74,6 +83,7 @@ export function offerResumeAll(workspaceId: string) {
   const nodes = nodesStore.getState().nodes;
   const statuses = terminalStatusStore.getState().statuses;
   if (resumableTerminals(nodes, statuses, workspaceId, liveSet(Object.keys(nodes)), sceneSet()).length === 0) return;
+  resumeOfferStore.setState({ open: true });
   toast.custom(() => <ResumeAllToast workspaceId={workspaceId} />, {
     id: toastId(workspaceId),
     duration: Infinity,
@@ -83,4 +93,5 @@ export function offerResumeAll(workspaceId: string) {
 /** Leaving the workspace hides the offer without answering it. */
 export function dismissResumeOffer(workspaceId: string) {
   toast.dismiss(toastId(workspaceId));
+  resumeOfferStore.setState({ open: false });
 }
