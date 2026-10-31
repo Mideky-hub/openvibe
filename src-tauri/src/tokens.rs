@@ -6,18 +6,36 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
 /// Days shown, today included.
 pub const DAYS: u64 = 30;
-const MAX_FILES: usize = 2_000;
-const MAX_FILE_BYTES: u64 = 64 << 20;
-const MAX_TOTAL_BYTES: u64 = 1 << 30;
-const MAX_LINE_BYTES: usize = 4 << 20;
 const MAX_DEPTH: usize = 4;
 const MAX_SESSIONS: usize = 200;
+
+/// What bounds a scan: it must never hold the interface, or the disk, for long.
+#[derive(Debug, Clone, Copy)]
+pub struct Limits {
+    pub files: usize,
+    pub file_bytes: u64,
+    pub total_bytes: u64,
+    pub line_bytes: usize,
+    pub time: Duration,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Limits {
+            files: 2_000,
+            file_bytes: 64 << 20,
+            total_bytes: 1 << 30,
+            line_bytes: 4 << 20,
+            time: Duration::from_secs(20),
+        }
+    }
+}
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -141,19 +159,19 @@ fn collect(dir: &Path, depth: usize, out: &mut Vec<(SystemTime, PathBuf)>) {
     }
 }
 
-/// Reads a line of at most `MAX_LINE_BYTES` into `buffer`: `Some(true)`; a longer one is
+/// Reads a line of at most `line_bytes` into `buffer`: `Some(true)`; a longer one is
 /// skipped to its end, `Some(false)`; `None` at the end of the file.
-fn next_line(reader: &mut impl BufRead, buffer: &mut Vec<u8>) -> Option<bool> {
+fn next_line(reader: &mut impl BufRead, buffer: &mut Vec<u8>, max: usize) -> Option<bool> {
     buffer.clear();
     let read = reader
         .by_ref()
-        .take(MAX_LINE_BYTES as u64 + 1)
+        .take(max as u64 + 1)
         .read_until(b'\n', buffer)
         .ok()?;
     if read == 0 {
         return None;
     }
-    if buffer.len() > MAX_LINE_BYTES && buffer.last() != Some(&b'\n') {
+    if buffer.len() > max && buffer.last() != Some(&b'\n') {
         buffer.clear();
         let mut rest = Vec::new();
         loop {
@@ -174,6 +192,12 @@ fn next_line(reader: &mut impl BufRead, buffer: &mut Vec<u8>) -> Option<bool> {
 
 /// The tokens Claude Code logged under `root/projects` for the last `DAYS` days up to `now_secs` (epoch, UTC).
 pub fn scan(root: &Path, now_secs: u64) -> Report {
+    scan_with(root, now_secs, &Limits::default())
+}
+
+/// `scan` under the given bounds.
+pub fn scan_with(root: &Path, now_secs: u64, limits: &Limits) -> Report {
+    let started = Instant::now();
     let today = (now_secs / 86_400) as i64;
     let first = today - (DAYS as i64 - 1);
     let dates: Vec<String> = (first..=today).map(date_of).collect();
@@ -194,8 +218,8 @@ pub fn scan(root: &Path, now_secs: u64) -> Report {
         + std::time::Duration::from_secs(((first - 1).max(0) as u64) * 86_400);
     files.retain(|(modified, _)| *modified >= cutoff);
     files.sort_by(|a, b| b.0.cmp(&a.0));
-    let mut truncated = files.len() > MAX_FILES;
-    files.truncate(MAX_FILES);
+    let mut truncated = files.len() > limits.files;
+    files.truncate(limits.files);
 
     let mut scanned = 0;
     let mut total_bytes = 0u64;
@@ -205,13 +229,13 @@ pub fn scan(root: &Path, now_secs: u64) -> Report {
             continue;
         };
         scanned += 1;
-        if file.metadata().map(|meta| meta.len()).unwrap_or(0) > MAX_FILE_BYTES {
+        if file.metadata().map(|meta| meta.len()).unwrap_or(0) > limits.file_bytes {
             truncated = true;
         }
-        let mut reader = BufReader::new(file.take(MAX_FILE_BYTES));
-        while let Some(usable) = next_line(&mut reader, &mut buffer) {
+        let mut reader = BufReader::new(file.take(limits.file_bytes));
+        while let Some(usable) = next_line(&mut reader, &mut buffer, limits.line_bytes) {
             total_bytes += buffer.len() as u64;
-            if total_bytes > MAX_TOTAL_BYTES {
+            if total_bytes > limits.total_bytes || started.elapsed() >= limits.time {
                 truncated = true;
                 break 'files;
             }
@@ -445,7 +469,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let huge = format!(
             r#"{{"type":"user","message":{{"content":"{}"}}}}"#,
-            "x".repeat(MAX_LINE_BYTES + 10)
+            "x".repeat(Limits::default().line_bytes + 10)
         );
         write(
             dir.path(),
@@ -458,5 +482,139 @@ mod tests {
         let report = scan(dir.path(), NOW);
         assert!(report.truncated);
         assert_eq!(report.days.last().unwrap().counts.output, 2);
+    }
+
+    /// Today's output of a scan under small bounds, over files written by `fill`.
+    fn bounded(limits: Limits, files: usize, lines: usize) -> Report {
+        let dir = tempfile::tempdir().unwrap();
+        for f in 0..files {
+            let batch: Vec<String> = (0..lines)
+                .map(|l| {
+                    assistant(
+                        &format!("m-{f}-{l}"),
+                        "s",
+                        "2026-10-31",
+                        "claude-opus-5-5",
+                        1,
+                        1,
+                    )
+                })
+                .collect();
+            write(dir.path(), &format!("p/f{f}.jsonl"), &batch);
+        }
+        scan_with(dir.path(), NOW, &limits)
+    }
+
+    fn output_of_today(report: &Report) -> u64 {
+        report.days.last().unwrap().counts.output
+    }
+
+    #[test]
+    fn reads_no_more_files_than_the_bound() {
+        let report = bounded(
+            Limits {
+                files: 2,
+                ..Limits::default()
+            },
+            5,
+            3,
+        );
+        assert_eq!(report.files_scanned, 2);
+        assert!(report.truncated);
+        assert_eq!(output_of_today(&report), 6);
+    }
+
+    #[test]
+    fn reads_no_more_of_a_file_than_the_bound() {
+        // A line is about 400 bytes: 1 200 bytes hold three of the ten.
+        let report = bounded(
+            Limits {
+                file_bytes: 1_200,
+                ..Limits::default()
+            },
+            1,
+            10,
+        );
+        assert!(report.truncated);
+        assert!(output_of_today(&report) < 10);
+        assert!(output_of_today(&report) >= 1);
+    }
+
+    #[test]
+    fn stops_at_the_total_bytes_bound() {
+        let report = bounded(
+            Limits {
+                total_bytes: 2_000,
+                ..Limits::default()
+            },
+            4,
+            10,
+        );
+        assert!(report.truncated);
+        assert!(output_of_today(&report) < 40);
+    }
+
+    #[test]
+    fn stops_when_the_time_is_up() {
+        let report = bounded(
+            Limits {
+                time: Duration::ZERO,
+                ..Limits::default()
+            },
+            4,
+            10,
+        );
+        assert!(report.truncated);
+        assert_eq!(output_of_today(&report), 0);
+    }
+
+    #[test]
+    fn a_large_generated_log_is_read_whole_within_the_default_bounds_and_quickly() {
+        // About 30 MB over 20 files: far from the bounds, so nothing is lost.
+        let started = Instant::now();
+        let report = bounded(Limits::default(), 20, 4_000);
+        assert!(!report.truncated);
+        assert_eq!(report.files_scanned, 20);
+        assert_eq!(output_of_today(&report), 20 * 4_000);
+        assert!(
+            started.elapsed() < Duration::from_secs(15),
+            "took {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn a_message_id_is_counted_once_across_files() {
+        let dir = tempfile::tempdir().unwrap();
+        for f in 0..3 {
+            write(
+                dir.path(),
+                &format!("p/f{f}.jsonl"),
+                &[assistant(
+                    "same",
+                    "s",
+                    "2026-10-31",
+                    "claude-opus-5-5",
+                    1,
+                    7,
+                )],
+            );
+        }
+        assert_eq!(output_of_today(&scan(dir.path(), NOW)), 7);
+    }
+
+    #[test]
+    fn ignores_a_day_outside_the_window() {
+        let dir = tempfile::tempdir().unwrap();
+        write(
+            dir.path(),
+            "p/s.jsonl",
+            &[
+                assistant("a", "s", "2026-10-01", "claude-opus-5-5", 1, 5),
+                assistant("b", "s", "2026-11-02", "claude-opus-5-5", 1, 5),
+            ],
+        );
+        let report = scan(dir.path(), NOW);
+        assert_eq!(report.days.iter().map(|d| d.counts.output).sum::<u64>(), 0);
     }
 }
