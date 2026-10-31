@@ -151,6 +151,7 @@ export const fleetMessages = defineMessages(
       remove: (label: string) => `Retirer ${label}`,
       send: "Envoyer",
       writeInstruction: "Écris une consigne",
+      noAgents: "Aucun agent dans cette cible",
     },
     compose: {
       title: "Composer un groupe",
@@ -171,6 +172,8 @@ export const fleetMessages = defineMessages(
       linkOrchestrator: "Relier un orchestrateur",
       pauseAll: "Tout mettre en pause",
       resumeAll: "Tout reprendre",
+      fold: "Replier le groupe",
+      unfold: "Déplier le groupe",
       ungroup: "Dégrouper",
       close: "Fermer le groupe",
     },
@@ -376,6 +379,7 @@ export const fleetMessages = defineMessages(
       remove: (label: string) => `Remove ${label}`,
       send: "Send",
       writeInstruction: "Write an instruction",
+      noAgents: "No agent in this target",
     },
     compose: {
       title: "Compose a group",
@@ -396,6 +400,8 @@ export const fleetMessages = defineMessages(
       linkOrchestrator: "Link an orchestrator",
       pauseAll: "Pause all",
       resumeAll: "Resume all",
+      fold: "Fold the group",
+      unfold: "Unfold the group",
       ungroup: "Ungroup",
       close: "Close the group",
     },

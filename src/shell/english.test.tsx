@@ -76,6 +76,7 @@ it("the settings menu offers the language, applies a choice, and its labels are 
     "Export the scene…",
     "Import a scene…",
     "Export as PNG…",
+    "Windows notifications",
     "Check for updates automatically",
     "Check for updates",
     "About OpenVibe",

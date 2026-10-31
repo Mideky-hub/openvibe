@@ -11,7 +11,9 @@ import {
   insertIntoFrame,
   MAX_SPECIALITY,
   nextGroupName,
+  withGroupFolded,
   withGroupSpeciality,
+  hiddenNodeIds,
 } from "./groups";
 
 const element = (fields: Record<string, unknown>) =>
@@ -127,5 +129,27 @@ describe("groupBeingRenamed", () => {
   it("leaves plain frames and the idle editor to Excalidraw", () => {
     expect(groupBeingRenamed("plain", frames)).toBeNull();
     expect(groupBeingRenamed(null, frames)).toBeNull();
+  });
+});
+
+describe("a folded group (spec replier un groupe)", () => {
+  it("is read from the frame, and written without trace when unfolded", () => {
+    const data = (folded: unknown) => group("g", "backend", "greek", { customData: { openvibe: { kind: "group", role: "backend", pantheon: "greek", folded } } });
+    expect(groupInfoOf(data(true))?.folded).toBe(true);
+    expect(groupInfoOf(data("yes"))?.folded).toBeUndefined();
+    expect(groupInfoOf(group("g"))?.folded).toBeUndefined();
+    const folded = withGroupFolded(group("g").customData, true) as { openvibe: Record<string, unknown> };
+    expect(folded.openvibe.folded).toBe(true);
+    expect((withGroupFolded(folded, false) as { openvibe: Record<string, unknown> }).openvibe).not.toHaveProperty("folded");
+  });
+
+  it("tells the terminals hidden by folded groups", () => {
+    const scene = [
+      group("g1", "backend", "greek", { customData: { openvibe: { kind: "group", role: "backend", pantheon: "greek", folded: true } } }),
+      group("g2"),
+      terminal("a", "g1"),
+      terminal("b", "g2"),
+    ];
+    expect([...hiddenNodeIds(framesFromScene(scene))]).toEqual(["a"]);
   });
 });

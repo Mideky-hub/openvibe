@@ -218,3 +218,20 @@ export function orphanWires(elements: readonly ExcalidrawElement[]): string[] {
     })
     .map((arrow) => arrow.id);
 }
+
+/**
+ * Wires `orphanWires` deleted whose two ends are back: an undo restored the
+ * node (and, for Suppr, the binding) but not the wire, which was deleted
+ * outside the history. Only those the upkeep marked: a wire the user deleted
+ * stays deleted.
+ */
+export function revivableWires(elements: readonly ExcalidrawElement[]): string[] {
+  const byId = new Map(elements.map((e) => [e.id, e]));
+  return elements
+    .filter((e) => e.isDeleted && e.type === "arrow" && isWire(e) && (e.customData?.openvibe as { orphaned?: unknown }).orphaned === true)
+    .filter((arrow) => {
+      const { startBinding, endBinding } = arrow as ExcalidrawArrowElement;
+      return [startBinding, endBinding].every((b) => b && isWireEnd(byId.get(b.elementId)));
+    })
+    .map((arrow) => arrow.id);
+}

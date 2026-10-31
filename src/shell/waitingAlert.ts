@@ -1,5 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { onAction, sendNotification, type ActionPerformed } from "@tauri-apps/plugin-notification";
+import { nativeNotificationsStore } from "@/app/nativeNotifications";
 import { goToAgent } from "@/commands/goToRun";
 import { currentWaitingAgents } from "@/fleet/waitingAgents";
 import { messages } from "@/i18n";
@@ -10,6 +11,7 @@ import { shellMessages } from "./messages";
 const warn = (error: unknown) => console.warn("Windows notification failed", error);
 
 async function alertFor(nodeId: string) {
+  if (!nativeNotificationsStore.getState().enabled) return;
   const agent = currentWaitingAgents().find((a) => a.id === nodeId);
   if (!agent || (await getCurrentWindow().isFocused())) return;
   sendNotification({ title: "OpenVibe", body: messages(shellMessages).waitingNotice.question(agent.name), extra: { nodeId } });

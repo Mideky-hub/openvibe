@@ -7,6 +7,7 @@ import { agentsPanelStore, setAgentsPanel } from "@/fleet/agentsPanelState";
 import { currentWaitingAgents } from "@/fleet/waitingAgents";
 import { focusCommandBar } from "@/shell/commandBarFocus";
 import { projectsStore } from "@/store/projects";
+import { openNotes } from "@/notes/notesStore";
 import { openStudio } from "@/studio/studioStore";
 import type { Command, CommandContext } from "../command";
 import { goToNextWaiting } from "../goToRun";
@@ -46,6 +47,7 @@ export const NAVIGATION: readonly Command[] = [
     run: () => setAgentsPanel(!agentsPanelStore.getState().open),
   }),
   command("studio.code", { section: nav, available: inProject, run: () => openStudio() }),
+  command("notes.open", { section: nav, available: inProject, run: () => openNotes() }),
   command("project.home", { section: nav, available: inProject, run: () => projectsStore.getState().goHome() }),
   command("project.close", { section: nav, available: inProject, run: () => projectsStore.getState().close() }),
   command("palette.functions", { section: nav, shortcut: "Ctrl+Maj+P", available: always, run: (ctx) => openPalette("functions", ctx) }),

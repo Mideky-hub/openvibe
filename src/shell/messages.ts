@@ -6,7 +6,7 @@ export const shellMessages = defineMessages(
     loading: "Chargement…",
     percent: (n: number) => `${n} %`,
     failed: (what: string, error: string) => `${what} : ${error}`,
-    activityRail: { agents: "Agents", codeStudio: "Studio Code", settings: "Réglages" },
+    activityRail: { agents: "Agents", codeStudio: "Studio Code", notes: "Notes", settings: "Réglages" },
     agentCounts: {
       working: "Agents en cours",
       waiting: "Agents qui attendent ta réponse",
@@ -64,6 +64,7 @@ export const shellMessages = defineMessages(
       light: "Clair (Ivoire)",
       dark: "Sombre (Argile)",
       transparency: "Effets de transparence",
+      nativeNotifications: "Notifications Windows",
       exportScene: "Exporter la scène…",
       importScene: "Importer une scène…",
       exportPng: "Exporter en PNG…",
@@ -162,6 +163,8 @@ export const shellMessages = defineMessages(
     tabs: {
       deleteWorkspace: "Supprimer le workspace",
       rename: "Renommer",
+      moveLeft: "Déplacer à gauche",
+      moveRight: "Déplacer à droite",
       delete: "Supprimer",
       newWorkspace: "Nouveau workspace",
       activeAgents: (count: number) => plural("fr", count, "agent actif", "agents actifs"),
@@ -218,7 +221,7 @@ export const shellMessages = defineMessages(
     loading: "Loading…",
     percent: (n: number) => `${n}%`,
     failed: (what: string, error: string) => `${what}: ${error}`,
-    activityRail: { agents: "Agents", codeStudio: "Code studio", settings: "Settings" },
+    activityRail: { agents: "Agents", codeStudio: "Code studio", notes: "Notes", settings: "Settings" },
     agentCounts: {
       working: "Agents working",
       waiting: "Agents waiting for your answer",
@@ -276,6 +279,7 @@ export const shellMessages = defineMessages(
       light: "Light (Ivory)",
       dark: "Dark (Clay)",
       transparency: "Transparency effects",
+      nativeNotifications: "Windows notifications",
       exportScene: "Export the scene…",
       importScene: "Import a scene…",
       exportPng: "Export as PNG…",
@@ -374,6 +378,8 @@ export const shellMessages = defineMessages(
     tabs: {
       deleteWorkspace: "Delete the workspace",
       rename: "Rename",
+      moveLeft: "Move left",
+      moveRight: "Move right",
       delete: "Delete",
       newWorkspace: "New workspace",
       activeAgents: (count: number) => plural("en", count, "active agent", "active agents"),

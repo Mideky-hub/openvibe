@@ -36,11 +36,11 @@ async function refusedWithoutClaude(): Promise<boolean> {
 }
 
 /** "Relier un orchestrateur" of the group menu: a new orchestrator left of the group, wired to it, in one undo step. */
-export async function orchestrateGroup(groupId: string) {
+export async function orchestrateGroup(groupId: string): Promise<string | null> {
   const api = canvasStore.getState().api;
   const workspaceId = workspacesStore.getState().activeId;
   const group = canvasStore.getState().frames.find((f) => f.id === groupId);
-  if (!api || !workspaceId || !group || !isGroup(group) || (await refusedWithoutClaude())) return;
+  if (!api || !workspaceId || !group || !isGroup(group) || (await refusedWithoutClaude())) return null;
   // A second orchestrator of the same group must not land on the first: moved past what it would cover.
   const { width, height } = NODE_SIZE.orchestrator;
   const spot = orchestratorSpot(group);
@@ -55,6 +55,7 @@ export async function orchestrateGroup(groupId: string) {
     elements: withWire([...api.getSceneElementsIncludingDeleted(), element], element.id, groupId),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
+  return element.id;
 }
 
 /** The menu's "Orchestrateur", placed with a click like an agent (spec habillage §10.1). */

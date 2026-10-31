@@ -11,7 +11,7 @@ import { ReviewPanel } from "./ReviewPanel";
 import { reviewStore } from "./reviewStore";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
-vi.mock("@/fleet/broadcast", () => ({ sendToAgents: vi.fn(() => Promise.resolve({ sent: 1, skipped: [], waiting: [], unsuited: [] })) }));
+vi.mock("@/fleet/broadcast", () => ({ sendToAgents: vi.fn(() => Promise.resolve({ sent: 1, skipped: [], waiting: [], unsuited: [], starting: [] })) }));
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { warning: vi.fn(), error: vi.fn() }) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -159,4 +159,13 @@ it("keeps the file read and the remark being typed through Refresh and a click o
   await vi.waitFor(() => expect(calls.filter((c) => c.cmd === "review_changes").length).toBe(2));
   expect(host.querySelectorAll("[data-diff-line]").length).toBe(4);
   expect(field().value).toBe("à moitié");
+});
+
+it("tells the remarks wait when the agent is still starting, and keeps them (plan B3)", async () => {
+  vi.mocked(sendToAgents).mockResolvedValueOnce({ sent: 0, skipped: [], waiting: [], unsuited: [], starting: ["Isis"] });
+  vi.mocked(toast.warning).mockClear();
+  await act(async () => reviewStore.getState().add({ file: "src/a.ts", line: 2, text: "Pourquoi 3 ?" }));
+  await act(async () => button("Envoyer à Isis").click());
+  expect(toast.warning).toHaveBeenCalledWith("Isis démarre encore : réessaie dans un instant pour lui envoyer la revue.");
+  expect(reviewStore.getState().remarks).toHaveLength(1);
 });

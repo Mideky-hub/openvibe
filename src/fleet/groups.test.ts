@@ -5,7 +5,7 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { canvasStore } from "@/canvas/canvasStore";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { workspacesStore } from "@/store/workspaces";
-import { closeGroup, launchGroup, setGroupSpeciality, showGroups } from "./groups";
+import { closeGroup, launchGroup, setGroupFolded, setGroupSpeciality, showGroups } from "./groups";
 
 vi.mock("@excalidraw/excalidraw", () => ({ CaptureUpdateAction: { IMMEDIATELY: "i" }, newElementWith: (e: object, patch: object) => ({ ...e, ...patch }) }));
 vi.mock("@/nodes/terminal/registry", () => ({ markForAutostart: vi.fn() }));
@@ -98,4 +98,15 @@ it("closes a group with the wires that led to it (final review H2)", () => {
   ];
   closeGroup("f1");
   expect(scene.filter((e) => e.isDeleted).map((e) => e.id)).toEqual(["f1", "t1", "w1", "w2"]);
+});
+
+it("folds and unfolds a group as one undoable step, keeping everything else (spec replier un groupe §3)", () => {
+  const data = { kind: "group", role: "general", pantheon: "egyptian", speciality: "API" };
+  scene = [{ id: "f1", type: "frame", customData: { openvibe: data } }, { id: "plain", type: "frame" }];
+  setGroupFolded("f1", true);
+  expect(scene[0].customData?.openvibe).toEqual({ ...data, folded: true });
+  setGroupFolded("plain", true);
+  expect(scene[1].customData).toBeUndefined();
+  setGroupFolded("f1", false);
+  expect(scene[0].customData?.openvibe).toEqual(data);
 });

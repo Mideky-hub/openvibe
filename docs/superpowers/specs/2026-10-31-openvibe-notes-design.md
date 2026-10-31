@@ -51,7 +51,7 @@ Garder ce que le projet doit retenir (décisions, architecture, conventions) dan
 ## 5. Front (`src/notes/`)
 
 - `names.ts` : validation. `links.ts` : extraction des `[[liens]]`, résolution, rétroliens, arêtes. `search.ts` : recherche. `markdown.ts` : analyse. `graph.ts` : disposition.
-- `NotesDialog.tsx`, `NoteList.tsx`, `NoteReader.tsx`, `NoteGraph.tsx`, `Backlinks.tsx` : l'interface ; `notesStore.ts` : ouverture ; `Notes.tsx` : l'hôte, chargé à la demande.
+- `NotesDialog.tsx` (liste et rétroliens compris), `NoteReader.tsx`, `NoteGraph.tsx` : l'interface ; `notesStore.ts` : ouverture ; `Notes.tsx` : l'hôte, chargé à la demande.
 - `groupNotes.ts`, `GroupNotesDialog.tsx`, `GroupNotesItem.tsx` : l'attache. `agentTool.ts` : l'outil MCP.
 - Réutilisés du studio : `CodeEditor`, `fileSession`, `UnsavedDialog`, le bandeau de disque et les effets communs (sondage, Ctrl+S, fermeture), sortis de `StudioDialog`.
 
@@ -68,5 +68,6 @@ En-tête comme le studio : icône, « Notes », nom de la note, point d'accent s
 
 - `.openvibe/notes/` apparaît comme fichiers non suivis dans `git status` tant que le projet n'a pas choisi : c'est voulu.
 - Le contenu d'une note est donné tel quel aux agents : une note écrite par un agent peut en influencer un autre, comme tout fichier du dépôt.
-- Le graphe calcule sa disposition en O(n²) par tour : borné à 1000 notes, à contrôler à la main sur un gros carnet.
+- Le graphe calcule sa disposition en O(n²) par tour : borné à 1000 notes, avec moins de tours au-delà de 300, à contrôler à la main sur un gros carnet.
+- Le worktree d'un agent de mission ne contient `.openvibe/notes/` que si les notes sont commitées : l'outil `notes` lit toujours le dossier du projet et n'a pas cette limite.
 - Contrôle manuel indispensable : l'app n'est pas lancée pendant la mission de nuit.

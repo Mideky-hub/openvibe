@@ -105,3 +105,18 @@ it("puts a second orchestrator of the same group clear of the first (plan B3)", 
   const overlaps = a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
   expect(overlaps).toBe(false);
 });
+
+it("tells which orchestrator it posed, and null when Claude Code is missing (plan presets)", async () => {
+  const frame = { id: "g1", type: "frame", x: 1000, y: 0, width: 600, height: 400, isDeleted: false, frameId: null, customData: { openvibe: { kind: "group", role: "backend", pantheon: "egypt" } } };
+  scene = [frame];
+  canvasStore.setState({
+    frames: [{ id: "g1", name: "G", x: 1000, y: 0, width: 600, height: 400, group: { role: "backend", pantheon: "egypt" }, memberIds: [] }],
+  });
+  const { workspacesStore } = await import("@/store/workspaces");
+  workspacesStore.setState({ activeId: "w1" } as never);
+  const id = await orchestrateGroup("g1");
+  expect(id).toBe((scene.find((e) => e.type === "embeddable") as { id: string }).id);
+  agentsStore.setState({ agents: [{ id: "claude", available: false }], shells: [], loaded: true });
+  expect(await orchestrateGroup("g1")).toBeNull();
+  expect(await orchestrateGroup("nope")).toBeNull();
+});

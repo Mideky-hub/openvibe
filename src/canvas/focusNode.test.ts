@@ -18,3 +18,21 @@ it("activates the element a fleet panel click centers on (spec habillage §5.5)"
   focusNode("t1");
   expect(updateScene.mock.calls[0][0].appState.activeEmbeddable).toEqual({ element, state: "active" });
 });
+
+it("unfolds the folded group of the agent first (spec replier un groupe §2)", async () => {
+  const setGroupFolded = vi.fn();
+  vi.stubGlobal("requestAnimationFrame", () => 0);
+  vi.doMock("@/fleet/groups", () => ({ setGroupFolded }));
+  const element = { id: "t1", x: 0, y: 0, width: 400, height: 300 };
+  canvasStore.setState({
+    frames: [{ id: "g", name: "G", x: 0, y: 0, width: 1, height: 1, group: { role: "general", pantheon: "greek", folded: true }, memberIds: ["t1"] }] as never,
+    api: {
+      getSceneElements: () => [element],
+      getAppState: () => ({ width: 1000, height: 800, zoom: { value: 1 }, scrollX: 0, scrollY: 0 }),
+      updateScene: vi.fn(),
+    } as unknown as ExcalidrawImperativeAPI,
+  });
+  focusNode("t1");
+  await vi.waitFor(() => expect(setGroupFolded).toHaveBeenCalledWith("g", false));
+  canvasStore.setState({ frames: [] });
+});

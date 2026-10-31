@@ -81,6 +81,16 @@ describe("inside a line", () => {
     ]);
   });
 
+  it("leaves a sentence's punctuation out of a bare address", () => {
+    expect(parseInline("at https://a.dev/x, then https://b.dev.")).toEqual([
+      { kind: "text", text: "at " },
+      { kind: "link", url: "https://a.dev/x", label: "https://a.dev/x" },
+      { kind: "text", text: ", then " },
+      { kind: "link", url: "https://b.dev", label: "https://b.dev" },
+      { kind: "text", text: "." },
+    ]);
+  });
+
   it("gives no link to what is not http or https", () => {
     expect(parseInline("[x](javascript:alert(1))")).toEqual([{ kind: "text", text: "[x](javascript:alert(1))" }]);
     expect(parseInline("[x](file:///C:/secret)")).toEqual([{ kind: "text", text: "[x](file:///C:/secret)" }]);
@@ -97,6 +107,7 @@ describe("safe addresses", () => {
     expect(safeUrl("https://a.dev")).toBe("https://a.dev/");
     expect(safeUrl("HTTP://a.dev/x")).toBe("http://a.dev/x");
     expect(safeUrl("java\nscript:alert(1)")).toBeNull();
+    expect(safeUrl("https://a.dev/a b")).toBeNull();
     expect(safeUrl("not a url")).toBeNull();
   });
 });

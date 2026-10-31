@@ -22,7 +22,7 @@ export const agentMessages = defineMessages(
       team: "Chaque agent de la mission : groupe et spécialité, sous-tâche, état (working, waiting, idle, stopped), étapes, temps passé / budget, compte rendu.",
       readOutput: "La fin du terminal d'un agent de la mission, en texte simple.",
       write: "Tape un message dans le terminal d'un agent de la mission (relance, précision). Refusé s'il attend une réponse de l'utilisateur.",
-      extend: "Ajoute des minutes au budget d'un agent de la mission, prises sur le reste du budget global.",
+      extend: "Ajoute des minutes au budget d'un agent de la mission ; sa nouvelle cible doit finir avant le budget global, du temps réel.",
       interrupt: "Arrête le tour d'un agent au travail (Échap), comme « Pause » ; write « continue » le reprend.",
       reassign: "Donne une sous-tâche à un autre agent de la mission qui a rendu compte, ou à un agent « new » : il la reçoit avec le compte rendu et la branche du précédent.",
       merge: "Fusionne dans la branche de la mission les branches des agents qui ont rendu compte « done » ; dit ce qui est fusionné et les conflits.",
@@ -70,7 +70,7 @@ export const agentMessages = defineMessages(
       notLinkedGroup: (n: number, group: string) => `Sous-tâche ${n} : « ${group} » n'est pas un groupe relié.`,
       level: (n: number) => `Sous-tâche ${n} : niveau low, medium, high ou extreme.`,
       levelRouter: (n: number) => `Sous-tâche ${n} : un niveau (low, medium, high ou extreme) — le routeur choisit le modèle de l'agent avec.`,
-      overBudget: (total: number, budget: number) => `Les budgets font ${total} min, plus que le budget global (${budget} min).`,
+      overBudget: (n: number, minutes: number, budget: number) => `Sous-tâche ${n} : ${minutes} min ne tiennent pas dans le budget global (${budget} min de temps réel).`,
     },
     orchestrator: {
       gone: "Cet orchestrateur n'est plus sur le canvas.",
@@ -135,6 +135,9 @@ export const agentMessages = defineMessages(
       stopped: (name: string) => `${name} s'est arrêté : son terminal ne tourne plus.`,
       budgetOver: (name: string, task: string, budget: number) =>
         `Budget écoulé : ${name} (${task}) a passé ses ${budget} min sans rendre compte. Décide : write, extend, interrupt ou reassign.`,
+      targetOver: (name: string, task: string, budget: number) =>
+        `Cible dépassée : ${name} (${task}) a passé ses ${budget} min, ce n'est qu'une cible. Regarde où il en est avec read_output ; laisse-le finir s'il avance.`,
+      windDown: (left: number) => `Plus que ${left} min : la file ne donne plus de tâche. Fusionne ce qui est fait, fais vérifier, puis termine.`,
       globalOver: (budget: number) => `Budget global écoulé (${budget} min) : termine avec ce qui est fait.`,
     },
     merge: {
@@ -189,7 +192,7 @@ export const agentMessages = defineMessages(
       team: "Each agent of the mission: group and speciality, sub-task, state (working, waiting, idle, stopped), steps, time spent / budget, report.",
       readOutput: "The end of a mission agent's terminal, as plain text.",
       write: "Type a message into a mission agent's terminal (a nudge, a precision). Refused while it waits for the user's answer.",
-      extend: "Add minutes to a mission agent's budget, taken from what is left of the overall budget.",
+      extend: "Add minutes to a mission agent's budget; its new target must end before the overall budget, which is real time.",
       interrupt: "Stop the turn of an agent at work (Esc), like \"Pause\"; write \"continue\" resumes it.",
       reassign: "Give a sub-task to another mission agent that has reported, or to a \"new\" agent: it gets the previous agent's report and branch.",
       merge: "Merge into the mission's branch the branches of the agents that reported \"done\"; says what was merged and the conflicts.",
@@ -237,7 +240,7 @@ export const agentMessages = defineMessages(
       notLinkedGroup: (n: number, group: string) => `Sub-task ${n}: "${group}" is not a linked group.`,
       level: (n: number) => `Sub-task ${n}: level low, medium, high or extreme.`,
       levelRouter: (n: number) => `Sub-task ${n}: a level (low, medium, high or extreme) — the router chooses the agent's model with it.`,
-      overBudget: (total: number, budget: number) => `The budgets add up to ${total} min, more than the overall budget (${budget} min).`,
+      overBudget: (n: number, minutes: number, budget: number) => `Sub-task ${n}: ${minutes} min do not fit in the overall budget (${budget} min of real time).`,
     },
     orchestrator: {
       gone: "This orchestrator is no longer on the canvas.",
@@ -302,6 +305,9 @@ export const agentMessages = defineMessages(
       stopped: (name: string) => `${name} stopped: its terminal is no longer running.`,
       budgetOver: (name: string, task: string, budget: number) =>
         `Budget used up: ${name} (${task}) went past its ${budget} min without reporting. Decide: write, extend, interrupt or reassign.`,
+      targetOver: (name: string, task: string, budget: number) =>
+        `Target passed: ${name} (${task}) went past its ${budget} min, which is only a target. See where it stands with read_output; let it finish if it is moving.`,
+      windDown: (left: number) => `${left} min left: the queue gives out no more tasks. Merge what is done, have it checked, then finish.`,
       globalOver: (budget: number) => `Overall budget used up (${budget} min): finish with what is done.`,
     },
     merge: {
