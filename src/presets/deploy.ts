@@ -21,6 +21,8 @@ export interface DeployDeps {
   orchestrate: (groupId: string) => Promise<string | null>;
   link: (orchestratorId: string, groupId: string) => void;
   rename: (orchestratorId: string, name: string) => void;
+  /** Brings the view onto what was posed: every group and orchestrator, once, at the end. */
+  fit: (ids: string[]) => void;
 }
 
 export interface DeployResult {
@@ -44,6 +46,7 @@ export async function deployPreset(preset: TeamPreset, deps: DeployDeps): Promis
   const origin = clearSpot({ x: deps.center.x - width / 2, y: deps.center.y - height / 2, width, height }, deps.obstacles);
   const result: DeployResult = { groups: 0, agents: 0, orchestrators: 0, substituted: 0, orchestratorsSkipped: 0 };
   const frames: (string | null)[] = [];
+  const posed: string[] = [];
   for (const [i, group] of preset.groups.entries()) {
     const agents = group.agents.map((agent) => {
       if (deps.isAvailable(agent)) return agent;
@@ -55,6 +58,7 @@ export async function deployPreset(preset: TeamPreset, deps: DeployDeps): Promis
     frames.push(made?.frameId ?? null);
     if (!made) continue;
     result.groups += 1;
+    posed.push(made.frameId);
     result.agents += made.nodeIds.length;
     if (group.speciality) deps.setSpeciality(made.frameId, group.speciality);
   }
@@ -71,7 +75,9 @@ export async function deployPreset(preset: TeamPreset, deps: DeployDeps): Promis
     }
     for (const groupId of targets.slice(1)) deps.link(id, groupId);
     deps.rename(id, orchestrator.name);
+    posed.push(id);
     result.orchestrators += 1;
   }
+  if (posed.length > 0) deps.fit(posed);
   return result;
 }

@@ -248,15 +248,25 @@ pub fn attached_of_node(conn: &Connection, node_id: &str) -> AppResult<Vec<Strin
         .unwrap_or_default())
 }
 
-/// The project's notes for an agent; what is attached but gone is not listed.
+/// The project's notes for an agent, from their names alone: nothing is read.
+/// A note that cannot be read says so when asked for; what is attached but gone
+/// is not listed.
 pub fn for_agent(project: &Path, attached: &[String]) -> Result<Vec<AgentNote>, String> {
+    let root = notes_root(project, false)?;
     let wanted: BTreeSet<String> = attached.iter().map(|name| name.to_lowercase()).collect();
-    Ok(all(project)?
-        .notes
+    let (names, _) = candidates(&root)?;
+    Ok(names
         .into_iter()
-        .map(|note| AgentNote {
-            attached: wanted.contains(&note.name.to_lowercase()),
-            name: note.name,
+        // A link is no note: `candidates` leaves it for a read to refuse, and there is none here.
+        .filter(|name| {
+            root.join(format!("{name}{EXTENSION}"))
+                .symlink_metadata()
+                .is_ok_and(|meta| meta.is_file())
+        })
+        .take(MAX_NOTES)
+        .map(|name| AgentNote {
+            attached: wanted.contains(&name.to_lowercase()),
+            name,
         })
         .collect())
 }
@@ -648,6 +658,45 @@ mod tests {
                 },
             ]
         );
+    }
+
+    /// `all` leaves such a note out because it reads it; a list of names never opens it.
+    #[test]
+    fn an_agent_s_list_reads_no_note() {
+        let big = vec![b'x'; studio::MAX_BYTES as usize + 1];
+        let dir = project(&[("big.md", &big), ("binary.md", b"\0"), ("plain.md", b"x")]);
+        let names: Vec<String> = for_agent(dir.path(), &[])
+            .unwrap()
+            .into_iter()
+            .map(|note| note.name)
+            .collect();
+        assert_eq!(names, ["big", "binary", "plain"]);
+    }
+
+    #[test]
+    fn an_agent_s_list_stops_at_the_limit_and_creates_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(for_agent(dir.path(), &[]).unwrap(), []);
+        assert!(!notes_of(dir.path()).exists());
+        std::fs::create_dir_all(notes_of(dir.path())).unwrap();
+        for i in 0..MAX_NOTES + 2 {
+            std::fs::write(notes_of(dir.path()).join(format!("n{i}.md")), "x").unwrap();
+        }
+        assert_eq!(for_agent(dir.path(), &[]).unwrap().len(), MAX_NOTES);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn an_agent_s_list_leaves_a_junction_out() {
+        let outside = tempfile::tempdir().unwrap();
+        let dir = project(&[("good.md", b"x")]);
+        junction(&notes_of(dir.path()).join("link.md"), outside.path());
+        let names: Vec<String> = for_agent(dir.path(), &[])
+            .unwrap()
+            .into_iter()
+            .map(|note| note.name)
+            .collect();
+        assert_eq!(names, ["good"]);
     }
 
     #[test]

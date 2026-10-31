@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { readSource } from "./cssBlocks";
 
 // Spec identité §4.4: no pill shapes, except counter badges; a dot is not a pill.
-it.each(["fleet/AgentMenu.tsx", "fleet/ComposeGroup.tsx", "fleet/InstallPrompt.tsx", "fleet/OllamaPicker.tsx", "home/NoAgent.tsx"])(
+it.each(["fleet/AgentMenu.tsx", "fleet/ComposeGroup.tsx", "fleet/InstallPrompt.tsx", "fleet/OllamaPicker.tsx", "git/GitWindow.tsx", "home/NoAgent.tsx"])(
   "%s has no pill shape",
   (file) => {
     const pills = readSource(file)

@@ -35,6 +35,8 @@ pub struct PtyManager {
     /// Terminals being started: a second start of the same one is refused
     /// before it can touch the first one's token and files.
     starting: Arc<Mutex<HashSet<String>>>,
+    /// What the database holds of a terminal about to be relaunched; taken by its `spawn`.
+    histories: Arc<Mutex<HashMap<String, Vec<u8>>>>,
 }
 
 /// The right to start one terminal; released when dropped.
@@ -68,6 +70,7 @@ impl PtyManager {
         on_output: OnOutput,
         on_exit: impl FnOnce(ExitInfo) + Send + 'static,
     ) -> AppResult<Option<u32>> {
+        let history = lock(&self.histories).remove(node_id).unwrap_or_default();
         let mut sessions = lock(&self.sessions);
         if sessions.contains_key(node_id) {
             return Err(AppError::InvalidInput(tr!(
@@ -79,7 +82,7 @@ impl PtyManager {
             session,
             mut child,
             reader,
-        } = Session::start(plan, size, sink, on_output)?;
+        } = Session::start(plan, size, sink, on_output, &history)?;
         sessions.insert(node_id.to_string(), session.clone());
         drop(sessions);
 
@@ -187,6 +190,11 @@ impl PtyManager {
             starting: self.starting.clone(),
             node_id: node_id.to_string(),
         })
+    }
+
+    /// The previous run's saved output, for the next `spawn` of `node_id` to start from.
+    pub fn seed_history(&self, node_id: &str, history: Vec<u8>) {
+        lock(&self.histories).insert(node_id.to_string(), history);
     }
 
     pub fn is_running(&self, node_id: &str) -> bool {
@@ -412,6 +420,23 @@ mod windows_tests {
     }
 
     #[test]
+    fn a_relaunch_keeps_the_saved_output_in_its_scrollback() {
+        let mgr = PtyManager::default();
+        mgr.seed_history("h", b"previous run\r\n".to_vec());
+        let sink = VecSink::default();
+        let exited = spawn_answering(
+            &mgr,
+            "h",
+            cmd_plan(&["/c", "echo second-run"], None),
+            sink.clone(),
+        );
+        let info = wait_exit(&exited);
+        let saved = String::from_utf8_lossy(&info.scrollback.data).into_owned();
+        assert!(saved.contains("previous run"), "{saved:?}");
+        assert!(saved.contains("second-run"), "{saved:?}");
+    }
+
+    #[test]
     fn types_initial_input_before_the_cursor_query_is_answered() {
         let mgr = PtyManager::default();
         let sink = VecSink::default();
@@ -608,7 +633,10 @@ mod windows_tests {
             cmd_plan(&["/k", "echo \x1b[?2004hpaste-mode-on"], None),
             sink.clone(),
         );
-        wait_until("mode switch", || sink.text().contains("paste-mode-on"));
+        // cmd echoes the command line (with the text but not the switch) before it runs it:
+        // the text appearing says nothing yet. Wait for the switch itself, then for its output.
+        wait_until("mode switch", || mgr.pastes_bracketed("i"));
+        wait_until("its output", || sink.text().contains("paste-mode-on"));
         assert!(mgr.pastes_bracketed("i"));
         mgr.kill("i");
         wait_exit(&exited);

@@ -76,6 +76,8 @@ pub struct ActivityEvent {
 pub struct ActivitySnapshot {
     hooks_available: bool,
     activities: Vec<ActivityEvent>,
+    /// The sessions running subagents, for a page that reloads.
+    subagents: Vec<SubagentsEvent>,
 }
 
 /// Wall-clock milliseconds of `at`, given `now` and the wall clock at `now`:
@@ -374,9 +376,15 @@ pub async fn mcp_reply(state: State<'_, AgentState>, call_id: u64, result: Value
 #[tauri::command]
 pub async fn agent_activity_snapshot(state: State<'_, AgentState>) -> AppResult<ActivitySnapshot> {
     let activities = lock(&state.tracker).snapshot().iter().map(event).collect();
+    let subagents = lock(&state.subagents)
+        .running()
+        .into_iter()
+        .map(|(node_id, running)| SubagentsEvent { node_id, running })
+        .collect();
     Ok(ActivitySnapshot {
         hooks_available: state.hooks.is_some(),
         activities,
+        subagents,
     })
 }
 

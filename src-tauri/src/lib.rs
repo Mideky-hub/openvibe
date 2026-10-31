@@ -9,9 +9,11 @@ mod mission;
 mod notes;
 mod process;
 mod pty;
+mod repo;
 mod review;
 mod studio;
 mod sync;
+mod tokens;
 
 use std::time::Duration;
 
@@ -117,6 +119,7 @@ pub fn run() {
             commands::pty::list_ollama_models,
             commands::pty::npm_available,
             commands::pty::list_shells,
+            commands::tokens::token_usage,
             commands::workspace::list_workspaces,
             commands::workspace::create_workspace,
             commands::workspace::rename_workspace,
@@ -135,6 +138,11 @@ pub fn run() {
             commands::project::delete_project,
             commands::workspace::set_workspace_pantheon,
             commands::git::git_status,
+            commands::repo::repo_state,
+            commands::repo::repo_history,
+            commands::repo::repo_commit,
+            commands::repo::repo_discard,
+            commands::repo::repo_push,
             commands::review::review_changes,
             commands::review::review_file_diff,
             commands::review::review_files,
