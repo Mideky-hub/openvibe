@@ -384,6 +384,21 @@ describe("reassignTask (spec §7.2 reattribuer)", () => {
     expect(pauseAgents).not.toHaveBeenCalled();
   });
 
+  it("refuses at once an agent that is stopped, instead of failing a minute later", async () => {
+    await team();
+    terminalStatusStore.getState().set("n1", { state: "stopped" });
+    expect(await reassignTask("chef", "isis", "Horus")).toContain("est arrêté");
+    expect(missionNow().members[0].handedTo).toBeUndefined();
+    expect(pauseAgents).not.toHaveBeenCalled();
+  });
+
+  it("does not open a new agent past Max agents", async () => {
+    await setup({ state: "en_cours", maxAgents: 2, project: "C:/code/proj", slug: "auth", frameId: "f1", members: [member("isis", "Isis", true, { task: "Login" }), member("n1", "Horus", false, { task: "API" })] });
+    expect(await reassignTask("chef", "isis", "nouveau")).toContain("Agents max");
+    expect(missionAddAgent).not.toHaveBeenCalled();
+    expect(pauseAgents).not.toHaveBeenCalled();
+  });
+
   it("gives a sub-task to a new agent in the mission's group, started at once", async () => {
     await team();
     canvasStore.setState({ frames: [{ id: "f1", x: 0, y: 0, width: 800, height: 500, name: "Mission Auth", group: { role: "general", pantheon: "egyptian" }, memberIds: ["n1"] }] });
