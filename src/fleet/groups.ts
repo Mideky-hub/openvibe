@@ -4,7 +4,7 @@ import { canvasStore } from "@/canvas/canvasStore";
 import { returnKeyboardToCanvas } from "@/canvas/keyboardFocus";
 import { createGroupFrame, groupInfoOf, isGroup, withGroupFolded, withGroupSpeciality } from "@/canvas/groups";
 import { allowRemoval } from "@/canvas/removalGuard";
-import { createNodeElement } from "@/canvas/nodeElement";
+import { createNodeElement, nodeKindOf } from "@/canvas/nodeElement";
 import type { AgentId } from "@/ipc/pty";
 import { newTerminalPayload } from "@/nodes/terminal/launch";
 import { markForAutostart } from "@/nodes/terminal/registry";
@@ -147,7 +147,12 @@ export function setGroupFolded(groupId: string, folded: boolean) {
   api.updateScene({
     elements: api
       .getSceneElementsIncludingDeleted()
-      .map((e) => (e.id === groupId && groupInfoOf(e) ? newElementWith(e, { customData: withGroupFolded(e.customData, folded) }) : e)),
+      .map((e) => {
+        if (e.id === groupId && groupInfoOf(e)) return newElementWith(e, { customData: withGroupFolded(e.customData, folded) });
+        // Locked while folded: a click on a hidden agent's empty cell can neither select, move nor delete it.
+        if (e.frameId === groupId && nodeKindOf(e) === "terminal") return newElementWith(e, { locked: folded });
+        return e;
+      }),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
 }

@@ -104,13 +104,16 @@ it("closes a group with the wires that led to it (final review H2)", () => {
 
 it("folds and unfolds a group as one undoable step, keeping everything else (spec replier un groupe §3)", () => {
   const data = { kind: "group", role: "general", pantheon: "egyptian", speciality: "API" };
-  scene = [{ id: "f1", type: "frame", customData: { openvibe: data } }, { id: "plain", type: "frame" }];
+  scene = [{ id: "f1", type: "frame", customData: { openvibe: data } }, { id: "plain", type: "frame" }, { id: "t1", type: "embeddable", customData: { kind: "terminal" }, frameId: "f1" } as never];
   setGroupFolded("f1", true);
+  // Hidden agents cannot be selected, moved or deleted by a click on their empty cell.
+  expect((scene[2] as { locked?: boolean }).locked).toBe(true);
   expect(scene[0].customData?.openvibe).toEqual({ ...data, folded: true });
   setGroupFolded("plain", true);
   expect(scene[1].customData).toBeUndefined();
   setGroupFolded("f1", false);
   expect(scene[0].customData?.openvibe).toEqual(data);
+  expect((scene[2] as { locked?: boolean }).locked).toBe(false);
 });
 
 it("unfolds a folded group before adding an agent to it, so the agent shows and starts", async () => {
