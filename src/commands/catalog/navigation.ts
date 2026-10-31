@@ -4,15 +4,18 @@ import { canvasStore } from "@/canvas/canvasStore";
 import { stepTerminal, terminalOrder } from "@/canvas/terminalOrder";
 import { fitScene, zoomTo } from "@/canvas/viewActions";
 import { agentsPanelStore, setAgentsPanel } from "@/fleet/agentsPanelState";
+import { currentWaitingAgents } from "@/fleet/waitingAgents";
 import { focusCommandBar } from "@/shell/commandBarFocus";
 import { projectsStore } from "@/store/projects";
 import type { Command, CommandContext } from "../command";
+import { goToNextWaiting } from "../goToRun";
 import { command, sectionNamed } from "./define";
 import { catalog } from "./messages";
 import { openPalette } from "../paletteState";
 
 export const inProject = (ctx: CommandContext) => ctx.project;
 const withTerminals = (ctx: CommandContext) => ctx.project && ctx.terminalCount > 0;
+const withWaiting = (ctx: CommandContext) => ctx.project && currentWaitingAgents().length > 0;
 const always = () => true;
 
 /** Ctrl+Tab and Ctrl+Maj+Tab (spec fenêtre §6.3): the next terminal in reading order, then the arrival (§6.4). */
@@ -28,6 +31,7 @@ const nav = sectionNamed((s) => s.navigation);
 export const NAVIGATION: readonly Command[] = [
   command("terminal.next", { section: nav, shortcut: "Ctrl+Tab", available: withTerminals, run: (ctx) => step(1, ctx) }),
   command("terminal.previous", { section: nav, shortcut: "Ctrl+Maj+Tab", available: withTerminals, run: (ctx) => step(-1, ctx) }),
+  command("agent.nextWaiting", { section: nav, available: withWaiting, run: (ctx) => goToNextWaiting(ctx.terminalId) }),
   command("palette.goTo", { section: nav, shortcut: "Ctrl+P", available: always, run: (ctx) => openPalette("goTo", ctx) }),
   command("canvas.overview", { section: nav, shortcut: "Ctrl+Maj+A", available: inProject, run: () => overview() }),
   command("canvas.release", { section: nav, shortcut: "Maj+Échap", available: inProject, run: () => releaseToCanvas() }),

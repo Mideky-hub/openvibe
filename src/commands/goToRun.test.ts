@@ -4,11 +4,14 @@ import { toast } from "sonner";
 import { arrive } from "@/canvas/arrive";
 import { focusGroup } from "@/canvas/canvasFocus";
 import { langStore } from "@/i18n";
+import { agentActivityStore } from "@/store/agentActivity";
+import { nodesStore } from "@/store/nodes";
 import { projectsStore } from "@/store/projects";
+import { terminalStatusStore } from "@/store/terminalStatus";
 import { workspacesStore } from "@/store/workspaces";
 import { readSource } from "@/theme/cssBlocks";
 import type { GoToItem } from "./goTo";
-import { goTo } from "./goToRun";
+import { goTo, goToAgent, goToNextWaiting } from "./goToRun";
 import { completeArrival } from "./pendingArrival";
 
 vi.mock("@/canvas/arrive", () => ({ arrive: vi.fn(() => true) }));
@@ -79,8 +82,54 @@ describe("goTo (spec fenêtre §7.2)", () => {
     expect(error).toHaveBeenCalledWith("Isis no longer exists");
   });
 
+  it("goes to a waiting agent like a line of « Aller à »", () => {
+    goToAgent({ id: "isis", kind: "terminal", name: "Isis", workspaceId: "w1", since: 0 });
+    expect(arrive).toHaveBeenCalledWith("isis");
+    goToAgent({ id: "chef", kind: "orchestrator", name: "Chef", workspaceId: "w2", since: 0 });
+    expect(select).toHaveBeenCalledWith("w2");
+    completeArrival("w2");
+    expect(arrive).toHaveBeenLastCalledWith("chef");
+  });
+
   it("is completed by the canvas of a workspace, and orchestrators are found by their field", () => {
     expect(readSource("canvas/Canvas.tsx")).toContain("completeArrival(workspaceId)");
     expect(readSource("nodes/orchestrator/OrchestratorNode.tsx")).toContain("data-orchestrator={nodeId}");
+  });
+});
+
+describe("goToNextWaiting (spec notification §6)", () => {
+  const terminal = (name: string) => ({
+    workspaceId: "w1",
+    kind: "terminal",
+    payload: { title: name, name, agent: "claude", cwd: "C:/code", shell: "default", command: "" },
+  });
+
+  beforeEach(() => {
+    workspacesStore.setState({ workspaces: [{ id: "w1", projectId: "p1", name: "Workspace 1", position: 0, pantheon: null }] } as never);
+    nodesStore.setState({ nodes: { a: terminal("A"), b: terminal("B") } } as never);
+    terminalStatusStore.setState({ statuses: { a: { state: "running" }, b: { state: "running" } } });
+    agentActivityStore.setState({ activities: { a: { activity: "waiting", since: 1 }, b: { activity: "waiting", since: 2 } } });
+  });
+
+  it("goes round every waiting agent, even when the keyboard is on none of them", () => {
+    // An orchestrator's xterm is not a terminal of the context: it stays on what had the keyboard before.
+    for (const expected of ["a", "b", "a"]) {
+      goToNextWaiting("other");
+      expect(arrive).toHaveBeenLastCalledWith(expected);
+    }
+  });
+
+  it("starts after the terminal that has the keyboard once the last agent reached no longer waits", () => {
+    nodesStore.setState({ nodes: { x: terminal("X"), y: terminal("Y") } } as never);
+    terminalStatusStore.setState({ statuses: { x: { state: "running" }, y: { state: "running" } } });
+    agentActivityStore.setState({ activities: { x: { activity: "waiting", since: 1 }, y: { activity: "waiting", since: 2 } } });
+    goToNextWaiting("x");
+    expect(arrive).toHaveBeenLastCalledWith("y");
+  });
+
+  it("does nothing when nobody waits", () => {
+    agentActivityStore.setState({ activities: {} });
+    goToNextWaiting(null);
+    expect(arrive).not.toHaveBeenCalled();
   });
 });
