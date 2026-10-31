@@ -16,6 +16,7 @@ import { goTo } from "./goToRun";
 import { openPalette, paletteStore, setPaletteQuery } from "./paletteState";
 import { Palette } from "./Palette";
 import { recentStore } from "./recent";
+import { presetsStore } from "@/presets/store";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
 vi.mock("@/nodes/terminal/registry", () => ({ focusTerminal: vi.fn(), terminalSelection: vi.fn(() => "") }));
@@ -229,5 +230,18 @@ describe("while scenes are read (plan F1 finding)", () => {
     const text = document.body.textContent ?? "";
     expect(text).toContain("Chargement…");
     expect(text).not.toContain("Aucun résultat");
+  });
+});
+
+describe("the team presets in the functions list (spec presets §3)", () => {
+  it("lists the saved presets under « Équipes », and reads them when the functions open", async () => {
+    presetsStore.setState({
+      presets: [{ id: "1", name: "Dev HQ", savedAt: 1, groups: [{ name: "G", role: "docs", agents: ["claude", "codex"], x: 0, y: 0 }], orchestrators: [] }],
+      loaded: true,
+    });
+    await act(async () => openPalette("functions", busy));
+    await act(async () => setPaletteQuery("> dev hq"));
+    expect(items().map((i) => i.textContent).sort()).toEqual(["Déployer l'équipe : Dev HQ (2 agents)", "Supprimer le preset : Dev HQ"]);
+    expect(document.body.textContent).toContain("Équipes");
   });
 });
