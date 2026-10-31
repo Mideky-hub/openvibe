@@ -3,6 +3,15 @@ import { agentActivityStore } from "./agentActivity";
 
 const state = () => agentActivityStore.getState();
 
+it("keeps the message of a wait, from a change and from Rust's state", () => {
+  state().apply({ nodeId: "m", activity: "waiting", since: 1, message: "May I?" });
+  expect(state().activities.m.message).toBe("May I?");
+  state().apply({ nodeId: "m", activity: "working", since: 2 });
+  expect(state().activities.m.message).toBeUndefined();
+  state().load([{ nodeId: "n", activity: "waiting", since: 1, message: "Still?" }]);
+  expect(state().activities.n.message).toBe("Still?");
+});
+
 beforeEach(() => state().load([]));
 
 describe("agent activity store", () => {
@@ -24,6 +33,14 @@ describe("agent activity store", () => {
     expect(state().activities.a).toEqual({ activity: "waiting", since: 20 });
     state().load([{ nodeId: "a", activity: "working", since: 15 }]);
     expect(state().activities.a).toEqual({ activity: "waiting", since: 20 });
+  });
+
+  it("takes a new question during a wait even dated 1 ms earlier, and the agent keeps its place", () => {
+    state().apply({ nodeId: "q", activity: "waiting", since: 20, message: "First?" });
+    state().apply({ nodeId: "q", activity: "waiting", since: 19, message: "Second?" });
+    expect(state().activities.q).toEqual({ activity: "waiting", since: 20, message: "Second?" });
+    state().apply({ nodeId: "q", activity: "waiting", since: 21 });
+    expect(state().activities.q).toEqual({ activity: "waiting", since: 20 });
   });
 
   it("forgets a terminal whose process exited", () => {

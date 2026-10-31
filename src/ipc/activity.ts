@@ -8,6 +8,8 @@ export interface ActivityEvent {
   nodeId: string;
   activity: Activity;
   since: number;
+  /** What a waiting agent says it waits for, cleaned by Rust; untrusted, plain text only (spec notification §7). */
+  message?: string;
 }
 
 export interface ActivitySnapshot {
