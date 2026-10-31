@@ -18,6 +18,18 @@ impl SubagentCounts {
         *count
     }
 
+    /// The sessions that run some, for a page that (re)loads.
+    pub fn running(&self) -> Vec<(String, u32)> {
+        let mut running: Vec<(String, u32)> = self
+            .0
+            .iter()
+            .filter(|(_, count)| **count > 0)
+            .map(|(node_id, count)| (node_id.clone(), *count))
+            .collect();
+        running.sort();
+        running
+    }
+
     /// The session or its process ended: true when some were still counted.
     pub fn clear(&mut self, node_id: &str) -> bool {
         self.0.remove(node_id).is_some_and(|count| count > 0)
@@ -37,7 +49,9 @@ mod tests {
         assert_eq!(counts.change("n1", false), 0);
         assert_eq!(counts.change("n1", false), 0);
         assert_eq!(counts.change("n2", true), 1);
+        assert_eq!(counts.running(), vec![("n2".to_string(), 1)]);
         assert!(counts.clear("n2"));
+        assert!(counts.running().is_empty());
         assert!(!counts.clear("n2"));
     }
 }

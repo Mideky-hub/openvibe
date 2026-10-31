@@ -15,6 +15,8 @@ export interface ActivityEvent {
 export interface ActivitySnapshot {
   hooksAvailable: boolean;
   activities: ActivityEvent[];
+  /** The sessions running subagents when the page loaded. */
+  subagents: { nodeId: string; running: number }[];
 }
 
 export const agentActivitySnapshot = () => call<ActivitySnapshot>("agent_activity_snapshot");
