@@ -17,9 +17,20 @@ interface AgentActivityState {
 
 export const agentActivityStore = createStore<AgentActivityState>()((set) => ({
   activities: {},
-  apply: ({ nodeId, activity, since }) => set((s) => ({ activities: { ...s.activities, [nodeId]: { activity, since } } })),
+  // `since` dates each transition: an event older than the one held arrived out of order (two Rust threads
+  // emit after releasing their lock) or is a startup snapshot overtaken by a live event, and is dropped.
+  apply: ({ nodeId, activity, since }) =>
+    set((s) => (s.activities[nodeId] && s.activities[nodeId].since > since ? s : { activities: { ...s.activities, [nodeId]: { activity, since } } })),
   load: (events) =>
-    set({ activities: Object.fromEntries(events.map(({ nodeId, activity, since }) => [nodeId, { activity, since }])) }),
+    set((s) => {
+      // Rust's list is the truth about which terminals run; for those, a newer live event wins.
+      const activities: Record<string, AgentActivity> = {};
+      for (const { nodeId, activity, since } of events) {
+        const held = s.activities[nodeId];
+        activities[nodeId] = held && held.since > since ? held : { activity, since };
+      }
+      return { activities };
+    }),
   remove: (nodeId) =>
     set((s) => ({ activities: Object.fromEntries(Object.entries(s.activities).filter(([id]) => id !== nodeId)) })),
 }));

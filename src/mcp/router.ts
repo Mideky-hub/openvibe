@@ -32,15 +32,40 @@ export async function answer(call: McpCall): Promise<unknown> {
   }
 }
 
+/** A handler slower than this is logged: Rust gives up on a call after 30 s ("OpenVibe is not responding"). */
+const SLOW_MS = 2000;
+
+/** What Rust can take as a reply: JSON. `undefined` or a cycle would make `mcp_reply` itself fail, and the call time out. */
+function replyable(result: unknown): unknown {
+  try {
+    if (result !== undefined && JSON.stringify(result) !== undefined) return result;
+  } catch (error) {
+    return refused(t().failed(String(error)));
+  }
+  return refused(t().failed("empty answer"));
+}
+
+/** One call, always answered: a failure of the tool, of its answer's shape, or of the reply itself included. */
+export async function handleCall(call: McpCall, reply: (callId: number, result: unknown) => Promise<void> = mcpReply) {
+  const started = Date.now();
+  let result: unknown;
+  try {
+    result = await answer(call);
+  } catch (error) {
+    result = refused(t().failed(String(error)));
+  }
+  const took = Date.now() - started;
+  if (took > SLOW_MS) console.warn(`mcp ${call.method} ${String(call.params.name ?? "")} for ${call.nodeId} took ${took} ms`);
+  try {
+    await reply(call.callId, replyable(result));
+  } catch (error) {
+    // A reply that failed is tried once more, in a form that cannot fail on its content.
+    console.error(`mcp reply ${call.callId} failed`, error);
+    await reply(call.callId, refused(t().failed(String(error)))).catch((again: unknown) => console.error(`mcp reply ${call.callId} lost`, again));
+  }
+}
+
 /** For the app's whole life: every call gets an answer, a failure included. */
 export async function installMcp() {
-  await onMcpCall(async (call) => {
-    let result: unknown;
-    try {
-      result = await answer(call);
-    } catch (error) {
-      result = refused(t().failed(String(error)));
-    }
-    await mcpReply(call.callId, result);
-  });
+  await onMcpCall((call) => void handleCall(call));
 }
