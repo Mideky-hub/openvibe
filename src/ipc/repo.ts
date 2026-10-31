@@ -14,6 +14,8 @@ export interface RepoState {
   pushTo: string | null;
   noPush: NoPush | null;
   files: ChangedFile[];
+  /** The list stops at Rust's limit. */
+  truncated: boolean;
 }
 
 export interface LogEntry {

@@ -134,7 +134,7 @@ function GitDrawer({ path }: { path: string }) {
         <>
           {/* Hidden, not unmounted: a look at the history keeps the message being written and the choices. */}
           <div className={tab === "changes" ? "contents" : "hidden"}>
-            <ChangesTab path={path} files={repo.files} refresh={refresh} onChanged={() => void again()} onFailure={setFailure} />
+            <ChangesTab path={path} files={repo.files} cut={repo.truncated} refresh={refresh} onChanged={() => void again()} onFailure={setFailure} />
           </div>
           {tab === "history" && <HistoryTab path={path} refresh={refresh} />}
         </>
@@ -171,8 +171,8 @@ function PushButton({ repo, pushing, onPush }: { repo: RepoState; pushing: boole
   );
 }
 
-function ChangesTab(props: { path: string; files: ChangedFile[]; refresh: number; onChanged: () => void; onFailure: (failure: string | null) => void }) {
-  const { path, files, refresh, onChanged, onFailure } = props;
+function ChangesTab(props: { path: string; files: ChangedFile[]; cut: boolean; refresh: number; onChanged: () => void; onFailure: (failure: string | null) => void }) {
+  const { path, files, cut, refresh, onChanged, onFailure } = props;
   const t = useMessages(gitMessages).changes;
   const words = useMessages(reviewMessages);
   // What is left out, not what is in: a new file arrives checked (spec fenêtre git §3.1).
@@ -236,6 +236,7 @@ function ChangesTab(props: { path: string; files: ChangedFile[]; refresh: number
           {t.includeAll}
         </label>
         <ul className="min-h-0 flex-1 overflow-y-auto py-1">
+          {cut && <li className="px-3 py-1 text-[11px] text-ov-text-3">{words.listCut(files.length)}</li>}
           {files.map((file) => {
             const status = FILE_STATUS[file.status];
             return (

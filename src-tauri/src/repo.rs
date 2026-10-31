@@ -27,6 +27,8 @@ pub struct RepoState {
     /// Why it cannot: `noRemote`, `manyRemotes`, `detached`, `noCommit`.
     pub no_push: Option<String>,
     pub files: Vec<ChangedFile>,
+    /// `files` stops at `review::MAX_ENTRIES`.
+    pub truncated: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -169,6 +171,7 @@ pub fn state(dir: &Path) -> Result<RepoState, String> {
         .unwrap_or((0, 0)),
         None => (0, 0),
     };
+    let changes = review::changes(dir, None)?;
     Ok(RepoState {
         branch,
         upstream,
@@ -176,7 +179,8 @@ pub fn state(dir: &Path) -> Result<RepoState, String> {
         behind,
         push_to: target.as_ref().ok().cloned(),
         no_push: target.err().map(str::to_string),
-        files: review::changes(dir, None)?.files,
+        files: changes.files,
+        truncated: changes.truncated,
     })
 }
 
@@ -359,6 +363,7 @@ mod tests {
         assert_eq!(read.upstream, None);
         assert_eq!(read.no_push.as_deref(), Some("noRemote"));
         assert_eq!(read.push_to, None);
+        assert!(!read.truncated);
         let found: Vec<_> = read
             .files
             .iter()

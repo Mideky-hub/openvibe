@@ -25,7 +25,7 @@ const file = (path: string, status: ChangedFile["status"] = "modified", counts: 
   removed: counts?.[1] ?? null,
 });
 
-const base: RepoState = { branch: "main", upstream: "origin/main", ahead: 2, behind: 0, pushTo: "origin/main", noPush: null, files: [] };
+const base: RepoState = { branch: "main", upstream: "origin/main", ahead: 2, behind: 0, pushTo: "origin/main", noPush: null, files: [], truncated: false };
 
 let repo: RepoState;
 let history: LogEntry[];
@@ -121,6 +121,12 @@ describe("the changes (spec fenêtre git §3.1)", () => {
     await act(async () => labelled("Actualiser").click());
     expect(check("Inclure src/a.ts").checked).toBe(false);
     expect(check("Inclure new.ts").checked).toBe(true);
+  });
+
+  it("says when the list was cut: what is not shown cannot be committed", async () => {
+    repo = { ...repo, truncated: true };
+    await render();
+    expect(document.body.textContent).toContain("Liste coupée : seuls les 2 premiers changements");
   });
 
   it("says when nothing changed", async () => {
