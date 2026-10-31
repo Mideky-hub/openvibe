@@ -60,3 +60,14 @@ it("shows the session's and the week's use of the plan in the title bar, then th
     expect(detail).toContain(piece);
   }
 });
+
+it("opens the 30-day tokens from the detail, and comes back to it", async () => {
+  mockIPC((cmd) => (cmd === "token_usage" ? { days: [], sessions: [], models: [], filesScanned: 0, truncated: false } : undefined));
+  await act(async () => meter().click());
+  const link = [...document.querySelectorAll<HTMLButtonElement>("[data-usage-detail] button")].find((b) => b.textContent?.includes("Tokens sur 30 jours"))!;
+  await act(async () => link.click());
+  expect(document.querySelector("[data-tokens]")).not.toBeNull();
+  expect(document.querySelector("[data-usage-detail]")).toBeNull();
+  await act(async () => document.querySelector<HTMLButtonElement>('[data-tokens] [aria-label="Usage"]')!.click());
+  expect(document.querySelector("[data-usage-detail]")).not.toBeNull();
+});
