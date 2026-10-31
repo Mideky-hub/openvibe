@@ -1,9 +1,10 @@
+// @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { check } from "@tauri-apps/plugin-updater";
 import { toast } from "sonner";
 import { call } from "@/ipc/invoke";
 import { flushAll } from "@/lib/flush";
-import { checkForUpdate, FIRST_CHECK_MS, installUpdate, startUpdateChecks, updatesStore } from "./updates";
+import { checkForUpdate, CHECK_TIMEOUT_MS, FIRST_CHECK_MS, installUpdate, startUpdateChecks, updatesStore } from "./updates";
 
 vi.mock("@tauri-apps/plugin-updater", () => ({ check: vi.fn() }));
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
@@ -21,6 +22,7 @@ function fakeUpdate(version = "1.0.0-beta.2") {
       onEvent({ event: "Progress", data: { chunkLength: 50 } });
       onEvent({ event: "Finished" });
     }),
+    close: vi.fn(async () => undefined),
     install: vi.fn(async () => {
       steps.push("install");
     }),
@@ -82,4 +84,36 @@ it("checks 10 s after the start, only when automatic checks are on", async () =>
   await vi.advanceTimersByTimeAsync(FIRST_CHECK_MS + 1);
   expect(check).toHaveBeenCalledTimes(1);
   stopAgain();
+});
+
+it("does not close an open update dialog on an automatic check", async () => {
+  updatesStore.setState({ dialogOpen: true });
+  vi.mocked(check).mockResolvedValue(fakeUpdate() as never);
+  await checkForUpdate();
+  expect(updatesStore.getState().dialogOpen).toBe(true);
+});
+
+it("gives the request a timeout", async () => {
+  vi.mocked(check).mockResolvedValue(null);
+  await checkForUpdate();
+  expect(check).toHaveBeenCalledWith({ timeout: CHECK_TIMEOUT_MS });
+});
+
+it("closes the previous Update when a new one is found", async () => {
+  const first = fakeUpdate("1.0.0-beta.2");
+  vi.mocked(check).mockResolvedValueOnce(first as never).mockResolvedValueOnce(fakeUpdate("1.0.0-beta.3") as never);
+  await checkForUpdate();
+  await checkForUpdate();
+  expect(first.close).toHaveBeenCalledTimes(1);
+});
+
+it("blurs a field being edited before installing", async () => {
+  vi.mocked(check).mockResolvedValue(fakeUpdate() as never);
+  await checkForUpdate();
+  const input = document.createElement("input");
+  document.body.append(input);
+  input.focus();
+  await installUpdate();
+  expect(document.activeElement).not.toBe(input);
+  input.remove();
 });
