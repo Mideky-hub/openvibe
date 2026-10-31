@@ -127,7 +127,8 @@ function describeMission(orchestratorId: string, mission: Mission): ToolResult {
       ? linkedClaudeAgents(orchestratorId)
           .filter((a) => !team.has(a.nodeId))
           .map((a) => ({ name: a.name, state: outAgentState(agentState(a.nodeId)) }))
-      : t().orchestrator.hiddenAgents,
+      : null,
+    linked_agents_note: orchestratorShown(orchestratorId) ? null : t().orchestrator.hiddenAgents,
     left_min: remainingGlobal(mission) ?? null,
     elapsed_min: mission.state === "en_cours" && mission.startedAt !== undefined ? Math.floor((Date.now() - mission.startedAt) / 60_000) : null,
     error: mission.error ?? null,
