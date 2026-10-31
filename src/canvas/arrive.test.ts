@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { focusTerminal } from "@/nodes/terminal/registry";
 import { arrivalStore } from "./arrivalSignal";
-import { arrivalView, arrive, arrivingNode, needsMove, showNode } from "./arrive";
+import { arrivalView, arrive, arrivingNode, needsMove, revealNode, showNode } from "./arrive";
 import { canvasStore } from "./canvasStore";
 
 vi.mock("@/nodes/terminal/registry", () => ({ focusTerminal: vi.fn() }));
@@ -154,5 +154,35 @@ describe("showNode", () => {
     showNode("isis");
     expect(updateScene).not.toHaveBeenCalled();
     expect(showNode("closed")).toBe(false);
+  });
+});
+
+describe("revealNode (plan B1)", () => {
+  const scrollToContent = vi.fn();
+  const withScene = (appState: Record<string, unknown>) =>
+    canvasStore.setState({
+      api: {
+        getSceneElements: () => [isis],
+        getAppState: () => ({ ...appState, zoom: { value: appState.zoom } }),
+        scrollToContent,
+      } as unknown as ExcalidrawImperativeAPI,
+    });
+  beforeEach(() => scrollToContent.mockClear());
+
+  it("scrolls to a node that is off screen, keeping the zoom: Excalidraw mounts nothing it does not show", () => {
+    withScene({ ...at100, scrollX: -5000 });
+    expect(revealNode("isis")).toBe(true);
+    expect(scrollToContent).toHaveBeenCalledWith(isis, { animate: true, canvasOffsets: { top: 72, bottom: 60 } });
+  });
+
+  it("leaves the view alone when the node is in sight, even zoomed out", () => {
+    withScene({ ...at100, zoom: 0.5 });
+    expect(revealNode("isis")).toBe(true);
+    expect(scrollToContent).not.toHaveBeenCalled();
+  });
+
+  it("does nothing for a node that is gone", () => {
+    withScene(at100);
+    expect(revealNode("nope")).toBe(false);
   });
 });

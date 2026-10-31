@@ -111,3 +111,21 @@ export function showNode(nodeId: string): boolean {
   if (needsMove(element, view)) api.updateScene({ appState: arrivalView(element, view) });
   return true;
 }
+
+/**
+ * Scrolls to a node added out of sight (Excalidraw mounts a node, and so
+ * starts its agent, only once it is shown), at the zoom the view has. A node
+ * in sight, even partly, leaves the view alone. False when it is gone.
+ */
+export function revealNode(nodeId: string): boolean {
+  const api = canvasStore.getState().api;
+  const element = api?.getSceneElements().find((e) => e.id === nodeId);
+  if (!api || !element) return false;
+  const app = api.getAppState();
+  const zoom = app.zoom.value;
+  const left = (element.x + app.scrollX) * zoom;
+  const top = (element.y + app.scrollY) * zoom;
+  const inSight = left + element.width * zoom > 0 && left < app.width && top + element.height * zoom > TOP_ROW_HEIGHT && top < app.height - BOTTOM_BAR_HEIGHT;
+  if (!inSight) api.scrollToContent(element, { animate: true, canvasOffsets: { top: TOP_ROW_HEIGHT, bottom: BOTTOM_BAR_HEIGHT } });
+  return true;
+}
