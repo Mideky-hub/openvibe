@@ -20,6 +20,8 @@ use shell::SpawnPlan;
 
 /// Reported once a terminal's process has exited and its output is drained.
 pub struct ExitInfo {
+    /// The process that exited: a relaunched terminal has another one.
+    pub pid: Option<u32>,
     pub code: Option<u32>,
     pub scrollback: scrollback::Capture,
 }
@@ -78,6 +80,7 @@ impl PtyManager {
             let _ = reader.join();
             lock(&sessions).remove(&node_id);
             on_exit(ExitInfo {
+                pid,
                 code,
                 scrollback: session.capture(),
             });
@@ -356,6 +359,7 @@ mod windows_tests {
         );
         let info = wait_exit(&exited);
         assert_eq!(info.code, Some(0));
+        assert!(info.pid.is_some(), "the exit names its process");
         assert!(
             sink.text().contains("openvibe-hello"),
             "output: {:?}",
