@@ -7,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { returnKeyboardToCanvas } from "@/canvas/keyboardFocus";
 import { useUiRequest } from "@/commands/uiRequests";
 import { messages, useMessages } from "@/i18n";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -105,6 +106,7 @@ export function ComposeGroup({
 
   const launch = () => {
     setOpen(false);
+    returnKeyboardToCanvas();
     void launchGroup({ name, role, agents: agentsOf(slots, fallback) }).catch((error: unknown) =>
       toast.error(messages(fleetMessages).launchFailed(String(error))),
     );

@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { canvasStore } from "@/canvas/canvasStore";
+import { returnKeyboardToCanvas } from "@/canvas/keyboardFocus";
 import { nextGroupName } from "@/canvas/groups";
 import { messages } from "@/i18n";
 import type { AgentId } from "@/ipc/pty";
@@ -31,6 +32,7 @@ export function launchFour(at?: Point) {
   const agent = defaultAgent(agentsStore.getState().agents);
   const name = nextGroupName(canvasStore.getState().frames);
   void launchGroup({ name, role: "general", agents: [agent, agent, agent, agent] }, defaultLaunchOptions(), at).catch(reportLaunchError);
+  returnKeyboardToCanvas();
 }
 
 /** « Orchestrateur »: at `at`, else at the center of the view, like a launch (plan F2, décision 3). */
