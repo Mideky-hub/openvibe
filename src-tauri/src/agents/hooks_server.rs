@@ -871,4 +871,63 @@ mod tests {
         let _ = client.read_to_string(&mut response);
         assert!(response.starts_with("HTTP/1.1 503"), "{response}");
     }
+
+    #[test]
+    fn a_client_stalling_on_its_body_does_not_hold_the_others_up() {
+        let (tx, _rx) = mpsc::channel();
+        let server = start(Arc::new(TestSink::new(tx))).unwrap();
+        // Announces a body, sends none, and keeps the connection open.
+        let mut stalled = TcpStream::connect(("127.0.0.1", server.port)).unwrap();
+        let head = format!(
+            "POST /status/n1?t={} HTTP/1.1\r\nHost: x\r\nContent-Length: 100\r\n\r\n",
+            server.token
+        );
+        stalled.write_all(head.as_bytes()).unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+
+        let (done, finished) = mpsc::channel();
+        let port = server.port;
+        std::thread::spawn(move || {
+            let mcp = [("Authorization", "Bearer tok-n1")];
+            let call = br#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
+            let _ = done.send(exchange(port, "POST", "/mcp", &mcp, call).0);
+        });
+        assert_eq!(
+            finished.recv_timeout(Duration::from_secs(3)),
+            Ok(200),
+            "a stalled hook client blocks the server loop"
+        );
+        let header = format!("{TOKEN_HEADER}: {}\r\n", server.token);
+        assert_eq!(
+            send_headed(server.port, "POST", "/status/n1", &header, b"{}"),
+            204
+        );
+        drop(stalled);
+    }
+
+    #[test]
+    fn many_agents_calling_at_once_are_all_answered() {
+        let (tx, _rx) = mpsc::channel();
+        let server = start(Arc::new(TestSink::new(tx))).unwrap();
+        let port = server.port;
+        let token = server.token.clone();
+        let workers: Vec<_> = (0..48)
+            .map(|i| {
+                let token = token.clone();
+                std::thread::spawn(move || {
+                    let node = format!("tok-n{}", i % 8);
+                    let auth = [("Authorization", node.as_str())];
+                    let auth = [(auth[0].0, format!("Bearer {}", auth[0].1))];
+                    let call = br#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"etape"}}"#;
+                    let mcp = exchange(port, "POST", "/mcp", &[(auth[0].0, auth[0].1.as_str())], call).0;
+                    let header = format!("{TOKEN_HEADER}: {token}\r\n");
+                    let hook = send_headed(port, "POST", "/status/n1", &header, b"{}");
+                    (mcp, hook)
+                })
+            })
+            .collect();
+        for worker in workers {
+            assert_eq!(worker.join().unwrap(), (200, 204));
+        }
+    }
 }
