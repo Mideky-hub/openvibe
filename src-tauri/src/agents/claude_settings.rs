@@ -55,8 +55,8 @@ pub struct StatusLine {
 /// line command, given the same JSON.
 pub const STATUS_SCRIPT: &str = "#!/usr/bin/env bash\n\
 # OpenVibe : la ligne d'état de Claude transmet l'usage de la session, puis affiche celle de l'utilisateur.\n\
-input=$(cat)\n\
-printf '%s' \"$input\" | curl -s -m 1 -K \"$2\" -X POST -H 'Content-Type: application/json' --data-binary @- \"$1\" >/dev/null 2>&1\n\
+input=$(cat; printf x); input=${input%x}\n\
+printf '%s' \"$input\" | curl -s -m 1 -K \"$2\" -X POST -H 'Content-Type: application/json' --data-binary @- \"$1\" >/dev/null 2>&1 &\n\
 if [ -n \"${3:-}\" ]; then printf '%s' \"$input\" | bash -c \"$3\"; fi\n";
 
 /// The curl config that gives the local server's token to curl as a header
@@ -433,6 +433,56 @@ mod tests {
             "{script}"
         );
         assert!(!script.contains('\r'), "bash needs LF line ends");
+    }
+
+    /// Runs the real script under bash; None when there is no bash to run it.
+    fn run_status_script(url: &str, input: &[u8]) -> Option<(Vec<u8>, std::time::Duration)> {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("statusline.sh");
+        std::fs::write(&script, STATUS_SCRIPT).unwrap();
+        let out = dir.path().join("out.txt");
+        let user = format!("cat > '{}'", out.to_string_lossy().replace('\\', "/"));
+        let started = std::time::Instant::now();
+        let mut child = Command::new("bash")
+            .arg(script.to_string_lossy().replace('\\', "/"))
+            .arg(url)
+            .arg(
+                dir.path()
+                    .join("none.cfg")
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+            )
+            .arg(user)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .ok()?;
+        child.stdin.take().unwrap().write_all(input).unwrap();
+        child.wait().ok()?;
+        let elapsed = started.elapsed();
+        Some((std::fs::read(out).ok()?, elapsed))
+    }
+
+    #[test]
+    fn the_status_script_keeps_the_trailing_newlines_and_does_not_wait_for_curl() {
+        // A server that accepts and never answers: curl would wait its full second.
+        let silent = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!(
+            "http://127.0.0.1:{}/status/n1",
+            silent.local_addr().unwrap().port()
+        );
+        let input = b"{\"a\":1}\n\n";
+        let Some((seen, elapsed)) = run_status_script(&url, input) else {
+            return; // no bash on this machine
+        };
+        assert_eq!(seen, input, "the user's line must get the JSON as sent");
+        assert!(
+            elapsed < std::time::Duration::from_millis(900),
+            "{elapsed:?}"
+        );
     }
 
     #[test]
