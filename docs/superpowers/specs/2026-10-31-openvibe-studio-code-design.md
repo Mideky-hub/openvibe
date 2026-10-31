@@ -48,7 +48,7 @@ Corriger un fichier à la main sans quitter OpenVibe, alors que des agents trava
 - `studio_version(projectId, file) -> string | null` : `null` si le fichier n'existe plus ; un fichier devenu trop gros garde une version (sa taille), sans être lu.
 - `studio_write(projectId, file, text, expected) -> { status: "saved", version } | { status: "conflict", disk }` ; refuse plus de 2 Mo et l'octet nul.
 
-**Confinement** (`resolve`) : chemin relatif non vide, composants normaux uniquement (ni `..`, ni `.`, ni racine, ni préfixe de lecteur), sans `:` (flux NTFS, lecteur) ; racine et cible passées par `canonicalize`, la cible doit commencer par la racine, ce qui traite liens symboliques et jonctions, y compris les parents ; une cible absente n'est acceptée que si son **parent** canonique est dans la racine et si aucun lien cassé n'occupe la place ; `.git` refusé à toute profondeur, casse ignorée.
+**Confinement** (`resolve`) : chemin relatif non vide, composants normaux uniquement (ni `..`, ni `.`, ni racine, ni préfixe de lecteur), sans `:` (flux NTFS, lecteur) ; racine et cible passées par `canonicalize`, la cible doit commencer par la racine, ce qui traite liens symboliques et jonctions, y compris les parents ; une cible absente n'est acceptée que si son **parent** canonique est dans la racine et si aucun lien cassé n'occupe la place ; `.git` refusé à toute profondeur, casse ignorée ; noms de périphériques Windows (`NUL`, `COM1`…) et noms finissant par un point ou une espace refusés (`.git.` désignerait `.git`). Un fichier en lecture seule est refusé avec son propre message.
 
 ## 5. Front (`src/studio/`)
 
@@ -73,4 +73,5 @@ Garde : « Enregistrer les modifications de <fichier> ? » → Enregistrer, Ne p
 ## 8. Risques
 
 - Le renommage temporaire + final change l'horodatage de création et peut échouer si un autre programme tient le fichier ouvert sous Windows : l'erreur est affichée, le tampon reste intact.
+- Entre la comparaison des versions et le renommage, une fenêtre très brève demeure : une écriture d'agent tombant exactement là serait écrasée. Windows n'offre pas de renommage conditionnel.
 - Contrôle manuel indispensable : l'app n'a pas été lancée pendant la mission de nuit.
