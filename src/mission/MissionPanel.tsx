@@ -51,7 +51,7 @@ function Settings({ nodeId, mission }: { nodeId: string; mission: Mission }) {
   const claude = linkedAgents(links, frames).agentIds.filter((id) => terminalOf(nodes[id])?.agent === "claude").length;
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <label className="flex items-center gap-1">
+      <label className="flex items-center gap-1" title={t.globalBudgetTitle}>
         {t.globalBudget}
         <input
           type="number"

@@ -272,20 +272,20 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
       expect(missionOf(nodesStore.getState().nodes.chef)?.members[0]).toMatchObject({ merged: true, report: { summary: "Vérifié" } });
     });
 
-    it("extends an agent's budget from what is left of the global one (spec §7.2)", async () => {
-      setMission("chef", { budgetMin: 30 });
+    it("extends an agent's target only within the real time left (spec mission de nuit §3)", async () => {
+      setMission("chef", { budgetMin: 30, startedAt: Date.now() });
       // Isis reported earlier in this file: still at work here, its whole budget counts.
       updateMember("chef", "isis", { report: undefined });
-      expect(textOf(await call("chef", "extend", { agent: "Isis", minutes: 20 }))).toBe("Il reste 10 min sur le budget global.");
+      expect(textOf(await call("chef", "extend", { agent: "Isis", minutes: 20 }))).toBe("Il reste 30 min sur le budget global.");
       updateMember("chef", "isis", { overdue: 1 });
       expect(textOf(await call("chef", "extend", { agent: "Isis", minutes: 10 }))).toBe("Isis : +10 min, budget 30 min.");
       expect(missionOf(nodesStore.getState().nodes.chef)?.members[0]).toMatchObject({ extraMin: 10 });
       expect(missionOf(nodesStore.getState().nodes.chef)?.members[0].overdue).toBeUndefined();
       // The orchestrator reads the time with its extensions, and what is left (final review H3).
       expect(JSON.parse(textOf(await call("chef", "team", {})))[0]).toMatchObject({ time: "0 / 30 min" });
-      expect(JSON.parse(textOf(await call("chef", "mission", {})))).toMatchObject({ left_min: 0, elapsed_min: null });
+      expect(JSON.parse(textOf(await call("chef", "mission", {})))).toMatchObject({ left_min: 30, elapsed_min: 0 });
       expect(await call("chef", "extend", { agent: "Isis", minutes: 0 })).toMatchObject({ isError: true });
-      setMission("chef", { budgetMin: undefined });
+      setMission("chef", { budgetMin: undefined, startedAt: undefined });
     });
 
     it("interrupts an agent's turn like « Pause » (spec §7.2)", async () => {

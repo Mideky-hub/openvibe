@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { langStore } from "@/i18n";
-import { budgetBar, budgetOf, clockText, memberTime, NEW_MISSION, oneLine, overruns, proposedPlan, readMission, remainingGlobal, sameName, spentMin, type Member, type Mission } from "./mission";
+import { budgetBar, budgetOf, clockText, memberTime, NEW_MISSION, oneLine, overruns, proposedPlan, readMission, remainingGlobal, sameName, spentMin, windingDown, type Member, type Mission } from "./mission";
 
 const task = (agent: string, budget = 20) => ({ titre: "Login", consigne: "Fais le login", agent, budget_min: budget });
 const args = (...sous_taches: object[]) => ({ nom: "Auth", tache: "Ajoute l'authentification", sous_taches });
@@ -22,7 +22,9 @@ describe("proposedPlan (spec orchestrateur §7.2)", () => {
     const budgeted: Mission = { ...NEW_MISSION, budgetMin: 30, maxAgents: 2 };
     expect(proposedPlan(args(task("Zeus")), NEW_MISSION, ["Athéna"])).toContain("Zeus");
     expect(proposedPlan(args(task("Athéna"), task("Athéna")), NEW_MISSION, ["Athéna"])).toContain("une sous-tâche par agent");
-    expect(proposedPlan(args(task("nouveau", 20), task("nouveau", 20)), budgeted, [])).toContain("budget global");
+    // Real time: two agents in parallel share it, one sub-task alone must fit (spec mission de nuit §3).
+    expect(proposedPlan(args({ ...task("nouveau", 30), titre: "A" }, { ...task("nouveau", 30), titre: "B" }), budgeted, [])).toMatchObject({ name: "Auth" });
+    expect(proposedPlan(args(task("nouveau", 31)), budgeted, [])).toBe("Sous-tâche 1 : 31 min ne tiennent pas dans le budget global (30 min de temps réel).");
     expect(proposedPlan(args(task("nouveau"), task("nouveau"), task("nouveau")), budgeted, [])).toContain("2 sous-tâches");
     expect(proposedPlan(args(task("nouveau", 0)), NEW_MISSION, [])).toContain("budget");
     expect(proposedPlan({ tache: "x", sous_taches: [task("nouveau")] }, NEW_MISSION, [])).toContain("nom");
@@ -162,12 +164,29 @@ describe("the time of a mission (spec orchestrateur §8)", () => {
     expect(overruns({ ...mission, state: "terminee" }, 31 * min)).toEqual({ members: [], global: false });
   });
 
-  it("knows what is left of the global budget, without the handed-over sub-tasks", () => {
-    expect(remainingGlobal(running([member(), member({ nodeId: "n2", extraMin: 5 }), member({ nodeId: "n3", handedTo: "Isis" })], { budgetMin: 30 }))).toBe(5);
-    expect(remainingGlobal(running([member()]))).toBeUndefined();
-    // A member who reported only took what it spent (final review H3).
-    const early = member({ report: { summary: "ok", status: "termine", at: 5 * min } });
-    expect(remainingGlobal(running([early, member({ nodeId: "n2" }), member({ nodeId: "n3" })], { budgetMin: 60 }))).toBe(35);
+  it("counts the global budget in real time from the go-ahead, whatever the number of agents (spec mission de nuit §3)", () => {
+    const team = [member(), member({ nodeId: "n2", extraMin: 5 }), member({ nodeId: "n3", handedTo: "Isis" })];
+    expect(remainingGlobal(running(team, { budgetMin: 30, startedAt: 0 }), 12 * min)).toBe(18);
+    expect(remainingGlobal(running(team), 12 * min)).toBeUndefined();
+    expect(remainingGlobal(running(team, { budgetMin: 30 }), 12 * min)).toBe(30);
+    expect(remainingGlobal(running(team, { budgetMin: 30, startedAt: 0 }), 40 * min)).toBe(0);
+    expect(remainingGlobal(running(team, { state: "terminee", budgetMin: 30, startedAt: 0, endedAt: 10 * min }), 25 * min)).toBe(20);
+  });
+
+  it("winds an overnight mission down near its end, at 10 % or 10 min, and half of a short one", () => {
+    const night = (budgetMin: number) => running([member()], { overnight: true, budgetMin, startedAt: 0 });
+    expect(windingDown(night(480), 431 * min)).toBe(false);
+    expect(windingDown(night(480), 432 * min)).toBe(true);
+    expect(windingDown(night(60), 49 * min)).toBe(false);
+    expect(windingDown(night(60), 50 * min)).toBe(true);
+    expect(windingDown(night(15), 7 * min)).toBe(false);
+    expect(windingDown(night(15), 8 * min)).toBe(true);
+    expect(windingDown(running([member()], { budgetMin: 60, startedAt: 0 }), 59 * min)).toBe(false);
+  });
+
+  it("keeps the overnight marks of a saved mission", () => {
+    expect(readMission({ state: "en_cours", overnight: true, windDownTold: true })).toMatchObject({ overnight: true, windDownTold: true });
+    expect(readMission({ state: "en_cours" })).not.toHaveProperty("overnight");
   });
 
   it("colours a budget's bar: green, orange past 80 %, red past 100 %", () => {
