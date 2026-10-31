@@ -245,3 +245,12 @@ describe("the team presets in the functions list (spec presets §3)", () => {
     expect(document.body.textContent).toContain("Équipes");
   });
 });
+
+describe("the loops in the functions list (spec boucles §4)", () => {
+  it("lists « Gérer les boucles… » in a project, under « Boucles »", async () => {
+    await act(async () => openPalette("functions", busy));
+    await act(async () => setPaletteQuery("> boucles"));
+    expect(items().map((i) => i.textContent)).toEqual(["Gérer les boucles…"]);
+    expect(document.body.textContent).toContain("Boucles");
+  });
+});
