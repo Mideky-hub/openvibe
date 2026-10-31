@@ -63,3 +63,17 @@ describe("the rings (spec menu radial §4)", () => {
     expect(lineOf(RINGS.terminal[4]!, ctx)!.danger).toBe(true);
   });
 });
+
+describe("the canvas ring when the default agent is the Shell (plan G1)", () => {
+  it("does not offer « Lancer Shell » twice: its second place goes to another agent, else to the custom one", () => {
+    const canvas = () => RINGS.canvas.map((slot) => (slot ? lineOf(slot, ctx)!.label : null));
+    agentsStore.setState({ agents: [{ id: "shell", available: true }, { id: "gemini", available: true }] } as never);
+    expect(canvas().filter((label) => label === "Lancer Shell")).toHaveLength(1);
+    expect(canvas()[1]).toBe("Lancer Gemini");
+    agentsStore.setState({ agents: [{ id: "shell", available: true }] } as never);
+    expect(canvas().filter((label) => label === "Lancer Shell")).toHaveLength(1);
+    expect(canvas()[1]).not.toBe("Lancer Shell");
+    agentsStore.setState({ agents: [{ id: "claude", available: true }] } as never);
+    expect(canvas()[1]).toBe("Lancer Shell");
+  });
+});

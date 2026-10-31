@@ -72,6 +72,11 @@ it("shows the plan and gives the go-ahead (spec §7.3)", async () => {
   expect(launchMission).toHaveBeenCalledWith("chef");
 });
 
+it("shows the group a new agent will join (spec groupes spécialisés §3)", async () => {
+  await show({ state: "plan", name: "Auth", plan: [{ title: "Style", brief: "Fais le style", agent: "nouveau", budgetMin: 20, group: { id: "g1", name: "Interface" } }] });
+  expect(host.textContent).toContain("nouveau → Interface · 20 min");
+});
+
 it("shows no runaway time for a mission ended before end times were kept", async () => {
   await show({
     state: "terminee",

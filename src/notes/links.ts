@@ -51,7 +51,9 @@ export function edges(notes: readonly LinkedNote[]): Edge[] {
   for (const note of notes) {
     for (const link of linksIn(note.text)) {
       const target = noteNamed(notes, link.target);
-      if (target && target !== note) found.set(`${note.name}\0${target.name}`, { from: note.name, to: target.name });
+      if (!target || target === note) continue;
+      const pair = [note.name, target.name].sort().join("\0");
+      if (!found.has(pair)) found.set(pair, { from: note.name, to: target.name });
     }
   }
   return [...found.values()];

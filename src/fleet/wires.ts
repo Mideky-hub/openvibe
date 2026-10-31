@@ -4,7 +4,7 @@ import { findTerminalAt } from "@/canvas/hitTest";
 import { nodeKindOf } from "@/canvas/nodeElement";
 import type { Point } from "./terminals";
 
-/** The orange of the wires (spec habillage §13). */
+/** The terracotta of the wires (spec identité §4.2, « Terre cuite »). */
 export const WIRE_COLOR = "#C2603F";
 
 /** Space between a wire's ends and the elements it joins. */

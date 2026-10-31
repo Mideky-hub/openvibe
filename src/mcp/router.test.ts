@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { mockIPC } from "@tauri-apps/api/mocks";
+import { canvasStore } from "@/canvas/canvasStore";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { answer } from "./router";
 import { pauseAgents } from "@/fleet/broadcast";
@@ -114,6 +115,37 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
     });
   });
 
+  describe("the groups and their specialities (spec groupes spécialisés §3)", () => {
+    const front = { id: "g1", name: "Interface", x: 0, y: 0, width: 10, height: 10, memberIds: ["isis"], group: { role: "frontend" as const, pantheon: "egyptian", speciality: "Frontend" } };
+    const back = { ...front, id: "g2", name: "Serveur", memberIds: [], group: { role: "backend" as const, pantheon: "norse" } };
+
+    afterAll(() => canvasStore.setState({ frames: [], links: {} }));
+
+    it("says each linked agent's group and speciality, and every linked group", async () => {
+      canvasStore.setState({ frames: [front, back], links: { chef: { groupIds: ["g1", "g2"], nodeIds: [] } } });
+      const mission = JSON.parse(textOf(await call("chef", "mission", {})));
+      expect(mission.linked_agents).toEqual([expect.objectContaining({ name: "Isis", group: "Interface", speciality: "Frontend" })]);
+      expect(mission.linked_groups).toEqual([{ name: "Interface", speciality: "Frontend" }, { name: "Serveur", speciality: null }]);
+    });
+
+    it("sends a new agent to a linked group and says so in the plan, refusing an unknown one", async () => {
+      canvasStore.setState({ frames: [front, back], links: { chef: { groupIds: ["g1", "g2"], nodeIds: [] } } });
+      const sub = { title: "Style", brief: "Fais le style", agent: "new", budget_min: 10 };
+      expect(await call("chef", "propose_plan", { ...plan, subtasks: [{ ...sub, group: "Zeus" }] })).toMatchObject({ isError: true });
+      await call("chef", "propose_plan", { ...plan, subtasks: [{ ...sub, group: "interface" }, plan.subtasks[1]] });
+      expect(missionOf(nodesStore.getState().nodes.chef)?.plan?.[0].group).toEqual({ id: "g1", name: "Interface" });
+      expect(JSON.parse(textOf(await call("chef", "mission", {}))).plan.map((s: { group: unknown }) => s.group)).toEqual(["Interface", null]);
+      await call("chef", "propose_plan", plan);
+    });
+
+    it("keeps today's answers for an agent outside any group, with nulls added", async () => {
+      canvasStore.setState({ frames: [], links: {} });
+      const mission = JSON.parse(textOf(await call("chef", "mission", {})));
+      expect(mission.linked_agents).toEqual([expect.objectContaining({ name: "Isis", group: null, speciality: null })]);
+      expect(mission.linked_groups).toEqual([]);
+    });
+  });
+
   it("takes each sub-task's level and says whether the router is on (spec maj §3)", async () => {
     setMission("chef", { router: true });
     expect(textOf(await call("chef", "propose_plan", plan))).toContain("niveau");
@@ -158,9 +190,12 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
     await nodesStore.getState().create("loin", { workspaceId: "w9", kind: "orchestrator", payload: { name: "Loin" } });
     const hidden = JSON.parse(textOf(await call("loin", "mission", {})));
     expect(hidden.linked_agents).toBeNull();
+    expect(hidden.linked_groups).toBeNull();
     expect(hidden.linked_agents_note).toBe("inconnus : l'espace de l'orchestrateur n'est pas affiché");
     expect(textOf(await call("loin", "propose_plan", plan))).toContain("n'est pas affiché");
     expect(textOf(await call("loin", "propose_plan", { ...plan, subtasks: [plan.subtasks[1]] }))).toContain("Plan proposé : 1 sous-tâche.");
+    // Its groups are as unknown as its agents: refused, not told that the group does not exist.
+    expect(textOf(await call("loin", "propose_plan", { ...plan, subtasks: [{ ...plan.subtasks[1], group: "Interface" }] }))).toContain("n'est pas affiché");
   });
 
   describe("once the team is formed", () => {
@@ -171,6 +206,23 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
         members: [{ nodeId: "isis", name: "Isis", task: "Login", budgetMin: 20, linked: true, branch: "openvibe/auth-isis", worktree: "C:/w/isis", sentAt: Date.now() }],
       }),
     );
+
+    it("says each member's group and speciality, to choose who takes a sub-task over (spec groupes spécialisés §3)", async () => {
+      const front = { id: "g1", name: "Interface", x: 0, y: 0, width: 10, height: 10, memberIds: ["isis"], group: { role: "frontend" as const, pantheon: "egyptian", speciality: "Frontend" } };
+      canvasStore.setState({ frames: [front] });
+      expect(JSON.parse(textOf(await call("chef", "team", {})))[0]).toMatchObject({ name: "Isis", group: "Interface", speciality: "Frontend" });
+      canvasStore.setState({ frames: [] });
+      expect(JSON.parse(textOf(await call("chef", "team", {})))[0]).toMatchObject({ group: null, speciality: null });
+    });
+
+    it("does not say an agent has no group when its canvas is out of sight (final review)", async () => {
+      workspacesStore.setState({ activeId: "w2" });
+      const [isis] = JSON.parse(textOf(await call("chef", "team", {})));
+      workspacesStore.setState({ activeId: "w1" });
+      expect(isis.name).toBe("Isis");
+      expect(isis).not.toHaveProperty("group");
+      expect(isis).not.toHaveProperty("speciality");
+    });
 
     it("reports the team and reads an agent's terminal", async () => {
       expect(JSON.parse(textOf(await call("chef", "team", {})))).toEqual([
