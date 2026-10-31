@@ -324,19 +324,9 @@ fn mcp_response(request: &mut Request, sink: &dyn HookSink) -> (u16, Option<Valu
     if body.len() > mcp::MAX_BODY {
         return (413, None);
     }
-    let Ok(message) = serde_json::from_slice::<Value>(&body) else {
-        return (400, None);
-    };
-    match mcp::action(&message) {
-        mcp::Action::Accept => (202, None),
-        mcp::Action::Reply(json) => (200, Some(json)),
-        mcp::Action::Forward { id, method, params } => {
-            match sink.mcp_call(&node_id, &method, params) {
-                Ok(result) => (200, Some(mcp::reply(&id, result))),
-                Err(message) => (200, Some(mcp::failure(&id, -32603, &message))),
-            }
-        }
-    }
+    mcp::handle(&body, |method, params| {
+        sink.mcp_call(&node_id, method, params)
+    })
 }
 
 #[cfg(test)]
@@ -780,7 +770,7 @@ mod tests {
                 b"not json"
             )
             .0,
-            400
+            200
         );
         let path = format!("/hook/claude/n1?t={}", server.token);
         assert_eq!(
