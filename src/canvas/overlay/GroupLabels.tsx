@@ -69,7 +69,8 @@ function GroupLabel(props: { group: SceneGroup; view: CanvasView; working: numbe
   const { group, view, working, waiting, renaming } = props;
   const waits = waitingText(waiting);
   const rect = screenRectOf(group, view);
-  const role = ROLES[group.group.role];
+  const { role: roleId, speciality } = group.group;
+  const role = ROLES[roleId];
   return (
     <div
       className="absolute flex items-center rounded-t-lg border border-b-0 bg-ov-surface pr-1.5 text-[11px] whitespace-nowrap"
@@ -88,6 +89,11 @@ function GroupLabel(props: { group: SceneGroup; view: CanvasView; working: numbe
         <NameField name={group.name} onDone={(name) => name !== null && renameGroup(group.id, name)} />
       ) : (
         <span className="font-semibold tracking-[0.08em] text-ov-text uppercase">{group.name}</span>
+      )}
+      {speciality && (
+        <span title={speciality} className="pointer-events-auto ml-2 max-w-40 truncate text-ov-text-2">
+          {speciality}
+        </span>
       )}
       <span className="ml-2 font-mono text-ov-text-2">{countsText(group.memberIds.length, working)}</span>
       {waits && <span className="ml-1 font-mono text-ov-waiting">{waits}</span>}

@@ -142,7 +142,7 @@ it("shows the review in English", async () => {
   expect(text()).toContain("1 remark");
   expect(button("Send to Isis")).toBeDefined();
   await act(async () => button("Send to Isis").click());
-  expect(toast).toHaveBeenCalledWith("Review sent to Isis");
+  expect(toast).toHaveBeenCalledWith("Review sent to Isis", { position: "top-center" });
 });
 
 it("keeps the file read and the remark being typed through Refresh and a click on another line (backlog 27 oct)", async () => {

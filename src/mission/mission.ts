@@ -14,6 +14,14 @@ export interface SubTask {
   budgetMin: number;
   /** Its difficulty: with the router, its agent's model (spec maj §3). */
   level?: Level;
+  /** The linked group a new agent joins, else it goes in the mission's (spec groupes spécialisés §4). */
+  group?: PlanGroup;
+}
+
+/** A group by its id, which survives a renaming, and the name to show. */
+export interface PlanGroup {
+  id: string;
+  name: string;
 }
 
 export interface Report {
@@ -47,6 +55,8 @@ export interface Member {
   done?: string[];
   /** The model the router started it on (spec maj §3). */
   model?: string;
+  /** The existing group it joined; it closes alone at the end (spec groupes spécialisés §4). */
+  group?: string;
 }
 
 export interface Mission {
@@ -119,6 +129,7 @@ function readMember(raw: unknown): Member | null {
   if (typeof r.handedTo === "string") member.handedTo = r.handedTo;
   if (Array.isArray(r.done)) member.done = r.done.filter((title): title is string => typeof title === "string");
   if (typeof r.model === "string" && r.model) member.model = r.model;
+  if (typeof r.group === "string") member.group = r.group;
   return member;
 }
 
@@ -130,7 +141,15 @@ function isSubTask(raw: unknown): raw is SubTask {
 function readSubTask(task: SubTask): SubTask {
   const { title, brief, agent, budgetMin } = task;
   const level = readLevel(task.level);
-  return level ? { title, brief, agent, budgetMin, level } : { title, brief, agent, budgetMin };
+  const group = task.group as Partial<PlanGroup> | undefined;
+  return {
+    title,
+    brief,
+    agent,
+    budgetMin,
+    ...(level ? { level } : {}),
+    ...(typeof group?.id === "string" && typeof group.name === "string" ? { group: { id: group.id, name: group.name } } : {}),
+  };
 }
 
 /** A saved mission; undefined when absent or unreadable. A launch cut short by a restart is back to its plan. */
@@ -155,11 +174,12 @@ export function readMission(raw: unknown): Mission | undefined {
   return mission;
 }
 
-/** `propose_plan`'s arguments (internal names, `@/mcp/protocol`) as a plan, or what is wrong (spec §7.2). `linked`: names of the linked Claude agents. */
+/** `propose_plan`'s arguments (internal names, `@/mcp/protocol`) as a plan, or what is wrong (spec §7.2). `linked`: names of the linked Claude agents; `groups`: the linked groups. */
 export function proposedPlan(
   args: Record<string, unknown>,
   mission: Mission,
   linked: readonly string[],
+  groups: readonly PlanGroup[] = [],
 ): { name: string; task: string; plan: SubTask[] } | string {
   const e = messages(agentMessages).plan;
   const name = text(args.nom);
@@ -187,7 +207,11 @@ export function proposedPlan(
     const level = readLevel(r.niveau);
     if (given && !level) return e.level(n);
     if (mission.router && !level) return e.levelRouter(n);
-    plan.push(level ? { title, brief, agent: known, budgetMin: budget, level } : { title, brief, agent: known, budgetMin: budget });
+    const wanted = text(r.groupe);
+    if (wanted && known !== NEW_AGENT) return e.groupForNew(n);
+    const group = wanted ? groups.find((g) => sameName(g.name, wanted)) : undefined;
+    if (wanted && !group) return e.notLinkedGroup(n, wanted);
+    plan.push({ title, brief, agent: known, budgetMin: budget, ...(level ? { level } : {}), ...(group ? { group: { id: group.id, name: group.name } } : {}) });
   }
   const total = plan.reduce((sum, s) => sum + s.budgetMin, 0);
   if (mission.budgetMin !== undefined && total > mission.budgetMin) {

@@ -26,6 +26,9 @@ const STATUS: Record<ChangedFile["status"], { letter: string; color: string }> =
   renamed: { letter: "R", color: "var(--ov-wait)" },
 };
 
+/** The panel's own toasts show at the top: the default corner is where « Envoyer » is. */
+const TOAST_AWAY = { position: "top-center" } as const;
+
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** What an agent changed and its folder's files, with remarks sent back to it (spec maj §5). */
@@ -422,10 +425,10 @@ function Remarks({ nodeId, name }: { nodeId: string; name: string }) {
     const { sent, skipped, waiting, starting } = await sendToAgents([nodeId], reviewMessage(remarks));
     if (sent > 0) {
       reviewStore.getState().clear();
-      toast(messages(reviewMessages).sent(name));
-    } else if (waiting.length > 0) toast.warning(messages(reviewMessages).waiting(name));
+      toast(messages(reviewMessages).sent(name), TOAST_AWAY);
+    } else if (waiting.length > 0) toast.warning(messages(reviewMessages).waiting(name), TOAST_AWAY);
     else if (starting.length > 0) toast.warning(startingText(starting) ?? "");
-    else if (skipped.length > 0) toast.warning(messages(reviewMessages).stopped(name));
+    else if (skipped.length > 0) toast.warning(messages(reviewMessages).stopped(name), TOAST_AWAY);
   };
   return (
     <footer className="flex max-h-[30%] shrink-0 flex-col gap-1.5 border-t border-ov-line px-3 py-2">
