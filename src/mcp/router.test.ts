@@ -257,6 +257,10 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
   });
 });
 
+it("answers a failed step with its accent in French (backlog R5c)", async () => {
+  expect(textOf(await call("isis", "step", { title: "Plan", state: "failed" }))).toBe("Plan : échec.");
+});
+
 describe("the English protocol (spec première version §7.1)", () => {
   it("still takes French values, and tells a former name what it became", async () => {
     expect(textOf(await call("isis", "step", { title: "Plan", state: "en_cours" }))).toBe("Plan : en cours.");
