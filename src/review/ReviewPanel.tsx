@@ -329,6 +329,7 @@ function RemarkField({ value: text, onChange: setText, onDone }: { value: string
 function FilesTab({ cwd, refresh }: { cwd: string; refresh: number }) {
   const t = useMessages(reviewMessages);
   const [files, setFiles] = useState<string[] | null>(null);
+  const [listCut, setListCut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -336,7 +337,11 @@ function FilesTab({ cwd, refresh }: { cwd: string; refresh: number }) {
   useEffect(() => {
     let alive = true;
     reviewFiles(cwd).then(
-      (list) => alive && setFiles(list),
+      (list) => {
+        if (!alive) return;
+        setListCut(list.truncated === true);
+        setFiles(list.files);
+      },
       (failure: unknown) => alive && setError(errorText(failure)),
     );
     return () => {
@@ -347,7 +352,10 @@ function FilesTab({ cwd, refresh }: { cwd: string; refresh: number }) {
   if (error) return <Message>{error}</Message>;
   if (!files) return <Message>{t.readingFiles}</Message>;
   const wanted = filter.trim().toLowerCase();
-  const found = (wanted ? files.filter((f) => f.toLowerCase().includes(wanted)) : files).slice(0, MAX_FILES);
+  const matching = wanted ? files.filter((f) => f.toLowerCase().includes(wanted)) : files;
+  const found = matching.slice(0, MAX_FILES);
+  // The list is cut by Rust (very large repository) or here, for display.
+  const cut = listCut || matching.length > MAX_FILES;
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex w-[260px] shrink-0 flex-col border-r border-ov-line">
@@ -359,6 +367,7 @@ function FilesTab({ cwd, refresh }: { cwd: string; refresh: number }) {
           className="m-2 h-7 rounded-[6px] bg-ov-field px-2 text-[12px] text-ov-text outline-none placeholder:text-ov-text-3"
         />
         <ul className="min-h-0 flex-1 overflow-y-auto pb-1">
+          {cut && <li className="px-3 py-1 text-[11px] text-ov-text-3">{t.filesCut(found.length)}</li>}
           {found.map((file) => (
             <li key={file}>
               <button

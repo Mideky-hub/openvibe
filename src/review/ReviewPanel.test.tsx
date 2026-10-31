@@ -37,7 +37,7 @@ beforeEach(async () => {
         ],
       };
     if (cmd === "review_file_diff") return DIFF;
-    if (cmd === "review_files") return ["README.md", "src/a.ts"];
+    if (cmd === "review_files") return { files: ["README.md", "src/a.ts"], truncated: false };
     if (cmd === "review_read_file") return { text: "# Projet\nBonjour\n", size: 17, truncated: false };
     return undefined;
   });

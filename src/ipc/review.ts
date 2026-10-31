@@ -27,7 +27,12 @@ export interface FileText {
 export const reviewChanges = (path: string, base: string | null) => call<Changes>("review_changes", { path, base });
 export const reviewFileDiff = (path: string, file: ChangedFile, base: string | null) => call<string>("review_file_diff", { path, file, base });
 /** Paths from the repository's root. */
-export const reviewFiles = (path: string) => call<string[]>("review_files", { path });
+export interface FileList {
+  files: string[];
+  /** More files than the list holds. */
+  truncated: boolean;
+}
+export const reviewFiles = (path: string) => call<FileList>("review_files", { path });
 export const reviewReadFile = (path: string, file: string) => call<FileText>("review_read_file", { path, file });
 /** The remote's default branch, else `main` or `master`. */
 export const reviewDefaultBase = (path: string) => call<string | null>("review_default_base", { path });
