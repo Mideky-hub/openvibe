@@ -215,6 +215,11 @@ function locked<T>(nodeId: string, flow: () => Promise<T>): Promise<T> {
   return run;
 }
 
+/** Whether a Remote Control flow is typing in this session: nothing else may be written meanwhile. */
+export function remoteBusy(nodeId: string): boolean {
+  return flows.has(nodeId);
+}
+
 /** Sessions to bring to their wanted state at the end of their turn. */
 const pending = new Set<string>();
 
