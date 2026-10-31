@@ -1,7 +1,8 @@
-import { CodeXml, Settings, Users } from "lucide-react";
+import { BookOpen, CodeXml, Settings, Users } from "lucide-react";
 import { useWorkspaceAgentCounts } from "@/fleet/agentCounts";
 import { setAgentsPanel, useAgentsPanel } from "@/fleet/agentsPanelState";
 import { useMessages } from "@/i18n";
+import { openNotes } from "@/notes/notesStore";
 import { openStudio } from "@/studio/studioStore";
 import { ToolButton } from "./buttons";
 import { shellMessages } from "./messages";
@@ -27,6 +28,9 @@ export function ActivityRail() {
       </ToolButton>
       <ToolButton label={t.codeStudio} onClick={openStudio}>
         <CodeXml />
+      </ToolButton>
+      <ToolButton label={t.notes} onClick={openNotes}>
+        <BookOpen />
       </ToolButton>
       <span aria-hidden className="my-1 h-px w-6 bg-ov-line" />
       <SettingsMenu

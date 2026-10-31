@@ -6,6 +6,7 @@ import { useAgentsPanel } from "@/fleet/agentsPanelState";
 import { useMessages } from "@/i18n";
 import { agentsStore } from "@/fleet/agentsStore";
 import { LinkMode } from "@/fleet/LinkMode";
+import { Notes } from "@/notes/Notes";
 import { RadialMenu } from "@/radial/RadialMenu";
 import { GitWindow } from "@/git/GitWindow";
 import { ReviewPanel } from "@/review/ReviewPanel";
@@ -17,6 +18,7 @@ import { AgentCounts } from "./AgentCounts";
 import { CommandBar, CommandHint } from "./CommandBar";
 import { CrashNotice } from "./CrashNotice";
 import { GitChip } from "./GitChip";
+import { ModeExit } from "./ModeExit";
 import { ProjectDialogs } from "./ProjectDialogs";
 import { ProjectPicker } from "./ProjectPicker";
 import { SearchField } from "./SearchField";
@@ -24,6 +26,7 @@ import { TitleBar } from "./TitleBar";
 import { ToolRail } from "./ToolRail";
 import { UpdateChip } from "./UpdateDialog";
 import { UsageMeter } from "./UsageMeter";
+import { WaitingNotice } from "./WaitingNotice";
 import { WorkspaceTabs } from "./WorkspaceTabs";
 import { shellMessages } from "./messages";
 import { ZoomControl } from "./ZoomControl";
@@ -74,6 +77,7 @@ export function ProjectView() {
               <AgentsPanel />
             </ErrorBoundary>
           )}
+          <WaitingNotice />
           <div className="absolute bottom-[14px] left-3 z-30">
             <GitChip />
           </div>
@@ -84,6 +88,7 @@ export function ProjectView() {
           <div className="absolute bottom-[14px] right-3 z-30">
             <ZoomControl />
           </div>
+          <ModeExit />
           <PlacementGhost />
           <LinkMode />
           <RadialMenu />
@@ -93,6 +98,9 @@ export function ProjectView() {
           </ErrorBoundary>
           <ErrorBoundary scope="studio" fallback={panelCrash}>
             <Studio />
+          </ErrorBoundary>
+          <ErrorBoundary scope="notes" fallback={panelCrash}>
+            <Notes />
           </ErrorBoundary>
         </>
       ) : (

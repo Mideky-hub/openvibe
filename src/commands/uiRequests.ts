@@ -10,6 +10,7 @@ export type UiRequest =
   | { kind: "renameOrchestrator"; id: string }
   | { kind: "agentMenu"; view: "agents" | "options" | "ollama" | { install: AgentId }; at?: Point }
   | { kind: "composeGroup" }
+  | { kind: "savePreset" }
   | { kind: "groupMenu"; id: string };
 
 type RequestOf<K extends UiRequest["kind"]> = Extract<UiRequest, { kind: K }>;

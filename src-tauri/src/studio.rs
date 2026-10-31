@@ -17,8 +17,22 @@ use crate::process::hide_window;
 pub const MAX_BYTES: u64 = 2 * 1024 * 1024;
 /// A folder of thousands of generated files must not freeze the tree.
 pub const MAX_FILES: usize = 50_000;
-/// Outside a repository nothing says what is generated: these are not walked.
-const SKIPPED_FOLDERS: [&str; 3] = [".git", "node_modules", "target"];
+/// Outside a repository nothing says what is generated or private: these are not walked.
+const SKIPPED_FOLDERS: [&str; 6] = [".git", "node_modules", "target", ".ssh", ".aws", ".gnupg"];
+/// Private keys and stores, by extension.
+const SECRET_EXTENSIONS: [&str; 7] = ["pem", "key", "p12", "pfx", "keystore", "jks", "ppk"];
+/// Private keys and credentials, by name.
+const SECRET_NAMES: [&str; 9] = [
+    "id_rsa",
+    "id_dsa",
+    "id_ecdsa",
+    "id_ed25519",
+    ".netrc",
+    ".npmrc",
+    ".pypirc",
+    ".git-credentials",
+    "credentials.json",
+];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -70,13 +84,13 @@ fn is_device_name(name: &str) -> bool {
 /// Whether Windows would take `name` as it is. A `:` is a drive or an NTFS
 /// stream, and a final dot or space is dropped, so `.git.` would be `.git`.
 /// This also leaves out `.`, `..` and the empty name of a root.
-fn is_plain_name(name: &str) -> bool {
+pub(crate) fn is_plain_name(name: &str) -> bool {
     !name.is_empty() && !name.contains(':') && !name.ends_with(['.', ' ']) && !is_device_name(name)
 }
 
 /// The file's real path, which may not exist yet; whatever leaves `root` or
 /// reaches a `.git` is refused, through links and junctions too.
-fn resolve(root: &Path, file: &str) -> Result<PathBuf, String> {
+pub(crate) fn resolve(root: &Path, file: &str) -> Result<PathBuf, String> {
     if !file.split(['/', '\\']).all(is_plain_name) {
         return Err(refused(file));
     }
@@ -186,6 +200,15 @@ fn listed_by_git(root: &Path) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
+/// Without a `.gitignore` to hide them, these would sit in the tree in plain sight.
+fn is_secret(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    let extension = Path::new(&name).extension().and_then(|e| e.to_str());
+    name.starts_with(".env")
+        || SECRET_NAMES.contains(&name.as_str())
+        || extension.is_some_and(|e| SECRET_EXTENSIONS.contains(&e))
+}
+
 /// The files of a folder that is no repository; links are not followed.
 fn walk(root: &Path) -> Result<Vec<String>, String> {
     let mut found = BTreeSet::new();
@@ -210,7 +233,9 @@ fn walk(root: &Path) -> Result<Vec<String>, String> {
                 format!("{folder}/{name}")
             };
             if kind.is_file() {
-                found.insert(path);
+                if !is_secret(&name) {
+                    found.insert(path);
+                }
             } else if kind.is_dir() && !SKIPPED_FOLDERS.contains(&name.as_str()) {
                 folders.push(path);
             }
@@ -766,6 +791,46 @@ mod tests {
     }
 
     #[cfg(windows)]
+    #[test]
+    fn the_walk_keeps_secrets_out_of_the_list() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        for name in [
+            ".env",
+            ".env.local",
+            ".ENV.production",
+            ".envrc",
+            "server.pem",
+            "SERVER.KEY",
+            "cert.p12",
+            "store.pfx",
+            "app.keystore",
+            "release.jks",
+            "putty.ppk",
+            "id_rsa",
+            "id_ed25519",
+            ".netrc",
+            ".npmrc",
+            ".pypirc",
+            ".git-credentials",
+            "credentials.json",
+        ] {
+            std::fs::write(root.join(name), "secret").unwrap();
+        }
+        std::fs::create_dir_all(root.join("deep").join(".ssh")).unwrap();
+        std::fs::write(root.join("deep").join(".ssh").join("config"), "x").unwrap();
+        std::fs::create_dir(root.join(".aws")).unwrap();
+        std::fs::write(root.join(".aws").join("config"), "x").unwrap();
+        std::fs::write(root.join("deep").join(".env"), "secret").unwrap();
+        for name in ["main.rs", "environment.md", "id_rsa.pub", "keys.md"] {
+            std::fs::write(root.join(name), "x").unwrap();
+        }
+        assert_eq!(
+            files(root).unwrap(),
+            ["environment.md", "id_rsa.pub", "keys.md", "main.rs"]
+        );
+    }
+
     #[test]
     fn the_walk_does_not_follow_a_junction() {
         let outside = project(&[("secret.txt", b"x")]);

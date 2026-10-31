@@ -5,7 +5,7 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { canvasStore } from "@/canvas/canvasStore";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { workspacesStore } from "@/store/workspaces";
-import { closeGroup, launchGroup } from "./groups";
+import { closeGroup, launchGroup, setGroupFolded, setGroupSpeciality, showGroups } from "./groups";
 
 vi.mock("@excalidraw/excalidraw", () => ({ CaptureUpdateAction: { IMMEDIATELY: "i" }, newElementWith: (e: object, patch: object) => ({ ...e, ...patch }) }));
 vi.mock("@/nodes/terminal/registry", () => ({ markForAutostart: vi.fn() }));
@@ -52,6 +52,31 @@ it("staffs a mission's group with the names, folders and pantheon it is given, a
   expect(frame?.customData?.openvibe).toMatchObject({ kind: "group", pantheon: "egyptian" });
 });
 
+it("sets a group's speciality as one undoable step, and leaves other frames alone (spec groupes spécialisés §2)", () => {
+  const data = { kind: "group", role: "general", pantheon: "egyptian" };
+  scene = [
+    { id: "f1", type: "frame", customData: { openvibe: data } },
+    { id: "f2", type: "frame", customData: { openvibe: data } },
+    { id: "plain", type: "frame" },
+  ];
+  setGroupSpeciality("f1", "Frontend");
+  expect(scene[0].customData?.openvibe).toEqual({ ...data, speciality: "Frontend" });
+  expect(scene[1].customData?.openvibe).toEqual(data);
+  setGroupSpeciality("plain", "Frontend");
+  expect(scene[2].customData).toBeUndefined();
+  setGroupSpeciality("f1", "");
+  expect(scene[0].customData?.openvibe).toEqual(data);
+});
+
+it("frames the groups it is given, and does nothing without one", () => {
+  scene = [{ id: "f1", type: "frame" }, { id: "f2", type: "frame" }, { id: "t1", type: "embeddable" }];
+  const scroll = vi.mocked(canvasStore.getState().api!.scrollToContent);
+  showGroups([]);
+  expect(scroll).not.toHaveBeenCalled();
+  showGroups(["f1", "f2", "gone"]);
+  expect(scroll.mock.calls[0][0]).toEqual([scene[0], scene[1]]);
+});
+
 it("gives each agent of a staffed group the model the router chose, and none otherwise (backlog 27 oct)", async () => {
   const made = await launchGroup(
     { name: "Mission Auth", role: "general", agents: ["claude", "claude"] },
@@ -73,4 +98,15 @@ it("closes a group with the wires that led to it (final review H2)", () => {
   ];
   closeGroup("f1");
   expect(scene.filter((e) => e.isDeleted).map((e) => e.id)).toEqual(["f1", "t1", "w1", "w2"]);
+});
+
+it("folds and unfolds a group as one undoable step, keeping everything else (spec replier un groupe §3)", () => {
+  const data = { kind: "group", role: "general", pantheon: "egyptian", speciality: "API" };
+  scene = [{ id: "f1", type: "frame", customData: { openvibe: data } }, { id: "plain", type: "frame" }];
+  setGroupFolded("f1", true);
+  expect(scene[0].customData?.openvibe).toEqual({ ...data, folded: true });
+  setGroupFolded("plain", true);
+  expect(scene[1].customData).toBeUndefined();
+  setGroupFolded("f1", false);
+  expect(scene[0].customData?.openvibe).toEqual(data);
 });

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { renameGroup } from "@/fleet/groups";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { renameGroup, setGroupFolded } from "@/fleet/groups";
 import { GroupMenu } from "@/fleet/GroupMenu";
 import { countsText, membersIn, waitingText } from "@/fleet/groupSummary";
 import { screenRectOf } from "@/fleet/placement";
@@ -69,7 +70,9 @@ function GroupLabel(props: { group: SceneGroup; view: CanvasView; working: numbe
   const { group, view, working, waiting, renaming } = props;
   const waits = waitingText(waiting);
   const rect = screenRectOf(group, view);
-  const role = ROLES[group.group.role];
+  const { role: roleId, speciality, folded } = group.group;
+  const t = useMessages(canvasMessages);
+  const role = ROLES[roleId];
   return (
     <div
       className="absolute flex items-center rounded-t-lg border border-b-0 bg-ov-surface pr-1.5 text-[11px] whitespace-nowrap"
@@ -81,13 +84,25 @@ function GroupLabel(props: { group: SceneGroup; view: CanvasView; working: numbe
         borderColor: `color-mix(in srgb, ${role.color} 60%, transparent)`,
       }}
     >
-      <span className="grid w-7 shrink-0 place-items-center">
-        <span className="size-1.5 rounded-full" style={{ backgroundColor: role.color }} />
-      </span>
+      <button
+        type="button"
+        aria-label={folded ? t.unfoldGroup : t.foldGroup}
+        title={folded ? t.unfoldGroup : t.foldGroup}
+        onClick={() => setGroupFolded(group.id, !folded)}
+        className="pointer-events-auto grid h-full w-4 shrink-0 place-items-center text-ov-text-2 hover:text-ov-text"
+      >
+        {folded ? <ChevronRight className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+      </button>
+      <span className="mr-1.5 size-1.5 shrink-0 rounded-full" /* chevron 16 + dot 6 + gap 6 = the 28 px the native name is aligned on */ style={{ backgroundColor: role.color }} />
       {renaming ? (
         <NameField name={group.name} onDone={(name) => name !== null && renameGroup(group.id, name)} />
       ) : (
         <span className="font-semibold tracking-[0.08em] text-ov-text uppercase">{group.name}</span>
+      )}
+      {speciality && (
+        <span title={speciality} className="pointer-events-auto ml-2 max-w-40 truncate text-ov-text-2">
+          {speciality}
+        </span>
       )}
       <span className="ml-2 font-mono text-ov-text-2">{countsText(group.memberIds.length, working)}</span>
       {waits && <span className="ml-1 font-mono text-ov-waiting">{waits}</span>}

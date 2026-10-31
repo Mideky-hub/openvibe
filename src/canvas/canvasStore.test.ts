@@ -29,7 +29,14 @@ describe("viewFrom", () => {
       tool: "rectangle",
       selectedIds: ["a", "b"],
       editingFrame: null,
+      mode: null,
     });
+  });
+
+  it("tells the zen and reading modes (Alt+Z, Alt+R), which hide the tools", () => {
+    expect(viewFrom(appState({ zenModeEnabled: true })).mode).toBe("zen");
+    expect(viewFrom(appState({ viewModeEnabled: true })).mode).toBe("reading");
+    expect(sameView(viewFrom(appState()), viewFrom(appState({ zenModeEnabled: true })))).toBe(false);
   });
 });
 

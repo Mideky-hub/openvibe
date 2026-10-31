@@ -17,6 +17,9 @@ import { reviewStore, useReview } from "./reviewStore";
 /** The files tab lists this many paths at most; the filter finds the others. */
 const MAX_FILES = 400;
 
+/** The panel's own toasts show at the top: the default corner is where « Envoyer » is. */
+const TOAST_AWAY = { position: "top-center" } as const;
+
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** What an agent changed and its folder's files, with remarks sent back to it (spec maj §5). */
@@ -134,12 +137,14 @@ function ChangesTab({ cwd, base, refresh }: { cwd: string; base: string | null; 
   const [files, setFiles] = useState<ChangedFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<ChangedFile | null>(null);
+  const [cut, setCut] = useState(false);
 
   useEffect(() => {
     let alive = true;
     reviewChanges(cwd, base).then(
       (changes) => {
         if (!alive) return;
+        setCut(changes.truncated === true);
         setError(null);
         setFiles(changes.files);
         // A refresh stays on the file being read when it is still changed.
@@ -158,6 +163,7 @@ function ChangesTab({ cwd, base, refresh }: { cwd: string; base: string | null; 
   return (
     <div className="flex min-h-0 flex-1">
       <ul className="w-[260px] shrink-0 overflow-y-auto border-r border-ov-line py-1">
+        {cut && <li className="px-3 py-1 text-[11px] text-ov-text-3">{t.listCut(files.length)}</li>}
         {files.map((file) => {
           const status = FILE_STATUS[file.status];
           return (
@@ -284,6 +290,7 @@ function RemarkField({ value: text, onChange: setText, onDone }: { value: string
 function FilesTab({ cwd, refresh }: { cwd: string; refresh: number }) {
   const t = useMessages(reviewMessages);
   const [files, setFiles] = useState<string[] | null>(null);
+  const [listCut, setListCut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -291,7 +298,11 @@ function FilesTab({ cwd, refresh }: { cwd: string; refresh: number }) {
   useEffect(() => {
     let alive = true;
     reviewFiles(cwd).then(
-      (list) => alive && setFiles(list),
+      (list) => {
+        if (!alive) return;
+        setListCut(list.truncated === true);
+        setFiles(list.files);
+      },
       (failure: unknown) => alive && setError(errorText(failure)),
     );
     return () => {
@@ -302,7 +313,10 @@ function FilesTab({ cwd, refresh }: { cwd: string; refresh: number }) {
   if (error) return <Message>{error}</Message>;
   if (!files) return <Message>{t.readingFiles}</Message>;
   const wanted = filter.trim().toLowerCase();
-  const found = (wanted ? files.filter((f) => f.toLowerCase().includes(wanted)) : files).slice(0, MAX_FILES);
+  const matching = wanted ? files.filter((f) => f.toLowerCase().includes(wanted)) : files;
+  const found = matching.slice(0, MAX_FILES);
+  // The list is cut by Rust (very large repository) or here, for display.
+  const cut = listCut || matching.length > MAX_FILES;
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex w-[260px] shrink-0 flex-col border-r border-ov-line">
@@ -314,6 +328,7 @@ function FilesTab({ cwd, refresh }: { cwd: string; refresh: number }) {
           className="m-2 h-7 rounded-[6px] bg-ov-field px-2 text-[12px] text-ov-text outline-none placeholder:text-ov-text-3"
         />
         <ul className="min-h-0 flex-1 overflow-y-auto pb-1">
+          {cut && <li className="px-3 py-1 text-[11px] text-ov-text-3">{t.filesCut(found.length)}</li>}
           {found.map((file) => (
             <li key={file}>
               <button
@@ -377,12 +392,13 @@ function Remarks({ nodeId, name }: { nodeId: string; name: string }) {
   const remarks = useReview((s) => s.remarks);
   if (remarks.length === 0) return null;
   const send = async () => {
-    const { sent, skipped, waiting } = await sendToAgents([nodeId], reviewMessage(remarks));
+    const { sent, skipped, waiting, starting } = await sendToAgents([nodeId], reviewMessage(remarks));
     if (sent > 0) {
       reviewStore.getState().clear();
-      toast(messages(reviewMessages).sent(name));
-    } else if (waiting.length > 0) toast.warning(messages(reviewMessages).waiting(name));
-    else if (skipped.length > 0) toast.warning(messages(reviewMessages).stopped(name));
+      toast(messages(reviewMessages).sent(name), TOAST_AWAY);
+    } else if (waiting.length > 0) toast.warning(messages(reviewMessages).waiting(name), TOAST_AWAY);
+    else if (starting.length > 0) toast.warning(messages(reviewMessages).starting(name));
+    else if (skipped.length > 0) toast.warning(messages(reviewMessages).stopped(name), TOAST_AWAY);
   };
   return (
     <footer className="flex max-h-[30%] shrink-0 flex-col gap-1.5 border-t border-ov-line px-3 py-2">

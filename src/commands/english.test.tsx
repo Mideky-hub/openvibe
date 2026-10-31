@@ -41,6 +41,7 @@ afterEach(() => {
 describe("the palette's catalogs in English", () => {
   it("reads labels and sections in the current language", () => {
     expect(labelOf(find("terminal.next"), busy)).toBe("Next terminal");
+    expect(labelOf(find("agent.nextWaiting"), busy)).toBe("Go to the next waiting agent");
     expect(labelOf(find("agent.launch.claude"), busy)).toBe("Launch Claude");
     expect(labelOf(find("agent.launch.ollama"), busy)).toBe("Install Ollama…");
     expect(labelOf(find("tool.rectangle"), busy)).toBe("Rectangle");
@@ -171,5 +172,37 @@ describe("the go-to rows in English", () => {
     expect(await row({ key: "w", kind: "workspace", label: "Main", keywords: [], live: 1, current: true })).toBe("Main1 activeshown");
     await act(async () => root.unmount());
     host.remove();
+  });
+});
+
+describe("a language change while the palette is open (R5a)", () => {
+  let host: HTMLDivElement;
+  let root: Root;
+  beforeEach(async () => {
+    mockIPC(() => undefined);
+    projectsStore.setState({ view: "home", projects: [{ id: "p1", name: "api", path: "C:/code/api", lastOpenedAt: 1, missing: false }], activeId: null } as never);
+    paletteStore.setState({ open: false, query: "", context: null, returnFocus: null });
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(<Palette />));
+  });
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    document.body.replaceChildren();
+    clearMocks();
+  });
+
+  it("rewrites the placeholder, the section titles and the lines in the new language", async () => {
+    await act(async () => openPalette("goTo", home));
+    expect(document.querySelector("[cmdk-group-heading]")?.textContent).toBe("Projects");
+    await act(async () => langStore.setState({ lang: "fr" }));
+    expect(document.querySelector("[cmdk-group-heading]")?.textContent).toBe("Projets");
+    expect(document.querySelector<HTMLInputElement>("[cmdk-input]")!.placeholder).toContain("Aller à");
+    await act(async () => setPaletteQuery("> "));
+    expect(document.body.textContent).toContain("Fenêtre");
+    await act(async () => langStore.setState({ lang: "en" }));
+    expect(document.body.textContent).toContain("Window");
+    expect(document.body.textContent).not.toContain("Fenêtre");
   });
 });

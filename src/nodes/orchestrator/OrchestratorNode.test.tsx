@@ -6,6 +6,7 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import { requestUi } from "@/commands/uiRequests";
 import { nodesStore, sessionOf } from "@/store/nodes";
 import { markForAutostart, mountTerminal } from "../terminal/registry";
+import { MISSING_GRACE_MS } from "../terminal/MissingNode";
 import { OrchestratorNode } from "./OrchestratorNode";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
@@ -50,4 +51,16 @@ it("gives an orchestrator of before its Claude session, and shows its terminal (
   expect(host.querySelector('[data-mission="ancien"]')).not.toBeNull();
   await act(async () => root.unmount());
   host.remove();
+});
+
+it("does not flash « introuvable » while a copy's record is on its way", async () => {
+  vi.useFakeTimers();
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  await act(async () => root.render(<OrchestratorNode nodeId="copie-fantome" />));
+  expect(host.textContent).toBe("");
+  await act(async () => void vi.advanceTimersByTime(MISSING_GRACE_MS + 1));
+  expect(host.textContent).not.toBe("");
+  vi.useRealTimers();
+  await act(async () => root.unmount());
 });

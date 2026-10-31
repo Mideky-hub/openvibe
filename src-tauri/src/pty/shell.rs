@@ -393,6 +393,9 @@ fn ollama_command(launch: Option<&OllamaLaunch>, syntax: ShellSyntax) -> AppResu
     })
 }
 
+/// The longest model name or alias accepted for `--model`.
+const MAX_MODEL_LEN: usize = 64;
+
 fn claude_command(
     launch: Option<&ClaudeLaunch>,
     syntax: ShellSyntax,
@@ -422,7 +425,9 @@ fn claude_command(
     }
     if let Some(model) = launch.model.as_deref() {
         // Typed into a shell: a model's name, or an alias like `sonnet[1m]`, nothing else.
-        let valid = !model.is_empty()
+        // The first character is alphanumeric so the name can never read as a flag.
+        let valid = model.len() <= MAX_MODEL_LEN
+            && model.starts_with(|c: char| c.is_ascii_alphanumeric())
             && model
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '_' | '[' | ']'));
@@ -481,6 +486,16 @@ fn codex_command(syntax: ShellSyntax, notify_url: Option<&str>, config: Option<&
     let (Some(url), Some(config)) = (notify_url, config) else {
         return "codex".into();
     };
+    // cmd drops `%`, `!`, `^` and `"` from what it is given (see `quote`): the
+    // path would be another one and curl would send no token. Without the
+    // hook, the terminal's output decides its activity.
+    if syntax == ShellSyntax::Cmd && config.to_string_lossy().contains(['%', '!', '^', '"']) {
+        log::warn!(
+            "codex notify not set: {} holds a character cmd cannot pass",
+            config.display()
+        );
+        return "codex".into();
+    }
     let curl = if cfg!(windows) { "curl.exe" } else { "curl" };
     let config = toml_literal(&config.to_string_lossy());
     let notify = format!("notify=['{curl}','-s','-K',{config},'-X','POST','{url}','-d']");
@@ -959,6 +974,23 @@ mod tests {
     }
 
     #[test]
+    fn codex_gets_no_hook_rather_than_a_wrong_config_path_under_cmd() {
+        let hooks = AgentHooks {
+            codex_notify: Some("http://127.0.0.1:1/hook/codex/n1".into()),
+            curl_config: Some(PathBuf::from(r"C:\Users\100%Jean\curl.cfg")),
+            ..Default::default()
+        };
+        let under = |syntax| {
+            agent_command(&spec(Agent::Codex, None), syntax, &hooks)
+                .unwrap()
+                .unwrap()
+        };
+        assert_eq!(under(ShellSyntax::Cmd), "codex");
+        // PowerShell and POSIX shells keep the path as it is.
+        assert!(under(ShellSyntax::PowerShell).contains(r"100%Jean"));
+    }
+
+    #[test]
     fn codex_notifies_the_end_of_its_turns() {
         let curl = if cfg!(windows) { "curl.exe" } else { "curl" };
         let hooks = AgentHooks {
@@ -1140,6 +1172,14 @@ mod tests {
                 .kind(),
             "invalidInput"
         );
+        // Nor a name that would read as a flag, nor an endless one.
+        for bad in ["--dangerous", "-x", ".hidden", &"a".repeat(65)] {
+            assert_eq!(
+                with_model(ClaudeMode::New, bad).unwrap_err().kind(),
+                "invalidInput",
+                "{bad}"
+            );
+        }
     }
 
     #[test]

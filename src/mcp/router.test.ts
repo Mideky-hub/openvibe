@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { mockIPC } from "@tauri-apps/api/mocks";
+import { canvasStore } from "@/canvas/canvasStore";
 import { nodesStore, terminalOf } from "@/store/nodes";
-import { answer } from "./router";
+import { answer, handleCall } from "./router";
+import type { McpCall } from "@/ipc/mcp";
 import { pauseAgents } from "@/fleet/broadcast";
 import { setRemoteControl } from "@/fleet/remoteControl";
 import { ptySendText } from "@/ipc/pty";
@@ -47,10 +49,26 @@ beforeAll(async () => {
   await nodesStore.getState().create("chef", { workspaceId: "w1", kind: "orchestrator", payload: { name: "chef" } });
 });
 
+describe("the notes tool (spec notes §3)", () => {
+  const notes = (node: string) => call(node, "notes", {});
+  afterEach(() => void mockIPC(() => undefined));
+
+  it("answers agents and orchestrators alike, with the same tool", async () => {
+    mockIPC((command) => (command === "notes_agent_list" ? [{ name: "Auth", attached: true }] : undefined));
+    expect(textOf(await notes("isis"))).toContain("Auth (attachée à ton groupe)");
+    expect(textOf(await notes("chef"))).toContain("Auth");
+  });
+
+  it("answers an agent whose project is not on screen", async () => {
+    mockIPC((command) => (command === "notes_agent_list" ? [] : undefined));
+    expect(await notes("elsewhere")).not.toHaveProperty("isError");
+  });
+});
+
 describe("the agent's tools (spec orchestrateur §4.4)", () => {
   it("lists them for any Claude session", async () => {
     const list = (await answer({ callId: 1, nodeId: "isis", method: "tools/list", params: {} })) as { tools: { name: string; inputSchema: object }[] };
-    expect(list.tools.map((t) => t.name)).toEqual(["declare_steps", "step", "report"]);
+    expect(list.tools.map((t) => t.name)).toEqual(["declare_steps", "step", "report", "notes"]);
     expect(list.tools.every((t) => typeof t.inputSchema === "object")).toBe(true);
   });
 
@@ -93,7 +111,7 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
 
   it("lists them for the orchestrator only, and each side refuses the other's", async () => {
     const list = (await answer({ callId: 1, nodeId: "chef", method: "tools/list", params: {} })) as { tools: { name: string }[] };
-    expect(list.tools.map((t) => t.name)).toEqual(["mission", "propose_plan", "team", "read_output", "write", "extend", "interrupt", "reassign", "merge", "finish", "remote_control"]);
+    expect(list.tools.map((t) => t.name)).toEqual(["mission", "propose_plan", "team", "read_output", "write", "extend", "interrupt", "reassign", "merge", "finish", "remote_control", "notes"]);
     expect(textOf(await call("isis", "propose_plan", plan))).toBe("Outil réservé à l'orchestrateur.");
     expect(textOf(await call("chef", "report", { summary: "x", status: "done" }))).toBe("Outil réservé aux agents.");
   });
@@ -111,6 +129,37 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
       max_agents: 4,
       plan: [{ title: "Login", agent: "Isis" }, { title: "API", agent: "new" }],
       linked_agents: [{ name: "Isis" }],
+    });
+  });
+
+  describe("the groups and their specialities (spec groupes spécialisés §3)", () => {
+    const front = { id: "g1", name: "Interface", x: 0, y: 0, width: 10, height: 10, memberIds: ["isis"], group: { role: "frontend" as const, pantheon: "egyptian", speciality: "Frontend" } };
+    const back = { ...front, id: "g2", name: "Serveur", memberIds: [], group: { role: "backend" as const, pantheon: "norse" } };
+
+    afterAll(() => canvasStore.setState({ frames: [], links: {} }));
+
+    it("says each linked agent's group and speciality, and every linked group", async () => {
+      canvasStore.setState({ frames: [front, back], links: { chef: { groupIds: ["g1", "g2"], nodeIds: [] } } });
+      const mission = JSON.parse(textOf(await call("chef", "mission", {})));
+      expect(mission.linked_agents).toEqual([expect.objectContaining({ name: "Isis", group: "Interface", speciality: "Frontend" })]);
+      expect(mission.linked_groups).toEqual([{ name: "Interface", speciality: "Frontend" }, { name: "Serveur", speciality: null }]);
+    });
+
+    it("sends a new agent to a linked group and says so in the plan, refusing an unknown one", async () => {
+      canvasStore.setState({ frames: [front, back], links: { chef: { groupIds: ["g1", "g2"], nodeIds: [] } } });
+      const sub = { title: "Style", brief: "Fais le style", agent: "new", budget_min: 10 };
+      expect(await call("chef", "propose_plan", { ...plan, subtasks: [{ ...sub, group: "Zeus" }] })).toMatchObject({ isError: true });
+      await call("chef", "propose_plan", { ...plan, subtasks: [{ ...sub, group: "interface" }, plan.subtasks[1]] });
+      expect(missionOf(nodesStore.getState().nodes.chef)?.plan?.[0].group).toEqual({ id: "g1", name: "Interface" });
+      expect(JSON.parse(textOf(await call("chef", "mission", {}))).plan.map((s: { group: unknown }) => s.group)).toEqual(["Interface", null]);
+      await call("chef", "propose_plan", plan);
+    });
+
+    it("keeps today's answers for an agent outside any group, with nulls added", async () => {
+      canvasStore.setState({ frames: [], links: {} });
+      const mission = JSON.parse(textOf(await call("chef", "mission", {})));
+      expect(mission.linked_agents).toEqual([expect.objectContaining({ name: "Isis", group: null, speciality: null })]);
+      expect(mission.linked_groups).toEqual([]);
     });
   });
 
@@ -156,9 +205,14 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
 
   it("says so when its workspace is not on screen, instead of finding no linked agent (final review H2)", async () => {
     await nodesStore.getState().create("loin", { workspaceId: "w9", kind: "orchestrator", payload: { name: "Loin" } });
-    expect(JSON.parse(textOf(await call("loin", "mission", {}))).linked_agents).toBe("inconnus : l'espace de l'orchestrateur n'est pas affiché");
+    const hidden = JSON.parse(textOf(await call("loin", "mission", {})));
+    expect(hidden.linked_agents).toBeNull();
+    expect(hidden.linked_groups).toBeNull();
+    expect(hidden.linked_agents_note).toBe("inconnus : l'espace de l'orchestrateur n'est pas affiché");
     expect(textOf(await call("loin", "propose_plan", plan))).toContain("n'est pas affiché");
     expect(textOf(await call("loin", "propose_plan", { ...plan, subtasks: [plan.subtasks[1]] }))).toContain("Plan proposé : 1 sous-tâche.");
+    // Its groups are as unknown as its agents: refused, not told that the group does not exist.
+    expect(textOf(await call("loin", "propose_plan", { ...plan, subtasks: [{ ...plan.subtasks[1], group: "Interface" }] }))).toContain("n'est pas affiché");
   });
 
   describe("once the team is formed", () => {
@@ -169,6 +223,23 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
         members: [{ nodeId: "isis", name: "Isis", task: "Login", budgetMin: 20, linked: true, branch: "openvibe/auth-isis", worktree: "C:/w/isis", sentAt: Date.now() }],
       }),
     );
+
+    it("says each member's group and speciality, to choose who takes a sub-task over (spec groupes spécialisés §3)", async () => {
+      const front = { id: "g1", name: "Interface", x: 0, y: 0, width: 10, height: 10, memberIds: ["isis"], group: { role: "frontend" as const, pantheon: "egyptian", speciality: "Frontend" } };
+      canvasStore.setState({ frames: [front] });
+      expect(JSON.parse(textOf(await call("chef", "team", {})))[0]).toMatchObject({ name: "Isis", group: "Interface", speciality: "Frontend" });
+      canvasStore.setState({ frames: [] });
+      expect(JSON.parse(textOf(await call("chef", "team", {})))[0]).toMatchObject({ group: null, speciality: null });
+    });
+
+    it("does not say an agent has no group when its canvas is out of sight (final review)", async () => {
+      workspacesStore.setState({ activeId: "w2" });
+      const [isis] = JSON.parse(textOf(await call("chef", "team", {})));
+      workspacesStore.setState({ activeId: "w1" });
+      expect(isis.name).toBe("Isis");
+      expect(isis).not.toHaveProperty("group");
+      expect(isis).not.toHaveProperty("speciality");
+    });
 
     it("reports the team and reads an agent's terminal", async () => {
       expect(JSON.parse(textOf(await call("chef", "team", {})))).toEqual([
@@ -218,20 +289,20 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
       expect(missionOf(nodesStore.getState().nodes.chef)?.members[0]).toMatchObject({ merged: true, report: { summary: "Vérifié" } });
     });
 
-    it("extends an agent's budget from what is left of the global one (spec §7.2)", async () => {
-      setMission("chef", { budgetMin: 30 });
+    it("extends an agent's target only within the real time left (spec mission de nuit §3)", async () => {
+      setMission("chef", { budgetMin: 30, startedAt: Date.now() });
       // Isis reported earlier in this file: still at work here, its whole budget counts.
       updateMember("chef", "isis", { report: undefined });
-      expect(textOf(await call("chef", "extend", { agent: "Isis", minutes: 20 }))).toBe("Il reste 10 min sur le budget global.");
+      expect(textOf(await call("chef", "extend", { agent: "Isis", minutes: 20 }))).toBe("Il reste 30 min sur le budget global.");
       updateMember("chef", "isis", { overdue: 1 });
       expect(textOf(await call("chef", "extend", { agent: "Isis", minutes: 10 }))).toBe("Isis : +10 min, budget 30 min.");
       expect(missionOf(nodesStore.getState().nodes.chef)?.members[0]).toMatchObject({ extraMin: 10 });
       expect(missionOf(nodesStore.getState().nodes.chef)?.members[0].overdue).toBeUndefined();
       // The orchestrator reads the time with its extensions, and what is left (final review H3).
       expect(JSON.parse(textOf(await call("chef", "team", {})))[0]).toMatchObject({ time: "0 / 30 min" });
-      expect(JSON.parse(textOf(await call("chef", "mission", {})))).toMatchObject({ left_min: 0, elapsed_min: null });
+      expect(JSON.parse(textOf(await call("chef", "mission", {})))).toMatchObject({ left_min: 30, elapsed_min: 0 });
       expect(await call("chef", "extend", { agent: "Isis", minutes: 0 })).toMatchObject({ isError: true });
-      setMission("chef", { budgetMin: undefined });
+      setMission("chef", { budgetMin: undefined, startedAt: undefined });
     });
 
     it("interrupts an agent's turn like « Pause » (spec §7.2)", async () => {
@@ -257,6 +328,10 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
   });
 });
 
+it("answers a failed step with its accent in French (backlog R5c)", async () => {
+  expect(textOf(await call("isis", "step", { title: "Plan", state: "failed" }))).toBe("Plan : échec.");
+});
+
 describe("the English protocol (spec première version §7.1)", () => {
   it("still takes French values, and tells a former name what it became", async () => {
     expect(textOf(await call("isis", "step", { title: "Plan", state: "en_cours" }))).toBe("Plan : en cours.");
@@ -275,5 +350,53 @@ describe("the English protocol (spec première version §7.1)", () => {
     } finally {
       langStore.setState({ lang: "fr" });
     }
+  });
+});
+
+describe("every call gets its reply, even under load or a failing reply", () => {
+  const stepCall = (callId: number, nodeId: string): McpCall => ({ callId, nodeId, method: "tools/call", params: { name: "step", arguments: { title: "Plan", state: "done" } } });
+
+  it("answers 8 agents calling 25 times at once, each call once", async () => {
+    const replies = new Map<number, unknown>();
+    const calls = Array.from({ length: 200 }, (_, i) => stepCall(i, i % 2 ? "isis" : "chef"));
+    // The reply path is slow and out of order, as under a busy page.
+    const reply = async (callId: number, result: unknown) => {
+      await new Promise((resolve) => setTimeout(resolve, (callId * 7) % 13));
+      replies.set(callId, result);
+    };
+    await Promise.all(calls.map((c) => handleCall(c, reply)));
+    expect(replies.size).toBe(200);
+    expect([...replies.values()].every((r) => (r as { content: unknown[] }).content.length > 0)).toBe(true);
+  });
+
+  it("replies with a readable error when a tool's answer cannot be sent as JSON", async () => {
+    const replies: unknown[] = [];
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    const reply = async (_id: number, result: unknown) => void replies.push(result);
+    await handleCall({ callId: 1, nodeId: "isis", method: "tools/call", params: { name: "step", arguments: { title: "Plan", state: "done" } } }, reply);
+    expect(replies).toHaveLength(1);
+    const bad = vi.fn(async (_id: number, result: unknown) => {
+      if (result === cyclic) throw new Error("not serializable");
+      replies.push(result);
+    });
+    await handleCall({ callId: 2, nodeId: "isis", method: "tools/call", params: { name: "step", arguments: cyclic } }, bad);
+    expect(replies).toHaveLength(2);
+    expect(replies[1]).toMatchObject({ isError: true });
+  });
+
+  it("tries a reply that failed once more, in a form that cannot fail", async () => {
+    const seen: unknown[] = [];
+    let first = true;
+    const reply = async (_id: number, result: unknown) => {
+      if (first) {
+        first = false;
+        throw new Error("ipc hiccup");
+      }
+      seen.push(result);
+    };
+    await handleCall(stepCall(1, "isis"), reply);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ isError: true });
   });
 });

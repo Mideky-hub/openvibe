@@ -38,7 +38,7 @@ export const fleetMessages = defineMessages(
       roman: "Romain",
       yoruba: "Yoruba",
     },
-    filters: { all: "Tous", working: "En cours", waiting: "Attend", idle: "Prêts", stopped: "Arrêtés" },
+    filters: { all: "Tous", working: "En cours", waiting: "Attend", active: "Actifs", idle: "Prêts", stopped: "Arrêtés" },
     outsideGroup: "Hors groupe",
     summary: {
       counts: (members: number, working: number) => `${members} · ${working > 0 ? `${working} en cours` : "inactif"}`,
@@ -63,6 +63,11 @@ export const fleetMessages = defineMessages(
     broadcast: {
       skipped: (names: readonly string[]) =>
         names.length === 1 ? `1 agent arrêté ignoré : ${names[0]}` : `${names.length} agents arrêtés ignorés : ${names.join(", ")}`,
+      starting: (names: readonly string[]) =>
+        names.length === 1
+          ? `1 agent en démarrage ignoré : ${names[0]} — réessaie dans un instant`
+          : `${names.length} agents en démarrage ignorés : ${names.join(", ")} — réessaie dans un instant`,
+      resumeFailed: (name: string) => `${name} n'a pas pu reprendre : le processus vient de s'arrêter`,
       waiting: (names: readonly string[]) =>
         names.length === 1
           ? `1 agent en attente ignoré : ${names[0]} — réponds-lui dans son terminal`
@@ -146,6 +151,7 @@ export const fleetMessages = defineMessages(
       remove: (label: string) => `Retirer ${label}`,
       send: "Envoyer",
       writeInstruction: "Écris une consigne",
+      noAgents: "Aucun agent dans cette cible",
     },
     compose: {
       title: "Composer un groupe",
@@ -158,10 +164,16 @@ export const fleetMessages = defineMessages(
     },
     groupMenu: {
       rename: "Renommer",
+      speciality: "Spécialité",
+      specialityLabel: "Spécialité du groupe",
+      specialityCustom: "La tienne, puis Entrée",
+      specialityNone: "Aucune",
       addAgent: "Ajouter un agent",
       linkOrchestrator: "Relier un orchestrateur",
       pauseAll: "Tout mettre en pause",
       resumeAll: "Tout reprendre",
+      fold: "Replier le groupe",
+      unfold: "Déplier le groupe",
       ungroup: "Dégrouper",
       close: "Fermer le groupe",
     },
@@ -258,7 +270,7 @@ export const fleetMessages = defineMessages(
       roman: "Roman",
       yoruba: "Yoruba",
     },
-    filters: { all: "All", working: "Working", waiting: "Waiting", idle: "Ready", stopped: "Stopped" },
+    filters: { all: "All", working: "Working", waiting: "Waiting", active: "Active", idle: "Ready", stopped: "Stopped" },
     outsideGroup: "No group",
     summary: {
       counts: (members: number, working: number) => `${members} · ${working > 0 ? `${working} working` : "idle"}`,
@@ -283,6 +295,9 @@ export const fleetMessages = defineMessages(
     broadcast: {
       skipped: (names: readonly string[]) =>
         names.length === 1 ? `1 stopped agent ignored: ${names[0]}` : `${names.length} stopped agents ignored: ${names.join(", ")}`,
+      starting: (names: readonly string[]) =>
+        names.length === 1 ? `1 agent still starting ignored: ${names[0]} — try again in a moment` : `${names.length} agents still starting ignored: ${names.join(", ")} — try again in a moment`,
+      resumeFailed: (name: string) => `${name} could not resume: its process just stopped`,
       waiting: (names: readonly string[]) =>
         names.length === 1
           ? `1 waiting agent ignored: ${names[0]} — answer it in its terminal`
@@ -364,6 +379,7 @@ export const fleetMessages = defineMessages(
       remove: (label: string) => `Remove ${label}`,
       send: "Send",
       writeInstruction: "Write an instruction",
+      noAgents: "No agent in this target",
     },
     compose: {
       title: "Compose a group",
@@ -376,10 +392,16 @@ export const fleetMessages = defineMessages(
     },
     groupMenu: {
       rename: "Rename",
+      speciality: "Speciality",
+      specialityLabel: "Group speciality",
+      specialityCustom: "Your own, then Enter",
+      specialityNone: "None",
       addAgent: "Add an agent",
       linkOrchestrator: "Link an orchestrator",
       pauseAll: "Pause all",
       resumeAll: "Resume all",
+      fold: "Fold the group",
+      unfold: "Unfold the group",
       ungroup: "Ungroup",
       close: "Close the group",
     },

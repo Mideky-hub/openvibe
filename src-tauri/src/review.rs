@@ -39,6 +39,8 @@ pub struct Changes {
     /// What the files are compared with: `HEAD`, or the commit where the base forked.
     pub compared: String,
     pub files: Vec<ChangedFile>,
+    /// More than `MAX_ENTRIES` changes: the list is cut, the panel says so.
+    pub truncated: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -114,7 +116,10 @@ fn diff_output(dir: &Path, args: &[&str], codes: &[i32]) -> Result<String, Strin
         let _ = err.read_to_string(&mut stderr);
     }
     let status = child.wait().map_err(|err| err.to_string())?;
-    if status.code().is_some_and(|code| codes.contains(&code)) {
+    // `--no-index` answers 1 for a difference but also for an error: only
+    // a message without any diff is the error.
+    let failed_quietly = bytes.is_empty() && !stderr.trim().is_empty();
+    if !failed_quietly && status.code().is_some_and(|code| codes.contains(&code)) {
         Ok(String::from_utf8_lossy(&bytes).into_owned())
     } else {
         Err(stderr.trim().to_string())
@@ -236,6 +241,10 @@ fn is_binary(bytes: &[u8]) -> bool {
 /// The changes of the folder's repository against `base` (or HEAD): committed
 /// and not, untracked files included.
 pub fn changes(dir: &Path, base: Option<&str>) -> Result<Changes, String> {
+    changes_limited(dir, base, MAX_ENTRIES)
+}
+
+fn changes_limited(dir: &Path, base: Option<&str>, max: usize) -> Result<Changes, String> {
     let from = compared(dir, base)?;
     let names = git(
         dir,
@@ -261,11 +270,13 @@ pub fn changes(dir: &Path, base: Option<&str>) -> Result<Changes, String> {
     // From the root: run in a subfolder, ls-files lists that folder only.
     let root = root(dir)?;
     let untracked = git(&root, &["ls-files", "--others", "--exclude-standard", "-z"])?;
-    for path in untracked
+    let untracked: Vec<&str> = untracked
         .split('\0')
-        .filter(|p| !p.is_empty())
-        .take(MAX_ENTRIES)
-    {
+        // A nested repository is listed as `nested/`: not a file to diff.
+        .filter(|p| !p.is_empty() && !p.ends_with('/'))
+        .collect();
+    let truncated = files.len() + untracked.len() > max;
+    for path in untracked.into_iter().take(max) {
         let full = root.join(path);
         // Lines are counted below `MAX_BYTES` only; a bigger file shows none.
         let small =
@@ -286,10 +297,11 @@ pub fn changes(dir: &Path, base: Option<&str>) -> Result<Changes, String> {
         });
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
-    files.truncate(MAX_ENTRIES);
+    files.truncate(max);
     Ok(Changes {
         compared: from,
         files,
+        truncated,
     })
 }
 
@@ -335,7 +347,18 @@ pub fn file_diff(dir: &Path, file: &ChangedFile, base: Option<&str>) -> Result<S
 }
 
 /// The files of the repository, tracked or not, but not ignored ones; paths from its root.
-pub fn files(dir: &Path) -> Result<Vec<String>, String> {
+pub fn files(dir: &Path) -> Result<FileList, String> {
+    files_limited(dir, MAX_FILES)
+}
+
+/// The repository's files, at most `MAX_FILES`; `truncated` says the rest was left out.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FileList {
+    pub files: Vec<String>,
+    pub truncated: bool,
+}
+
+fn files_limited(dir: &Path, max: usize) -> Result<FileList, String> {
     // From the root: run in a subfolder, ls-files lists that folder only.
     let listed = git(
         &root(dir)?,
@@ -348,11 +371,11 @@ pub fn files(dir: &Path) -> Result<Vec<String>, String> {
         ],
     )?;
     let unique: BTreeSet<&str> = listed.split('\0').filter(|p| !p.is_empty()).collect();
-    Ok(unique
-        .into_iter()
-        .take(MAX_FILES)
-        .map(str::to_string)
-        .collect())
+    let truncated = unique.len() > max;
+    Ok(FileList {
+        files: unique.into_iter().take(max).map(str::to_string).collect(),
+        truncated,
+    })
 }
 
 /// The repository's root folder.
@@ -542,7 +565,10 @@ mod tests {
         std::fs::create_dir(dir.join("target")).unwrap();
         std::fs::write(dir.join("target").join("out.bin"), [0u8, 1, 2]).unwrap();
         std::fs::write(dir.join("img.bin"), [0u8, 1, 2]).unwrap();
-        assert_eq!(files(dir).unwrap(), [".gitignore", "a.txt", "img.bin"]);
+        assert_eq!(
+            files(dir).unwrap().files,
+            [".gitignore", "a.txt", "img.bin"]
+        );
         let read = read_file(dir, "a.txt").unwrap();
         assert_eq!(
             read,
@@ -566,6 +592,50 @@ mod tests {
             added: None,
             removed: None,
         }
+    }
+
+    #[test]
+    fn the_file_list_says_when_it_was_cut() {
+        let Some(repo) = repo() else { return };
+        let dir = repo.path();
+        std::fs::write(dir.join("b.txt"), "x\n").unwrap();
+        std::fs::write(dir.join("c.txt"), "x\n").unwrap();
+        let cut = files_limited(dir, 2).unwrap();
+        assert_eq!(
+            (cut.files, cut.truncated),
+            (vec!["a.txt".into(), "b.txt".into()], true)
+        );
+        assert!(!files_limited(dir, 3).unwrap().truncated);
+    }
+
+    #[test]
+    fn a_list_cut_at_its_limit_says_so() {
+        let Some(repo) = repo() else { return };
+        let dir = repo.path();
+        for name in ["u1.txt", "u2.txt", "u3.txt"] {
+            std::fs::write(dir.join(name), "x\n").unwrap();
+        }
+        let cut = changes_limited(dir, None, 2).unwrap();
+        assert_eq!((cut.files.len(), cut.truncated), (2, true));
+        let whole = changes_limited(dir, None, 3).unwrap();
+        assert_eq!((whole.files.len(), whole.truncated), (3, false));
+    }
+
+    #[test]
+    fn a_nested_repository_is_not_listed_and_its_diff_is_an_error() {
+        let Some(repo) = repo() else { return };
+        let dir = repo.path();
+        let nested = dir.join("nested");
+        std::fs::create_dir(&nested).unwrap();
+        sh(&nested, &["init", "-q", "-b", "main"]);
+        std::fs::write(nested.join("x.txt"), "x\n").unwrap();
+        let listed = changes(dir, None).unwrap();
+        assert!(
+            listed.files.iter().all(|f| !f.path.ends_with('/')),
+            "{:?}",
+            listed.files
+        );
+        assert!(file_diff(dir, &untracked("nested/"), None).is_err());
     }
 
     #[test]
@@ -606,7 +676,7 @@ mod tests {
             .collect();
         assert_eq!(listed, ["other/new.txt", "sub/s.txt"]);
         assert_eq!(
-            files(&from_sub).unwrap(),
+            files(&from_sub).unwrap().files,
             ["a.txt", "other/new.txt", "sub/s.txt"]
         );
     }

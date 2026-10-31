@@ -21,6 +21,9 @@ const LABEL_ROOM = 24;
  */
 export function releaseToCanvas(doc: Document = document) {
   const active = doc.activeElement;
+  // A rename field validates on blur: Escape first, so Maj+Échap cancels it like Échap does.
+  // Never into a terminal's textarea: the agent would read it.
+  if (active instanceof HTMLInputElement) active.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
   if (active instanceof HTMLElement) active.blur();
   canvasStore.getState().api?.updateScene({ appState: { activeEmbeddable: null, selectedElementIds: {}, selectedGroupIds: {} } });
   // Placement and link modes end here too: their own Escape listeners never see Maj+Échap.

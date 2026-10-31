@@ -93,7 +93,7 @@ describe("Dessin (spec fenêtre §7.3)", () => {
 });
 
 describe("Dessin, sur la sélection (spec menu radial §4.5)", () => {
-  const view = { scrollX: 0, scrollY: 0, zoom: 2, width: 800, height: 600, offsetLeft: 5, offsetTop: 7, tool: "selection", selectedIds: [], editingFrame: null };
+  const view = { scrollX: 0, scrollY: 0, zoom: 2, width: 800, height: 600, offsetLeft: 5, offsetTop: 7, tool: "selection", selectedIds: [], editingFrame: null, mode: null };
   const mixed = (selected: Record<string, boolean>) =>
     canvasStore.setState({
       view,

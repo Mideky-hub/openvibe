@@ -12,11 +12,14 @@ export function GroupBackdrops() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       {frames.map((frame) => {
+        // A folded group is only its label (spec replier un groupe).
+        if (frame.group?.folded) return null;
         const rect = screenRectOf(frame, view);
         const color = frame.group ? ROLES[frame.group.role].color : null;
         return (
           <div
             key={frame.id}
+            data-backdrop
             className="absolute border"
             style={{
               left: rect.x,

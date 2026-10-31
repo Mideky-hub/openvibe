@@ -33,6 +33,15 @@ export function needsMove(rect: Rect, view: Viewport): boolean {
   return left < 0 || top < TOP_ROW_HEIGHT || left + rect.width > view.width || top + rect.height > view.height - BOTTOM_BAR_HEIGHT;
 }
 
+/** The waiting notice would hide part of the node: an agent's question sits at the bottom of its terminal (spec notification §4). */
+function underWaitingNotice(rect: Rect, view: Viewport): boolean {
+  const notice = document.querySelector("[data-waiting-notice]")?.getBoundingClientRect();
+  if (!notice) return false;
+  const left = rect.x + view.scrollX;
+  const top = rect.y + view.scrollY;
+  return left < notice.right && left + rect.width > notice.left && top < notice.bottom && top + rect.height > notice.top;
+}
+
 /** The terminal at 100 %, centered in the zone utile (plan E1, décision 1). */
 export function arrivalView(rect: Rect, viewport: { width: number; height: number }) {
   const middle = (TOP_ROW_HEIGHT + viewport.height - BOTTOM_BAR_HEIGHT) / 2;
@@ -43,8 +52,8 @@ export function arrivalView(rect: Rect, viewport: { width: number; height: numbe
   };
 }
 
-/** How many frames the keyboard is offered to an arriving node (plan F1, décision 3). */
-const FOCUS_FRAMES = 10;
+/** How many frames (about two seconds) the keyboard is offered to an arriving node: after a workspace switch its terminal mounts late (plan E1, J8). */
+export const FOCUS_FRAMES = 120;
 
 /**
  * Offers the keyboard on each of the next frames until `focus` succeeds:
@@ -87,9 +96,18 @@ export function arrive(nodeId: string): boolean {
   const api = canvasStore.getState().api;
   const element = api?.getSceneElements().find((e) => e.id === nodeId);
   if (!api || !element) return false;
+  // A folded group keeps its terminals off the screen: unfold it, then arrive (spec replier un groupe §2).
+  const folded = canvasStore.getState().frames.find((f) => f.group?.folded && f.memberIds.includes(nodeId));
+  if (folded) {
+    void import("@/fleet/groups").then(({ setGroupFolded }) => {
+      setGroupFolded(folded.id, false);
+      setTimeout(() => arrive(nodeId), 0);
+    });
+    return true;
+  }
   const app = api.getAppState();
   const view = { scrollX: app.scrollX, scrollY: app.scrollY, zoom: app.zoom.value, width: app.width, height: app.height };
-  const move = needsMove(element, view) ? arrivalView(element, view) : {};
+  const move = needsMove(element, view) || underWaitingNotice(element, view) ? arrivalView(element, view) : {};
   api.updateScene({
     appState: { ...move, activeEmbeddable: { element, state: "active" }, selectedElementIds: {}, selectedGroupIds: {} },
   });

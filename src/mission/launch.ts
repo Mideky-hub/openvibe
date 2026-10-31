@@ -2,12 +2,12 @@ import { showNode } from "@/canvas/arrive";
 import { canvasStore } from "@/canvas/canvasStore";
 import { pauseAgents } from "@/fleet/broadcast";
 import { GROUP_GAP, groupGrid } from "@/fleet/groupLayout";
-import { closeGroup, launchGroup } from "@/fleet/groups";
+import { closeGroup, launchGroup, showGroups } from "@/fleet/groups";
 import { defaultLaunchOptions } from "@/fleet/launchAgent";
 import { nextName } from "@/fleet/names";
 import { namesInWorkspace, pantheonForNewGroup } from "@/fleet/naming";
 import { linkOrchestrator } from "@/fleet/orchestrators";
-import { addTerminal } from "@/fleet/terminals";
+import { addTerminal, removeNodes } from "@/fleet/terminals";
 import { messages } from "@/i18n";
 import { missionAddAgent, missionCleanup, missionDiscard, missionMerge, missionPrepare, type Cleanup, type Worktree } from "@/ipc/mission";
 import { ptySendText, ptyWrite } from "@/ipc/pty";
@@ -21,7 +21,7 @@ import { notify } from "./events";
 import { NEW_AGENT, NEW_MISSION, oneLine, sameName, type Member, type Mission, type SubTask } from "./mission";
 import { whenReady } from "./ready";
 import { modelFor } from "./router";
-import { linkedClaudeAgents, missionOf, orchestratorShown, setMission, updateMember } from "./store";
+import { linkedClaudeAgents, linkedGroups, missionOf, orchestratorShown, setMission, updateMember } from "./store";
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const t = () => messages(agentMessages);
@@ -61,11 +61,19 @@ function besideOrchestrator(orchestratorId: string, count: number) {
   return { x: element.x + element.width + GROUP_GAP + grid.width / 2, y: element.y + grid.height / 2 };
 }
 
-function newNames(workspaceId: string, pantheon: string, count: number): string[] {
-  const names: string[] = [];
-  const taken = namesInWorkspace(workspaceId);
-  for (let i = 0; i < count; i++) names.push(nextName(pantheon, [...taken, ...names]));
-  return names;
+const frameCenter = (frame: { x: number; y: number; width: number; height: number }) => ({ x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 });
+
+/** The terminal of an agent created for the mission, in its worktree. */
+const agentPayload = (name: string, cwd: string, model?: string) => ({
+  ...newTerminalPayload({ ...defaultLaunchOptions(), cwd, agent: "claude" }, name),
+  ...(model ? { model } : {}),
+});
+
+/** Like a linked agent, a group chosen in the plan may be gone at the go-ahead (spec groupes spécialisés §4). */
+function checkGroups(orchestratorId: string, plan: readonly SubTask[]) {
+  const linked = linkedGroups(orchestratorId);
+  const lost = plan.find((task) => task.group && !linked.some((g) => g.id === task.group?.id));
+  if (lost?.group) throw new Error(t().launch.groupLost(lost.group.name));
 }
 
 type Team = Required<Pick<Mission, "project" | "slug" | "branch" | "worktree">> & Pick<Mission, "frameId" | "members">;
@@ -80,17 +88,21 @@ async function formTeam(orchestratorId: string, workspaceId: string, project: st
   const agents = plan.map((task) => (task.agent === NEW_AGENT ? null : (linked.find((a) => sameName(a.name, task.agent)) ?? null)));
   const lost = plan.find((task, i) => task.agent !== NEW_AGENT && !agents[i]);
   if (lost) throw new Error(t().launch.unlinked(lost.agent));
+  checkGroups(orchestratorId, plan);
   const pantheon = pantheonForNewGroup(workspaceId);
-  const fresh = newNames(workspaceId, pantheon, agents.filter((a) => a === null).length);
+  const taken = namesInWorkspace(workspaceId);
+  const pantheonOf = (task: SubTask) => canvasStore.getState().frames.find((f) => f.id === task.group?.id)?.group?.pantheon ?? pantheon;
   const made: Worktree[] = [];
+  const joined: string[] = [];
+  let frameId: string | undefined;
   try {
     const root = await missionPrepare(project, mission.name ?? "mission");
     made.push(root);
     const members: Member[] = [];
-    let next = 0;
     for (const [i, task] of plan.entries()) {
       const agent = agents[i];
-      const name = agent?.name ?? fresh[next++];
+      const name = agent?.name ?? nextName(pantheonOf(task), taken);
+      taken.push(name);
       const tree = await missionAddAgent(project, root.slug, name);
       made.push(tree);
       const model = modelFor(mission, task);
@@ -103,12 +115,13 @@ async function formTeam(orchestratorId: string, workspaceId: string, project: st
         branch: tree.branch,
         worktree: tree.path,
         ...(model ? { model } : {}),
+        ...(task.group ? { group: task.group.id } : {}),
       });
     }
     // Its canvas is the one on screen only: the user may have left it during the git work (final review H2).
     if (!orchestratorShown(orchestratorId)) throw new Error(t().launch.leftWorkspace);
-    const created = members.filter((m) => !m.linked);
-    let frameId: string | undefined;
+    checkGroups(orchestratorId, plan);
+    const created = members.filter((m) => !m.linked && !m.group);
     if (created.length > 0) {
       const group = await launchGroup(
         { name: `Mission ${mission.name}`, role: "general", agents: created.map(() => "claude" as const) },
@@ -121,10 +134,25 @@ async function formTeam(orchestratorId: string, workspaceId: string, project: st
       frameId = group.frameId;
       linkOrchestrator(orchestratorId, group.frameId);
     }
+    for (const [i, member] of members.entries()) {
+      const group = plan[i].group;
+      if (!group) continue;
+      const frame = canvasStore.getState().frames.find((f) => f.id === group.id);
+      if (!frame) throw new Error(t().launch.groupLost(group.name));
+      const nodeId = await addTerminal(workspaceId, agentPayload(member.name, member.worktree, member.model), frameCenter(frame), frame.id);
+      if (!nodeId) throw new Error(t().launch.groupFailed);
+      member.nodeId = nodeId;
+      joined.push(nodeId);
+    }
+    // launchGroup framed its own group only, and an agent out of sight does not start.
+    if (joined.length > 0) showGroups([...new Set(members.flatMap((m) => m.group ?? []).concat(frameId ?? []))]);
     // Linked agents move only once the whole team exists (final review H2).
     for (const member of members) if (member.linked) restarts.set(member.nodeId, restartIn(member.nodeId, member.worktree, member.model));
     return { project, slug: root.slug, branch: root.branch, worktree: root.path, frameId, members };
   } catch (error) {
+    // Its terminals first: no agent may sit in a folder that goes.
+    if (joined.length > 0) removeNodes(joined);
+    if (frameId) closeGroup(frameId);
     // What this launch made goes, so the plan can be launched again; never forced (final review H2).
     if (made.length > 0) await missionDiscard(project, made).catch(() => undefined);
     throw error;
@@ -197,6 +225,9 @@ export function endMission(orchestratorId: string, summary: string) {
   for (const member of mission.members) if (member.linked && mission.project) void restartIn(member.nodeId, mission.project);
   if (orchestratorShown(orchestratorId)) {
     if (mission.frameId) closeGroup(mission.frameId);
+    // Those who joined a group go alone: it stays, with its own agents (spec groupes spécialisés §4).
+    const joined = mission.members.filter((m) => !m.linked && m.group).map((m) => m.nodeId);
+    if (joined.length > 0) removeNodes(joined);
     return;
   }
   // Away from its workspace its canvas cannot change: the created agents stop, freeing their worktrees (final review H2).
@@ -252,9 +283,12 @@ export async function cleanMission(orchestratorId: string): Promise<Cleanup | st
 /** A new agent for a handed-over sub-task: its worktree, its terminal in the mission's group, started now. */
 async function newMember(orchestratorId: string, workspaceId: string, mission: Mission, task: SubTask): Promise<Member | string> {
   if (!mission.project || !mission.slug) return t().launch.noFolder;
-  const frame = canvasStore.getState().frames.find((f) => f.id === mission.frameId);
+  const { frames } = canvasStore.getState();
+  // The sub-task's group if it still exists, else the mission's (spec groupes spécialisés §4).
+  const chosen = frames.find((f) => f.id === task.group?.id);
+  const frame = chosen ?? frames.find((f) => f.id === mission.frameId);
   const pantheon = frame?.group?.pantheon ?? pantheonForNewGroup(workspaceId);
-  const [name] = newNames(workspaceId, pantheon, 1);
+  const name = nextName(pantheon, namesInWorkspace(workspaceId));
   let tree: Worktree;
   try {
     tree = await missionAddAgent(mission.project, mission.slug, name);
@@ -262,10 +296,9 @@ async function newMember(orchestratorId: string, workspaceId: string, mission: M
     return errorText(error);
   }
   const model = modelFor(mission, task);
-  const payload = { ...newTerminalPayload({ ...defaultLaunchOptions(), cwd: tree.path, agent: "claude" }, name), ...(model ? { model } : {}) };
   let nodeId: string | null = null;
   if (frame) {
-    nodeId = await addTerminal(workspaceId, payload, { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 }, frame.id);
+    nodeId = await addTerminal(workspaceId, agentPayload(name, tree.path, model), frameCenter(frame), frame.id);
   } else {
     const group = await launchGroup(
       { name: `Mission ${mission.name}`, role: "general", agents: ["claude"] },
@@ -285,7 +318,17 @@ async function newMember(orchestratorId: string, workspaceId: string, mission: M
   }
   // Shown, it starts like any new agent; a second start would break its session (seen in the app, H3).
   if (frame) showNode(nodeId);
-  return { nodeId, name, task: task.title, budgetMin: task.budgetMin, linked: false, branch: tree.branch, worktree: tree.path, ...(model ? { model } : {}) };
+  return {
+    nodeId,
+    name,
+    task: task.title,
+    budgetMin: task.budgetMin,
+    linked: false,
+    branch: tree.branch,
+    worktree: tree.path,
+    ...(model ? { model } : {}),
+    ...(chosen ? { group: chosen.id } : {}),
+  };
 }
 
 /** `reassign` (spec §7.2): to a member who reported, or to a new agent; it gets the previous one's report and branch. */
@@ -300,6 +343,8 @@ export async function reassignTask(orchestratorId: string, fromNodeId: string, t
   let to: Member;
   if (sameName(target, NEW_AGENT)) {
     if (!orchestratorShown(orchestratorId)) return r.hidden;
+    // A handed-away agent's session stays open: only the running ones count against the cap.
+    if (mission.members.filter((m) => isRunning(m.nodeId)).length >= mission.maxAgents) return r.teamFull(mission.maxAgents);
     const made = await newMember(orchestratorId, record.workspaceId, mission, task);
     if (typeof made === "string") return made;
     to = made;
@@ -307,6 +352,8 @@ export async function reassignTask(orchestratorId: string, fromNodeId: string, t
     const found = mission.members.find((m) => sameName(m.name, target) && m.nodeId !== from.nodeId && !m.handedTo);
     if (!found) return r.notOther(target);
     if (!found.report) return r.notDone(found.name);
+    // A stopped session would only say « n'a pas démarré » a minute later.
+    if (!isRunning(found.nodeId)) return r.targetStopped(found.name);
     // Its entry takes the new sub-task: its finished work must be in the mission's branch first (final review H3).
     const finished = found.report.status === "termine";
     if (finished && !found.merged) return r.notMerged(found.name, found.task);

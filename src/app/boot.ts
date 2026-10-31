@@ -10,6 +10,7 @@ import { installMcp } from "@/mcp/router";
 import { installMissionClock } from "@/mission/clock";
 import { installMissionEvents } from "@/mission/events";
 import { forgetLivePty, setLivePtys } from "@/nodes/terminal/registry";
+import { installWaitingAlerts } from "@/shell/waitingAlert";
 import { agentActivityStore } from "@/store/agentActivity";
 import { subagentsStore } from "@/store/subagents";
 import { terminalStatusStore } from "@/store/terminalStatus";
@@ -19,6 +20,7 @@ import { saveBeforeClose } from "./close";
 import { forgetWorkspaces } from "./forget";
 import { loadLanguage } from "@/i18n/settings";
 import { loadThemeSettings } from "./theme";
+import { loadNativeNotifications } from "./nativeNotifications";
 import { loadUpdateSettings, startUpdateChecks } from "./updates";
 import { syncWindowTitle } from "./windowTitle";
 
@@ -34,6 +36,7 @@ export function boot(): Promise<void> {
     await loadLanguage();
     await loadThemeSettings();
     await loadUpdateSettings();
+    await loadNativeNotifications();
     await loadAgentsPanel();
     await onPtyExit(({ nodeId, exitCode }) => {
       forgetLivePty(nodeId);
@@ -50,6 +53,7 @@ export function boot(): Promise<void> {
     await installUsage();
     installMissionEvents();
     installMissionClock();
+    installWaitingAlerts();
     setLivePtys(await ptyList());
     await getCurrentWindow().onCloseRequested(saveBeforeClose);
     setForgetWorkspaces(forgetWorkspaces);
