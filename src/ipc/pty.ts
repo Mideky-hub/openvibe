@@ -73,7 +73,19 @@ export function ptySpawn(
   rows: number,
   onData: (bytes: Uint8Array) => void,
 ): Promise<number | null> {
-  return call("pty_spawn", { nodeId, spec, cols, rows, onData: byteChannel(onData) });
+  return call<number | null>("pty_spawn", { nodeId, spec, cols, rows, onData: byteChannel(onData) }).then((pid) => {
+    if (pid !== null) spawnedPids.set(nodeId, pid);
+    return pid;
+  });
+}
+
+/** The process each terminal was last started with; a terminal re-attached after a reload has none. */
+const spawnedPids = new Map<string, number>();
+
+/** An exit of another process than the terminal's current one: a late event of an older run. */
+export function isStaleExit(event: PtyExitEvent): boolean {
+  const current = spawnedPids.get(event.nodeId);
+  return event.pid !== null && event.pid !== undefined && current !== undefined && event.pid !== current;
 }
 
 /** Reconnects to a live session; the current scrollback is sent first. */
@@ -125,5 +137,10 @@ export async function getScrollback(nodeId: string): Promise<Uint8Array> {
 }
 
 export function onPtyExit(handler: (event: PtyExitEvent) => void): Promise<UnlistenFn> {
-  return listen<PtyExitEvent>("pty-exit", (event) => handler(event.payload));
+  return listen<PtyExitEvent>("pty-exit", (event) => {
+    // A late exit of an older process must not mark the relaunched terminal as ended.
+    if (isStaleExit(event.payload)) return;
+    spawnedPids.delete(event.payload.nodeId);
+    handler(event.payload);
+  });
 }
