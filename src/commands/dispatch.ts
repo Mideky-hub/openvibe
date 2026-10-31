@@ -1,13 +1,8 @@
 import { commandFor, runCommand, type Command, type CommandContext } from "./command";
+import { closeOpenMenus } from "./openMenus";
 import { closePalette, paletteStore } from "./paletteState";
 import { COMMANDS, commandContext } from "./registry";
 import { heldShortcutOf, isModalOpen, shortcutOf } from "./shortcuts";
-
-/** A Radix menu is modal and takes the keyboard back: Escape closes it before the command moves the keyboard (plan E1). */
-function closeOpenMenus(doc: Document) {
-  if (doc.querySelector('[role="menu"][data-state="open"]') === null) return;
-  doc.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
-}
 
 /**
  * The application's single keydown listener (spec fenêtre §6.2): on the

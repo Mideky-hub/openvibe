@@ -1,6 +1,7 @@
 import { canvasStore } from "@/canvas/canvasStore";
 import { isGroup } from "@/canvas/groups";
 import type { CommandContext } from "@/commands/command";
+import { closeOpenMenus } from "@/commands/openMenus";
 import { commandContext } from "@/commands/registry";
 import { sceneOf } from "@/fleet/placement";
 import type { Point } from "@/fleet/terminals";
@@ -70,6 +71,9 @@ export function installRadial(win: Window): () => void {
       }
       event.preventDefault();
       event.stopPropagation();
+      // The press is stopped here: the other menus' click-outside listeners never see it.
+      closeOpenMenus(win.document);
+      canvasStore.getState().api?.updateScene({ appState: { contextMenu: null } });
       const center = ringCenter(client, { width: win.innerWidth, height: win.innerHeight });
       openRadial({ ...opened, client, center, pressed: true, sliding: false, hovered: null });
       return;
