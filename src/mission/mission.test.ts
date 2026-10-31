@@ -30,6 +30,45 @@ describe("proposedPlan (spec orchestrateur §7.2)", () => {
   });
 });
 
+describe("a new agent's group (spec groupes spécialisés §3)", () => {
+  const groups = [{ id: "f1", name: "Interface" }];
+
+  it("puts it in a linked group, named as the orchestrator reads it", () => {
+    const result = proposedPlan(args({ ...task("nouveau"), groupe: "interface" }), NEW_MISSION, [], groups);
+    expect(typeof result === "string" ? result : result.plan[0].group).toEqual({ id: "f1", name: "Interface" });
+  });
+
+  it("keeps the mission's group without one", () => {
+    const result = proposedPlan(args(task("nouveau")), NEW_MISSION, [], groups);
+    expect(typeof result === "string" ? result : Object.keys(result.plan[0])).not.toContain("group");
+  });
+
+  it("refuses an unknown group, and a group for a named agent", () => {
+    expect(proposedPlan(args({ ...task("nouveau"), groupe: "Zeus" }), NEW_MISSION, [], groups)).toBe("Sous-tâche 1 : « Zeus » n'est pas un groupe relié.");
+    expect(proposedPlan(args({ ...task("Athéna"), groupe: "Interface" }), NEW_MISSION, ["Athéna"], groups)).toBe("Sous-tâche 1 : group ne s'emploie qu'avec agent « new ».");
+  });
+
+  it("refuses them in English too", () => {
+    langStore.setState({ lang: "en" });
+    try {
+      expect(proposedPlan(args({ ...task("nouveau"), groupe: "Zeus" }), NEW_MISSION, [], groups)).toBe('Sub-task 1: "Zeus" is not a linked group.');
+      expect(proposedPlan(args({ ...task("Athéna"), groupe: "Interface" }), NEW_MISSION, ["Athéna"], groups)).toBe('Sub-task 1: group only goes with agent "new".');
+    } finally {
+      langStore.setState({ lang: "fr" });
+    }
+  });
+
+  it("is saved with the plan and on the member", () => {
+    const saved = readMission({
+      state: "en_cours",
+      plan: [{ title: "A", brief: "B", agent: "nouveau", budgetMin: 1, group: { id: "f1", name: "Interface" } }, { title: "C", brief: "D", agent: "nouveau", budgetMin: 1, group: { id: 3 } }],
+      members: [{ nodeId: "n", name: "Isis", task: "A", budgetMin: 1, linked: false, branch: "b", worktree: "w", group: "f1" }],
+    });
+    expect(saved?.plan?.map((s) => s.group)).toEqual([{ id: "f1", name: "Interface" }, undefined]);
+    expect(saved?.members[0].group).toBe("f1");
+  });
+});
+
 describe("a refused plan in English (spec première version §7.1)", () => {
   it("explains what is wrong in the interface's language", () => {
     langStore.setState({ lang: "en" });

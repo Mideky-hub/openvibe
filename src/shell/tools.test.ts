@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { PEN_COLORS, PEN_WIDTHS, railToolOf } from "./tools";
+import { PEN_COLORS } from "@/theme/penColors";
+import { PEN_WIDTHS, railToolOf } from "./tools";
 
 describe("railToolOf", () => {
   it("lights the rail button of Excalidraw's active tool", () => {

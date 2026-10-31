@@ -163,6 +163,10 @@ export const fleetMessages = defineMessages(
     },
     groupMenu: {
       rename: "Renommer",
+      speciality: "Spécialité",
+      specialityLabel: "Spécialité du groupe",
+      specialityCustom: "La tienne, puis Entrée",
+      specialityNone: "Aucune",
       addAgent: "Ajouter un agent",
       linkOrchestrator: "Relier un orchestrateur",
       pauseAll: "Tout mettre en pause",
@@ -384,6 +388,10 @@ export const fleetMessages = defineMessages(
     },
     groupMenu: {
       rename: "Rename",
+      speciality: "Speciality",
+      specialityLabel: "Group speciality",
+      specialityCustom: "Your own, then Enter",
+      specialityNone: "None",
       addAgent: "Add an agent",
       linkOrchestrator: "Link an orchestrator",
       pauseAll: "Pause all",

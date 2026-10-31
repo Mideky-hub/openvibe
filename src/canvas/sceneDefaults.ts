@@ -1,11 +1,11 @@
 import type { ExcalidrawInitialDataState, UIOptions } from "@excalidraw/excalidraw/types";
-import { PEN_COLORS } from "@/shell/tools";
+import { PEN_COLORS } from "@/theme/penColors";
 
 /** Excalidraw 0.18.1's FONT_FAMILY["Comic Shanns"], its "code" font (a constant: tests cannot load Excalidraw). */
 export const COMIC_SHANNS = 8;
 
 /**
- * New elements get cream strokes and Comic Shanns text; the canvas itself is
+ * New elements get the pen's first ink (the theme turns it light on dark) and Comic Shanns text; the canvas itself is
  * transparent so the dot grid shows through (spec habillage §4.2, §5.7).
  */
 export const SCENE_DEFAULTS = {

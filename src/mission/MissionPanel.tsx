@@ -127,7 +127,8 @@ function Plan({ nodeId, mission }: { nodeId: string; mission: Mission }) {
                 </span>
               )}
               <span className="ml-auto shrink-0 font-mono text-[11px] text-ov-text-2">
-                {task.agent} · {task.budgetMin} {t.min}
+                {task.agent}
+                {task.group ? ` → ${task.group.name}` : ""} · {task.budgetMin} {t.min}
               </span>
             </div>
             <p className="line-clamp-2">{task.brief}</p>

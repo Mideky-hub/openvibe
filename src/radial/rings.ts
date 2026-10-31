@@ -47,13 +47,23 @@ export interface RingSlot {
 }
 
 const defaultLaunch = () => `agent.launch.${defaultAgent(agentsStore.getState().agents)}`;
+/** The second place of the canvas ring: the Shell, unless it is already the default agent (then another agent, else the custom one). */
+function secondLaunch(): string {
+  const agents = agentsStore.getState().agents;
+  if (defaultAgent(agents) !== "shell") return "agent.launch.shell";
+  const other = agents.find((a) => a.available && a.id !== "shell" && a.id !== "ollama");
+  return other ? `agent.launch.${other.id}` : "agent.custom";
+}
+const LAUNCH_PREFIX = "agent.launch.";
+const agentIconOf = (id: string): Icon =>
+  id.startsWith(LAUNCH_PREFIX) && id !== `${LAUNCH_PREFIX}shell` ? AGENTS[id.slice(LAUNCH_PREFIX.length) as keyof typeof AGENTS].Icon : Terminal;
 const resumes = (ctx: CommandContext) => COMMANDS.find((c) => c.id === "terminal.resume")?.available(ctx) ?? false;
 
 /** The five rings, positions clockwise from the top (spec menu radial §4). */
 export const RINGS: Record<RingKind, readonly (RingSlot | null)[]> = {
   canvas: [
     { command: defaultLaunch, icon: Play, iconOf: () => AGENTS[defaultAgent(agentsStore.getState().agents)].Icon },
-    { command: "agent.launch.shell", icon: Terminal },
+    { command: secondLaunch, icon: Terminal, iconOf: () => agentIconOf(secondLaunch()) },
     { command: "agent.four", icon: Layers },
     { command: "agent.orchestrator", icon: Network },
     { command: "drawing.paste", icon: ClipboardPaste },
