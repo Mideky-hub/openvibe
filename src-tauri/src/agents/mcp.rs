@@ -235,11 +235,9 @@ mod tests {
 
     #[test]
     fn a_batch_is_answered_message_by_message() {
-        let (status, body) = run(
-            r#"[{"jsonrpc":"2.0","id":1,"method":"ping"},
+        let (status, body) = run(r#"[{"jsonrpc":"2.0","id":1,"method":"ping"},
                 {"jsonrpc":"2.0","method":"notifications/initialized"},
-                {"jsonrpc":"2.0","id":2,"method":"tools/list"}]"#,
-        );
+                {"jsonrpc":"2.0","id":2,"method":"tools/list"}]"#);
         assert_eq!(status, 200);
         let body = body.unwrap();
         let replies = body.as_array().unwrap();

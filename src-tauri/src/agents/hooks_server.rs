@@ -4,7 +4,7 @@
 
 use std::io::Read;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
 use tiny_http::{Header, Method, Request, Response, Server};
@@ -119,9 +119,37 @@ pub fn start(sink: impl HookSink) -> std::io::Result<HookServer> {
     Ok(HookServer { port, token })
 }
 
-/// One thread per MCP request: a tools call waits for the interface.
+/// One thread per MCP request: a tools call waits for the interface. When the
+/// system refuses the thread, the caller is told so (503) instead of the
+/// process panicking.
 fn dispatch_mcp(request: Request, answer: impl FnOnce(Request) + Send + 'static) {
-    std::thread::spawn(move || answer(request));
+    dispatch_with(request, answer, |job| {
+        std::thread::Builder::new()
+            .name("mcp-request".into())
+            .spawn(job)
+            .map(drop)
+    });
+}
+
+/// `spawn` starts the job; on failure the request is answered 503.
+fn dispatch_with(
+    request: Request,
+    answer: impl FnOnce(Request) + Send + 'static,
+    spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> std::io::Result<()>,
+) {
+    let slot = Arc::new(Mutex::new(Some(request)));
+    let job_slot = Arc::clone(&slot);
+    let job = Box::new(move || {
+        if let Some(request) = crate::sync::lock(&job_slot).take() {
+            answer(request);
+        }
+    });
+    if let Err(err) = spawn(job) {
+        log::error!("MCP request not served, no thread: {err}");
+        if let Some(request) = crate::sync::lock(&slot).take() {
+            let _ = request.respond(Response::empty(503));
+        }
+    }
 }
 
 /// Node ids name files too: only the characters of our UUIDs pass.
@@ -283,8 +311,8 @@ fn status_of(request: &mut Request, token: &str, sink: &dyn HookSink) -> u16 {
 }
 
 fn answer_mcp(mut request: Request, sink: &dyn HookSink) {
-    let (status, body) = catch_unwind(AssertUnwindSafe(|| mcp_response(&mut request, sink)))
-        .unwrap_or((500, None));
+    let (status, body) =
+        catch_unwind(AssertUnwindSafe(|| mcp_response(&mut request, sink))).unwrap_or((500, None));
     let mut response = Response::from_data(
         body.map(|json| json.to_string().into_bytes())
             .unwrap_or_default(),
@@ -817,5 +845,30 @@ mod tests {
         );
         let ok = [("Authorization", "Bearer tok-n1")];
         assert_eq!(exchange(server.port, "POST", "/mcp", &ok, call).0, 200);
+    }
+
+    #[test]
+    fn an_mcp_request_without_a_thread_is_answered_503() {
+        // A listener of our own, its spawner always failing.
+        let probe = Server::http("127.0.0.1:0").unwrap();
+        let port = probe.server_addr().to_ip().unwrap().port();
+        let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        client
+            .write_all(
+                b"POST /mcp HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            )
+            .unwrap();
+        let request = probe.recv().unwrap();
+        dispatch_with(
+            request,
+            |_| panic!("must not run"),
+            |_| Err(std::io::Error::other("no thread")),
+        );
+        let mut response = String::new();
+        let _ = client.read_to_string(&mut response);
+        assert!(response.starts_with("HTTP/1.1 503"), "{response}");
     }
 }
