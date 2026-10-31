@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { FolderPlus, LifeBuoy } from "lucide-react";
 import { agentsStore } from "@/fleet/agentsStore";
-import { useMessages } from "@/i18n";
+import { toast } from "sonner";
+import { messages, useMessages } from "@/i18n";
 import { AccentButton } from "@/shell/buttons";
 import { SearchField } from "@/shell/SearchField";
 import { TitleBar } from "@/shell/TitleBar";
@@ -20,7 +21,10 @@ export function HomeScreen() {
 
   useEffect(() => {
     void projectsStore.getState().refresh();
-    void agentsStore.getState().load();
+    agentsStore
+      .getState()
+      .load()
+      .catch((error: unknown) => toast.error(messages(homeMessages).start.agentsFailed(error instanceof Error ? error.message : String(error))));
   }, []);
 
   return (
