@@ -125,12 +125,12 @@ function alignCopies(elements: readonly ExcalidrawElement[], copyIds: ReadonlySe
 export function removeNodes(ids: readonly string[]) {
   const api = canvasStore.getState().api;
   if (!api) return;
-  allowRemoval(ids);
-  const removed = new Set(ids);
+  const elements = api.getSceneElementsIncludingDeleted();
+  // Only those really leaving: the guard forgets a pass when a node goes, so one already gone would keep its pass for later.
+  const removed = new Set(elements.filter((e) => ids.includes(e.id) && !e.isDeleted).map((e) => e.id));
+  allowRemoval(removed);
   api.updateScene({
-    elements: api
-      .getSceneElementsIncludingDeleted()
-      .map((e) => (removed.has(e.id) && !e.isDeleted ? newElementWith(e, { isDeleted: true }) : e)),
+    elements: elements.map((e) => (removed.has(e.id) ? newElementWith(e, { isDeleted: true }) : e)),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
 }
