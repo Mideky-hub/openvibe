@@ -5,7 +5,7 @@ pub mod session;
 pub mod shell;
 
 use crate::tr;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -32,6 +32,21 @@ pub struct PtyManager {
     sessions: Arc<Mutex<HashMap<String, Arc<Session>>>>,
     /// Processes whose exit is not fully handled yet (final save included).
     exiting: Arc<AtomicUsize>,
+    /// Terminals being started: a second start of the same one is refused
+    /// before it can touch the first one's token and files.
+    starting: Arc<Mutex<HashSet<String>>>,
+}
+
+/// The right to start one terminal; released when dropped.
+pub struct StartClaim {
+    starting: Arc<Mutex<HashSet<String>>>,
+    node_id: String,
+}
+
+impl Drop for StartClaim {
+    fn drop(&mut self) {
+        lock(&self.starting).remove(&self.node_id);
+    }
 }
 
 pub fn pty_size(cols: u16, rows: u16) -> PtySize {
@@ -158,6 +173,22 @@ impl PtyManager {
         }
     }
 
+    /// Claims the start of `node_id`: refused while it runs or another start
+    /// is under way. Held until the start has succeeded or failed.
+    pub fn claim_start(&self, node_id: &str) -> AppResult<StartClaim> {
+        let mut starting = lock(&self.starting);
+        if self.is_running(node_id) || !starting.insert(node_id.to_string()) {
+            return Err(AppError::InvalidInput(tr!(
+                "le terminal {node_id} tourne déjà",
+                "terminal {node_id} is already running"
+            )));
+        }
+        Ok(StartClaim {
+            starting: self.starting.clone(),
+            node_id: node_id.to_string(),
+        })
+    }
+
     pub fn is_running(&self, node_id: &str) -> bool {
         lock(&self.sessions).contains_key(node_id)
     }
@@ -269,6 +300,16 @@ mod tests {
         // fit() reports 0x0 for a collapsed or not-yet-laid-out container.
         let size = pty_size(0, 0);
         assert_eq!((size.cols, size.rows), (1, 1));
+    }
+
+    #[test]
+    fn a_second_start_of_the_same_terminal_is_refused_until_the_first_is_over() {
+        let pty = PtyManager::default();
+        let first = pty.claim_start("n1").unwrap();
+        assert!(pty.claim_start("n1").is_err());
+        assert!(pty.claim_start("n2").is_ok(), "another terminal is free");
+        drop(first);
+        assert!(pty.claim_start("n1").is_ok());
     }
 }
 
