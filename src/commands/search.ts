@@ -1,9 +1,9 @@
 /** Lower case, accents dropped: « Hermès » and « hermes » are the same (spec fenêtre §7.1). */
 export function normalize(text: string): string {
-  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/œ/g, "oe").replace(/æ/g, "ae");
 }
 
-const words = (text: string) => normalize(text).split(/[\s\-_/.·]+/).filter(Boolean);
+const words = (text: string) => normalize(text).split(/[\s\-_/.·'’]+/).filter(Boolean);
 
 function isSubsequence(needle: string, haystack: string): boolean {
   let at = 0;
@@ -23,7 +23,8 @@ export function matchScore(query: string, label: string, keywords: readonly stri
   const haystack = allWords.join(" ");
   let score = 0;
   for (const term of terms) {
-    if (labelWords.some((w) => w.startsWith(term))) score += 4;
+    if (labelWords.includes(term)) score += 5;
+    else if (labelWords.some((w) => w.startsWith(term))) score += 4;
     else if (allWords.some((w) => w.startsWith(term))) score += 3;
     else if (haystack.includes(term)) score += 2;
     else if (isSubsequence(term, haystack)) score += 1;

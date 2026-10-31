@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Copy, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCanvas } from "@/canvas/canvasStore";
@@ -15,6 +15,23 @@ import { useTerminalHost } from "./useTerminalHost";
 import { useMessages } from "@/i18n";
 import { nodesMessages } from "@/nodes/messages";
 
+/** A copy's record arrives a moment after its element: the placeholder only speaks if the node stays missing. */
+export const MISSING_GRACE_MS = 600;
+
+function MissingTerminal() {
+  const t = useMessages(nodesMessages).terminal;
+  const [late, setLate] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setLate(true), MISSING_GRACE_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  return (
+    <div className="grid h-full place-items-center rounded-xl border border-ov-line bg-ov-surface text-sm text-ov-text-2">
+      {late ? t.notFound : null}
+    </div>
+  );
+}
+
 export function TerminalNode({ nodeId }: { nodeId: string }) {
   const payload = useNodes((s) => terminalOf(s.nodes[nodeId]));
   const status = useTerminalStatus(nodeId);
@@ -28,11 +45,7 @@ export function TerminalNode({ nodeId }: { nodeId: string }) {
   useTerminalHost(nodeId, hostRef, hasPayload);
 
   if (!payload) {
-    return (
-      <div className="grid h-full place-items-center rounded-xl border border-ov-line bg-ov-surface text-sm text-ov-text-2">
-        {t.notFound}
-      </div>
-    );
+    return <MissingTerminal />;
   }
 
   const waiting = status.state === "running" && activity?.activity === "waiting";

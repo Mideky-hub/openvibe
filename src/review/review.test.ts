@@ -92,3 +92,16 @@ describe("missionBranchFor", () => {
     expect(missionBranchFor("thot")).toBeNull();
   });
 });
+
+import { remarkRow } from "./review";
+
+it("finds the row of a remark by its line text when the numbers have drifted (backlog 27 oct)", () => {
+  const { lines } = parseDiff("@@ -1,2 +1,3 @@\n+new first\n const x = 1;\n+const y = 3;\n");
+  expect(remarkRow(lines, { file: "a", line: 2, lineText: "const y = 3;", text: "?" })).toBe(3);
+  expect(remarkRow(lines, { file: "a", line: 2, lineText: "gone", text: "?" })).toBe(-1);
+  expect(remarkRow(lines, { file: "a", line: 1, text: "no text" })).toBe(1);
+});
+
+it("quotes the line in the message the agent reads (backlog 27 oct)", () => {
+  expect(reviewMessage([{ file: "a.ts", line: 3, lineText: "const y = 3;", text: "why?" }])).toContain("a.ts:3 `const y = 3;` — why?");
+});

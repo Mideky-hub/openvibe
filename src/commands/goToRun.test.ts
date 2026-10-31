@@ -48,12 +48,17 @@ describe("goTo (spec fenêtre §7.2)", () => {
     goTo(item({ workspaceId: "w2", targetId: "thot", label: "Thot" }));
     expect(select).toHaveBeenCalledWith("w2");
     expect(arrive).not.toHaveBeenCalled();
-    completeArrival("w1");
-    expect(arrive).not.toHaveBeenCalled();
     completeArrival("w2");
     expect(arrive).toHaveBeenCalledWith("thot");
     completeArrival("w2");
     expect(arrive).toHaveBeenCalledTimes(1);
+  });
+
+  it("abandons an arrival when another workspace's scene comes up first", () => {
+    goTo(item({ workspaceId: "w2", targetId: "thot", label: "Thot" }));
+    completeArrival("w3");
+    completeArrival("w2");
+    expect(arrive).not.toHaveBeenCalled();
   });
 
   it("says so when the target is gone (spec fenêtre §9)", async () => {

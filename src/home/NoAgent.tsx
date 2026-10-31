@@ -26,7 +26,11 @@ export function NoAgent() {
   const project = useProjects((s) => recentProject(s.projects));
   const claude = AGENTS.claude;
 
-  const copy = () => void navigator.clipboard.writeText(CLAUDE.command).then(() => toast(t.copied));
+  const copy = () =>
+    void navigator.clipboard.writeText(CLAUDE.command).then(
+      () => toast(t.copied),
+      () => toast.error(t.copyFailed),
+    );
   const install = (agent: AgentId) => {
     setAsked(null);
     void installFromHome(agent);

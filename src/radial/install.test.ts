@@ -66,6 +66,17 @@ describe("opening the ring (spec menu radial §5.2, §6.4)", () => {
     expect(radialStore.getState().ring).toMatchObject({ kind: "terminal", client: { x: 300, y: 300 }, context: { terminalId: "isis", at: { x: 300, y: 300 } } });
   });
 
+  it("closes Excalidraw's own menu and the open dropdowns when the ring opens (plan G1)", () => {
+    document.body.insertAdjacentHTML("beforeend", '<div role="menu" data-state="open"></div>');
+    const escapes: string[] = [];
+    document.addEventListener("keydown", (e) => escapes.push(e.key), { once: true });
+    pointer(canvas(), "pointerdown", 500, 400);
+    expect(escapes).toEqual(["Escape"]);
+    expect(updateScene).toHaveBeenCalledWith({ appState: { contextMenu: null } });
+    expect(radialStore.getState().ring).not.toBeNull();
+    document.querySelector('[role="menu"]')!.remove();
+  });
+
   it("opens the canvas ring on the empty canvas, at the scene point of the click", () => {
     pointer(canvas(), "pointerdown", 500, 400);
     expect(radialStore.getState().ring).toMatchObject({ kind: "canvas", context: { at: { x: 500, y: 400 } } });

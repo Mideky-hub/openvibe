@@ -291,6 +291,13 @@ it("cleans a finished mission and frees the orchestrator for the next, its setti
   expect(missionNow()).toEqual({ state: "redaction", budgetMin: 90, maxAgents: 3, members: [] });
 });
 
+it("keeps the router setting when the mission is cleaned (backlog 27 oct)", async () => {
+  await setup({ state: "terminee", budgetMin: 90, maxAgents: 3, router: true, project: "C:/code/proj", slug: "auth", summary: "ok", members: [member("isis", "Isis", true)] });
+  vi.mocked(missionCleanup).mockResolvedValue({ removed: [], kept: [] });
+  await cleanMission("chef");
+  expect(missionNow()).toMatchObject({ state: "redaction", router: true });
+});
+
 describe("what the final review of H2 found", () => {
   it("undoes the worktrees of a launch that fails, and moves no linked agent before the group exists", async () => {
     await setup();

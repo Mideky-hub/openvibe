@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { FolderPlus, LifeBuoy } from "lucide-react";
 import { agentsStore } from "@/fleet/agentsStore";
-import { useMessages } from "@/i18n";
+import { toast } from "sonner";
+import { messages, useMessages } from "@/i18n";
 import { AccentButton } from "@/shell/buttons";
 import { SearchField } from "@/shell/SearchField";
 import { TitleBar } from "@/shell/TitleBar";
@@ -20,12 +21,15 @@ export function HomeScreen() {
 
   useEffect(() => {
     void projectsStore.getState().refresh();
-    void agentsStore.getState().load();
+    agentsStore
+      .getState()
+      .load()
+      .catch((error: unknown) => toast.error(messages(homeMessages).start.agentsFailed(error instanceof Error ? error.message : String(error))));
   }, []);
 
   return (
     <div className="ov-ambient flex h-screen w-screen flex-col">
-      <TitleBar leading={<span className="text-[13px] font-semibold text-ov-text">OpenVibe</span>} center={<SearchField />} trailing={<UpdateChip />} />
+      <TitleBar leading={<span data-tauri-drag-region="" className="text-[13px] font-semibold text-ov-text">OpenVibe</span>} center={<SearchField />} trailing={<UpdateChip />} />
       {/* The scroller starts below the title bar: scrolled cards never slide under it. */}
       <div className="min-h-0 flex-1 overflow-auto">
         <div className="relative mx-auto max-w-5xl px-8 pb-12 pt-8">

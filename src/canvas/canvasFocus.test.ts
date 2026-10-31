@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { uiStore } from "@/store/ui";
 import { canvasStore } from "./canvasStore";
 import { focusGroup, overview, overviewTargets, releaseToCanvas } from "./canvasFocus";
 
@@ -37,6 +38,14 @@ describe("releaseToCanvas (spec fenêtre §6.5)", () => {
     expect(updateScene).toHaveBeenCalledWith({ appState: { activeEmbeddable: null, selectedElementIds: {}, selectedGroupIds: {} } });
   });
 
+  it("ends placement and link modes", () => {
+    withScene([]);
+    uiStore.setState({ placing: { agent: "claude" } as never, linking: "chef" });
+    releaseToCanvas();
+    expect(uiStore.getState().placing).toBeNull();
+    expect(uiStore.getState().linking).toBeNull();
+  });
+
   it("creates no selection and leaves none behind: Suppr must not delete the terminal just left", () => {
     withScene([]);
     releaseToCanvas();
@@ -68,7 +77,7 @@ describe("overview (spec fenêtre §6.6)", () => {
     const scene = [node("isis", "terminal")];
     withScene(scene);
     overview();
-    expect(scrollToContent).toHaveBeenCalledWith(scene, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true });
+    expect(scrollToContent).toHaveBeenCalledWith(scene, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true, canvasOffsets: { top: 72, bottom: 60 } });
     expect(document.activeElement).toBe(container);
   });
 
@@ -84,7 +93,7 @@ describe("focusGroup (spec fenêtre §7.2)", () => {
     const frame = groupFrame("backend");
     withScene([frame]);
     expect(focusGroup("backend")).toBe(true);
-    expect(scrollToContent).toHaveBeenCalledWith(frame, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true, maxZoom: 1 });
+    expect(scrollToContent).toHaveBeenCalledWith(frame, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true, maxZoom: 1, canvasOffsets: { top: 96, bottom: 60 } });
     expect(document.activeElement).toBe(container);
   });
 

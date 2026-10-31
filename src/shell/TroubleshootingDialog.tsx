@@ -42,7 +42,11 @@ export function TroubleshootingDialog() {
     setChecking(false);
   };
   const copy = () => {
-    if (d) void navigator.clipboard.writeText(diagnosticText(d, lang)).then(() => toast(t.copied));
+    if (d)
+      void navigator.clipboard.writeText(diagnosticText(d, lang)).then(
+        () => toast(t.copied),
+        () => toast.error(t.copyFailed),
+      );
   };
   const report = async () => void openUrl(issueUrl(d?.version ?? (await getVersion())));
 

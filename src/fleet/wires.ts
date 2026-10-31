@@ -197,3 +197,24 @@ export function linkedAgents(links: Links, frames: readonly SceneFrame[]): Linke
   const directIds = links.nodeIds.filter((id) => !inGroups.includes(id));
   return { groups, directIds, agentIds: [...new Set([...inGroups, ...directIds])] };
 }
+
+/** What a wire can still join: an orchestrator, a terminal or a group's frame, alive. */
+function isWireEnd(element: ExcalidrawElement | undefined): boolean {
+  return element !== undefined && (nodeKindOf(element) === "orchestrator" ? !element.isDeleted : isWireTarget(element));
+}
+
+/**
+ * Wires with a missing end: ungrouping, closing a group or a terminal and
+ * Suppr on an orchestrator leave the orange arrow behind, unbound or bound to
+ * what is gone (plan B3). They go in the same update.
+ */
+export function orphanWires(elements: readonly ExcalidrawElement[]): string[] {
+  const byId = new Map(elements.map((e) => [e.id, e]));
+  return elements
+    .filter((e) => !e.isDeleted && e.type === "arrow" && isWire(e))
+    .filter((arrow) => {
+      const { startBinding, endBinding } = arrow as ExcalidrawArrowElement;
+      return ![startBinding, endBinding].every((b) => b && isWireEnd(byId.get(b.elementId)));
+    })
+    .map((arrow) => arrow.id);
+}

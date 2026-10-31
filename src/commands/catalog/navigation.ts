@@ -1,4 +1,4 @@
-import { arrive } from "@/canvas/arrive";
+import { arrive, arrivingNode } from "@/canvas/arrive";
 import { overview, releaseToCanvas } from "@/canvas/canvasFocus";
 import { canvasStore } from "@/canvas/canvasStore";
 import { stepTerminal, terminalOrder } from "@/canvas/terminalOrder";
@@ -6,6 +6,7 @@ import { fitScene, zoomTo } from "@/canvas/viewActions";
 import { agentsPanelStore, setAgentsPanel } from "@/fleet/agentsPanelState";
 import { focusCommandBar } from "@/shell/commandBarFocus";
 import { projectsStore } from "@/store/projects";
+import { openStudio } from "@/studio/studioStore";
 import type { Command, CommandContext } from "../command";
 import { command, sectionNamed } from "./define";
 import { catalog } from "./messages";
@@ -19,7 +20,7 @@ const always = () => true;
 function step(direction: 1 | -1, ctx: CommandContext) {
   const api = canvasStore.getState().api;
   if (!api) return;
-  const target = stepTerminal(terminalOrder(api.getSceneElements()), ctx.terminalId, direction);
+  const target = stepTerminal(terminalOrder(api.getSceneElements()), arrivingNode() ?? ctx.terminalId, direction);
   if (target) arrive(target);
 }
 
@@ -40,6 +41,7 @@ export const NAVIGATION: readonly Command[] = [
     available: inProject,
     run: () => setAgentsPanel(!agentsPanelStore.getState().open),
   }),
+  command("studio.code", { section: nav, available: inProject, run: () => openStudio() }),
   command("project.home", { section: nav, available: inProject, run: () => projectsStore.getState().goHome() }),
   command("project.close", { section: nav, available: inProject, run: () => projectsStore.getState().close() }),
   command("palette.functions", { section: nav, shortcut: "Ctrl+Maj+P", available: always, run: (ctx) => openPalette("functions", ctx) }),
