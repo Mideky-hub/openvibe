@@ -3,6 +3,12 @@ import { closePalette, paletteStore } from "./paletteState";
 import { COMMANDS, commandContext } from "./registry";
 import { heldShortcutOf, isModalOpen, shortcutOf } from "./shortcuts";
 
+/** A Radix menu is modal and takes the keyboard back: Escape closes it before the command moves the keyboard (plan E1). */
+function closeOpenMenus(doc: Document) {
+  if (doc.querySelector('[role="menu"][data-state="open"]') === null) return;
+  doc.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+}
+
 /**
  * The application's single keydown listener (spec fenêtre §6.2): on the
  * window, in the capture phase, ahead of xterm, the fields, Excalidraw and
@@ -34,6 +40,7 @@ export function installShortcuts(
     // A command that moves the keyboard closes the palette first: an open
     // palette never shows while the keys go to a terminal (Échap included).
     if (paletteStore.getState().open && !command.id.startsWith("palette.")) closePalette();
+    closeOpenMenus(target.document);
     runCommand(command, ctx);
   };
   target.addEventListener("keydown", listener, { capture: true });

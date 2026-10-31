@@ -90,3 +90,15 @@ it("consumes the repeats of a held shortcut that does not repeat, without runnin
   expect(event.defaultPrevented).toBe(true);
   expect(reachedXterm).not.toHaveBeenCalled();
 });
+
+it("closes an open dropdown menu before the command runs: the menu would take the keyboard back", () => {
+  const menu = document.createElement("div");
+  menu.setAttribute("role", "menu");
+  menu.dataset.state = "open";
+  document.body.append(menu);
+  const escapes: string[] = [];
+  document.addEventListener("keydown", (e) => e.key === "Escape" && escapes.push(e.key), { once: true });
+  press({ key: "Tab", ctrlKey: true });
+  expect(escapes).toEqual(["Escape"]);
+  expect(run).toHaveBeenCalled();
+});
