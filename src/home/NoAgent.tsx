@@ -54,7 +54,7 @@ export function NoAgent() {
         <div className="flex items-center gap-2">
           <claude.Icon className="size-4" style={{ color: agentInk(claude.tint) }} />
           <span className="text-[13px] font-semibold text-ov-text">Claude Code</span>
-          <span className="rounded-full bg-ov-accent-soft px-2 py-0.5 text-[10px] font-semibold text-ov-accent">{t.recommended}</span>
+          <span className="rounded-md bg-ov-accent-soft px-2 py-0.5 text-[10px] font-semibold text-ov-accent">{t.recommended}</span>
         </div>
         <p className="mt-1 text-xs text-ov-text-2">{t.claudeWhy}</p>
         <p className="mt-3 text-xs text-ov-text-2">{t.claudeHow}</p>
@@ -97,7 +97,7 @@ export function NoAgent() {
       </ul>
       {asked && (
         <div className="mt-2 max-w-md rounded-[10px] border border-ov-line bg-ov-card p-2">
-          <InstallPrompt agent={asked} onBack={() => setAsked(null)} onRun={() => install(asked)} />
+          <InstallPrompt key={asked} agent={asked} onBack={() => setAsked(null)} onRun={() => install(asked)} />
         </div>
       )}
       <p className="mt-3 text-xs text-ov-text-2">{project ? t.opensIn(project.name) : t.asksFolder}</p>
