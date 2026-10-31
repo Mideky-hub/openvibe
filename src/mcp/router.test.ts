@@ -128,6 +128,16 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
       expect(mission.linked_groups).toEqual([{ name: "Interface", speciality: "Frontend" }, { name: "Serveur", speciality: null }]);
     });
 
+    it("sends a new agent to a linked group and says so in the plan, refusing an unknown one", async () => {
+      canvasStore.setState({ frames: [front, back], links: { chef: { groupIds: ["g1", "g2"], nodeIds: [] } } });
+      const sub = { title: "Style", brief: "Fais le style", agent: "new", budget_min: 10 };
+      expect(await call("chef", "propose_plan", { ...plan, subtasks: [{ ...sub, group: "Zeus" }] })).toMatchObject({ isError: true });
+      await call("chef", "propose_plan", { ...plan, subtasks: [{ ...sub, group: "interface" }, plan.subtasks[1]] });
+      expect(missionOf(nodesStore.getState().nodes.chef)?.plan?.[0].group).toEqual({ id: "g1", name: "Interface" });
+      expect(JSON.parse(textOf(await call("chef", "mission", {}))).plan.map((s: { group: unknown }) => s.group)).toEqual(["Interface", null]);
+      await call("chef", "propose_plan", plan);
+    });
+
     it("keeps today's answers for an agent outside any group, with nulls added", async () => {
       canvasStore.setState({ frames: [], links: {} });
       const mission = JSON.parse(textOf(await call("chef", "mission", {})));
@@ -182,6 +192,8 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
     expect(JSON.parse(textOf(await call("loin", "mission", {}))).linked_groups).toBe("inconnus : l'espace de l'orchestrateur n'est pas affiché");
     expect(textOf(await call("loin", "propose_plan", plan))).toContain("n'est pas affiché");
     expect(textOf(await call("loin", "propose_plan", { ...plan, subtasks: [plan.subtasks[1]] }))).toContain("Plan proposé : 1 sous-tâche.");
+    // Its groups are as unknown as its agents: refused, not told that the group does not exist.
+    expect(textOf(await call("loin", "propose_plan", { ...plan, subtasks: [{ ...plan.subtasks[1], group: "Interface" }] }))).toContain("n'est pas affiché");
   });
 
   describe("once the team is formed", () => {

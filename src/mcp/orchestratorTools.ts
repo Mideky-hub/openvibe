@@ -39,6 +39,7 @@ export function orchestratorTools() {
                 title: { type: "string", maxLength: 60 },
                 brief: { type: "string" },
                 agent: { type: "string", description: d.planAgent },
+                group: { type: "string", description: d.planGroup },
                 budget_min: { type: "integer", minimum: 1 },
                 level: { type: "string", enum: ["low", "medium", "high", "extreme"], description: d.planLevel },
               },
@@ -112,6 +113,7 @@ function describeMission(orchestratorId: string, mission: Mission): ToolResult {
         title: s.title,
         brief: s.brief,
         agent: outAgent(s.agent),
+        group: s.group?.name ?? null,
         budget_min: s.budgetMin,
         level: s.level ? outLevel(s.level) : null,
         model: mission.router && s.level ? LEVELS[s.level].modelLabel : null,
@@ -131,9 +133,10 @@ function describeMission(orchestratorId: string, mission: Mission): ToolResult {
 function proposePlan(orchestratorId: string, mission: Mission, args: Record<string, unknown>): ToolResult {
   if (mission.state === "lancement" || mission.state === "en_cours") return refused(t().orchestrator.running);
   if (mission.state === "terminee") return refused(t().orchestrator.finished);
-  const named = Array.isArray(args.sous_taches) && args.sous_taches.some((s) => !sameName(String((s as Record<string, unknown> | null)?.agent ?? ""), NEW_AGENT));
+  const onCanvas = (s: Record<string, unknown> | null) => !sameName(String(s?.agent ?? ""), NEW_AGENT) || Boolean(s?.groupe);
+  const named = Array.isArray(args.sous_taches) && args.sous_taches.some((s) => onCanvas(s as Record<string, unknown> | null));
   if (named && !orchestratorShown(orchestratorId)) return refused(t().orchestrator.hiddenWorkspace);
-  const result = proposedPlan(args, mission, linkedClaudeAgents(orchestratorId).map((a) => a.name));
+  const result = proposedPlan(args, mission, linkedClaudeAgents(orchestratorId).map((a) => a.name), linkedGroups(orchestratorId));
   if (typeof result === "string") return refused(result);
   setMission(orchestratorId, { state: "plan", ...result, error: undefined });
   return said(t().orchestrator.proposed(result.plan.length));
