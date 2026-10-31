@@ -23,6 +23,7 @@ export const presetsMessages = defineMessages(
     toast: {
       saved: (name: string) => `Preset « ${name} » enregistré`,
       nothing: "Aucun groupe avec des agents à enregistrer",
+      noCanvas: "Aucun workspace affiché : ouvre un projet pour enregistrer son équipe",
       full: "Trop de presets (50 au plus) : supprime-en un d'abord",
       removed: (name: string) => `Preset « ${name} » supprimé`,
       undo: "Annuler",
@@ -54,6 +55,7 @@ export const presetsMessages = defineMessages(
     toast: {
       saved: (name: string) => `Preset “${name}” saved`,
       nothing: "No group with agents to save",
+      noCanvas: "No workspace on screen: open a project to save its team",
       full: "Too many presets (50 at most): delete one first",
       removed: (name: string) => `Preset “${name}” deleted`,
       undo: "Undo",
