@@ -38,7 +38,7 @@ export const fleetMessages = defineMessages(
       roman: "Romain",
       yoruba: "Yoruba",
     },
-    filters: { all: "Tous", working: "En cours", waiting: "Attend", idle: "Prêts", stopped: "Arrêtés" },
+    filters: { all: "Tous", working: "En cours", waiting: "Attend", active: "Actifs", idle: "Prêts", stopped: "Arrêtés" },
     outsideGroup: "Hors groupe",
     summary: {
       counts: (members: number, working: number) => `${members} · ${working > 0 ? `${working} en cours` : "inactif"}`,
@@ -259,7 +259,7 @@ export const fleetMessages = defineMessages(
       roman: "Roman",
       yoruba: "Yoruba",
     },
-    filters: { all: "All", working: "Working", waiting: "Waiting", idle: "Ready", stopped: "Stopped" },
+    filters: { all: "All", working: "Working", waiting: "Waiting", active: "Active", idle: "Ready", stopped: "Stopped" },
     outsideGroup: "No group",
     summary: {
       counts: (members: number, working: number) => `${members} · ${working > 0 ? `${working} working` : "idle"}`,
