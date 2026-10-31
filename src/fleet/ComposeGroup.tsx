@@ -139,7 +139,7 @@ export function ComposeGroup({
                 type="button"
                 onClick={() => pickRole(id)}
                 className={cn(
-                  "flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs",
+                  "flex h-7 items-center gap-1.5 rounded-[9px] border px-2.5 text-xs",
                   active ? "font-semibold text-ov-on-role" : "border-ov-line text-ov-text-2 hover:text-ov-text",
                 )}
                 style={active ? { backgroundColor: ROLES[id].color, borderColor: ROLES[id].color } : undefined}
@@ -187,7 +187,7 @@ export function ComposeGroup({
               aria-label={t.fewer}
               disabled={slots.length <= 1}
               onClick={() => setSlots((current) => resizeSlots(current, current.length - 1))}
-              className="grid size-7 place-items-center rounded-full text-ov-text-2 hover:bg-ov-card hover:text-ov-text disabled:opacity-40"
+              className="grid size-7 place-items-center rounded-[9px] text-ov-text-2 hover:bg-ov-card hover:text-ov-text disabled:opacity-40"
             >
               <Minus className="size-3.5" />
             </button>
@@ -197,7 +197,7 @@ export function ComposeGroup({
               aria-label={t.more}
               disabled={slots.length >= MAX_GROUP_SIZE}
               onClick={() => setSlots((current) => resizeSlots(current, current.length + 1))}
-              className="grid size-7 place-items-center rounded-full text-ov-text-2 hover:bg-ov-card hover:text-ov-text disabled:opacity-40"
+              className="grid size-7 place-items-center rounded-[9px] text-ov-text-2 hover:bg-ov-card hover:text-ov-text disabled:opacity-40"
             >
               <Plus className="size-3.5" />
             </button>
@@ -205,7 +205,7 @@ export function ComposeGroup({
           <button
             type="button"
             onClick={launch}
-            className="h-8 rounded-full px-4 text-[13px] font-semibold text-ov-on-role hover:brightness-110"
+            className="h-8 rounded-[10px] px-4 text-[13px] font-semibold text-ov-on-role hover:brightness-110"
             style={{ backgroundColor: color }}
           >
             {t.launch(slots.length)}
