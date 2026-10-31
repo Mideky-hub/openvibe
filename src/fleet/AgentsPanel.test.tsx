@@ -124,3 +124,11 @@ it("stops above the « Reprendre » offer instead of sitting under it", async ()
   await act(async () => resumeOfferStore.setState({ open: false }));
   expect(panel.style.maxHeight).toBe(before);
 });
+
+it("gives each agent row Centrer and Fermer on hover and on keyboard focus (spec identité §5.6)", () => {
+  const row = host.querySelector("[data-filter]")!.closest("aside")!.querySelector<HTMLElement>(".group.flex.items-center.gap-2")!;
+  const labels = [...row.querySelectorAll("button[aria-label]")].map((b) => b.getAttribute("aria-label"));
+  expect(labels.some((l) => /^Centrer/.test(l!))).toBe(true);
+  expect(labels.some((l) => /^Fermer/.test(l!))).toBe(true);
+  expect(row.querySelector('[class*="group-hover:flex"]')!.className).toContain("group-focus-within:flex");
+});
