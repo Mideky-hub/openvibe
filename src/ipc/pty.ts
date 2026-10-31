@@ -45,6 +45,12 @@ export interface AgentInfo {
 export interface PtyExitEvent {
   nodeId: string;
   exitCode: number | null;
+  /**
+   * The process that exited, the number `ptySpawn` resolved with. A terminal relaunched
+   * since runs under another pid: an exit with a different pid is the old process's
+   * and must be ignored.
+   */
+  pid: number | null;
 }
 
 /** Raw channel payloads arrive as ArrayBuffer; Tauri < 2.5.1 sent small ones as number[]. */

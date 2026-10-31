@@ -27,6 +27,9 @@ impl OutputSink for ChannelSink {
 struct PtyExitEvent {
     node_id: String,
     exit_code: Option<u32>,
+    /// The process that exited, as `pty_spawn` returned it: an event whose pid
+    /// is not the terminal's current one comes from an older process.
+    pid: Option<u32>,
 }
 
 /// Re-reads Windows' PATH so an agent installed meanwhile is found.
@@ -102,7 +105,11 @@ pub async fn pty_spawn(
         Box::new(ChannelSink(on_data)),
         Box::new(move || agents::output(&output_app, &output_id)),
         move |info| {
-            agents::ended(&exit_app, &exited_id);
+            // A relaunch may already run under this id: its tracking, settings
+            // and token are not this exit's to clear.
+            if !exit_app.state::<PtyManager>().is_running(&exited_id) {
+                agents::ended(&exit_app, &exited_id);
+            }
             // Saved before the event so a restore right after the exit finds it.
             let saved = exit_app.state::<Db>().with(|conn| {
                 scrollback::save_logged(conn, &exited_id, &info.scrollback.data, info.scrollback.at)
@@ -116,6 +123,7 @@ pub async fn pty_spawn(
                 PtyExitEvent {
                     node_id: exited_id,
                     exit_code: info.code,
+                    pid: info.pid,
                 },
             );
         },
