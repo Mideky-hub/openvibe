@@ -91,6 +91,20 @@ describe("goTo (spec fenêtre §7.2)", () => {
     expect(arrive).toHaveBeenLastCalledWith("chef");
   });
 
+  it("waits for the scene when a second click comes during the switch of workspace", () => {
+    const error = vi.spyOn(toast, "error").mockImplementation(() => "");
+    vi.mocked(arrive).mockReturnValue(false);
+    const agent = { id: "thot", kind: "terminal", name: "Thot", workspaceId: "w2", since: 0 } as const;
+    goToAgent(agent);
+    workspacesStore.setState({ activeId: "w2" } as never);
+    goToAgent(agent);
+    expect(arrive).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    vi.mocked(arrive).mockReturnValue(true);
+    completeArrival("w2");
+    expect(arrive).toHaveBeenCalledTimes(1);
+  });
+
   it("is completed by the canvas of a workspace, and orchestrators are found by their field", () => {
     expect(readSource("canvas/Canvas.tsx")).toContain("completeArrival(workspaceId)");
     expect(readSource("nodes/orchestrator/OrchestratorNode.tsx")).toContain("data-orchestrator={nodeId}");
@@ -111,20 +125,39 @@ describe("goToNextWaiting (spec notification §6)", () => {
     agentActivityStore.setState({ activities: { a: { activity: "waiting", since: 1 }, b: { activity: "waiting", since: 2 } } });
   });
 
-  it("goes round every waiting agent, even when the keyboard is on none of them", () => {
-    // An orchestrator's xterm is not a terminal of the context: it stays on what had the keyboard before.
-    for (const expected of ["a", "b", "a"]) {
-      goToNextWaiting("other");
+  it("gets past an orchestrator, whose keyboard is not in the context", () => {
+    nodesStore.setState({ nodes: { chef: { workspaceId: "w1", kind: "orchestrator", payload: { name: "Chef" } }, a: terminal("A") } } as never);
+    terminalStatusStore.setState({ statuses: { chef: { state: "running" }, a: { state: "running" } } });
+    agentActivityStore.setState({ activities: { chef: { activity: "waiting", since: 1 }, a: { activity: "waiting", since: 2 } } });
+    // The context keeps naming the last terminal, « a », while the orchestrator has the keyboard.
+    for (const expected of ["chef", "a", "chef"]) {
+      goToNextWaiting("a");
       expect(arrive).toHaveBeenLastCalledWith(expected);
     }
   });
 
-  it("starts after the terminal that has the keyboard once the last agent reached no longer waits", () => {
-    nodesStore.setState({ nodes: { x: terminal("X"), y: terminal("Y") } } as never);
-    terminalStatusStore.setState({ statuses: { x: { state: "running" }, y: { state: "running" } } });
-    agentActivityStore.setState({ activities: { x: { activity: "waiting", since: 1 }, y: { activity: "waiting", since: 2 } } });
-    goToNextWaiting("x");
-    expect(arrive).toHaveBeenLastCalledWith("y");
+  it("follows the keyboard when a terminal took it since the last agent reached", () => {
+    nodesStore.setState({ nodes: { a: terminal("A"), b: terminal("B"), c: terminal("C") } } as never);
+    terminalStatusStore.setState({ statuses: { a: { state: "running" }, b: { state: "running" }, c: { state: "running" } } });
+    agentActivityStore.setState({
+      activities: { a: { activity: "waiting", since: 1 }, b: { activity: "waiting", since: 2 }, c: { activity: "waiting", since: 3 } },
+    });
+    goToNextWaiting(null);
+    expect(arrive).toHaveBeenLastCalledWith("a");
+    goToAgent({ id: "b", kind: "terminal", name: "B", workspaceId: "w1", since: 2 });
+    goToNextWaiting("b");
+    expect(arrive).toHaveBeenLastCalledWith("c");
+  });
+
+  it("remembers an orchestrator reached from the notice", () => {
+    nodesStore.setState({ nodes: { chef: { workspaceId: "w1", kind: "orchestrator", payload: { name: "Chef" } }, a: terminal("A"), b: terminal("B") } } as never);
+    terminalStatusStore.setState({ statuses: { chef: { state: "running" }, a: { state: "running" }, b: { state: "running" } } });
+    agentActivityStore.setState({
+      activities: { chef: { activity: "waiting", since: 1 }, a: { activity: "waiting", since: 2 }, b: { activity: "waiting", since: 3 } },
+    });
+    goToAgent({ id: "chef", kind: "orchestrator", name: "Chef", workspaceId: "w1", since: 1 });
+    goToNextWaiting("b");
+    expect(arrive).toHaveBeenLastCalledWith("a");
   });
 
   it("does nothing when nobody waits", () => {

@@ -5,13 +5,14 @@ import { projectsStore } from "@/store/projects";
 import { workspacesStore } from "@/store/workspaces";
 import type { GoToItem } from "./goTo";
 import { commandsMessages } from "./messages";
-import { requestArrival, type PendingArrival } from "./pendingArrival";
+import { arrivalPending, requestArrival, type PendingArrival } from "./pendingArrival";
 import { reach } from "./reach";
 
 /** Reaches a node or a group, switching to its workspace first if it is not on screen. */
 function reachTarget(target: PendingArrival) {
   const workspaces = workspacesStore.getState();
-  if (target.workspaceId !== workspaces.activeId) {
+  // A second click during the switch finds the workspace active but its scene not there yet.
+  if (target.workspaceId !== workspaces.activeId || arrivalPending(target.workspaceId)) {
     requestArrival(target);
     workspaces.select(target.workspaceId);
     return;
@@ -38,22 +39,23 @@ export function goTo(item: GoToItem) {
   }
 }
 
+let lastReached: string | null = null;
+
 /** A click on the notification (spec notification §5). */
 export function goToAgent(agent: WaitingAgent) {
+  lastReached = agent.id;
   reachTarget({ workspaceId: agent.workspaceId, kind: agent.kind, id: agent.id, label: agent.name });
 }
 
-let lastReached: string | null = null;
-
 /**
- * The next waiting agent (spec notification §6), after the last one reached
- * while it still waits: the keyboard of an orchestrator is not in the
- * context, so `currentId` alone would never get past one.
+ * The next waiting agent (spec notification §6), after the current node. The
+ * keyboard of an orchestrator is not in the context, which keeps naming the
+ * last terminal: an orchestrator just reached counts as the current node, or
+ * the command would never get past it.
  */
 export function goToNextWaiting(currentId: string | null) {
   const agents = currentWaitingAgents();
-  const next = nextWaiting(agents, agents.some((a) => a.id === lastReached) ? lastReached : currentId);
-  if (!next) return;
-  lastReached = next.id;
-  goToAgent(next);
+  const reached = agents.find((a) => a.id === lastReached);
+  const next = nextWaiting(agents, reached?.kind === "orchestrator" ? reached.id : currentId);
+  if (next) goToAgent(next);
 }
