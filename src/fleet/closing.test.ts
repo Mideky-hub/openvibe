@@ -49,6 +49,13 @@ describe("closing running agents, confirmed (spec habillage §7.5, retours J8b)"
     expect(check(scene, ["isis", "thot"])).toEqual({ dispose: ["isis", "thot"], restore: [], ask: null });
   });
 
+  it("gives no pass to a node already gone: back by an undo and running, it still asks (final review)", () => {
+    const check = createRemovalGuard(isRunning, [element("isis")]);
+    scene = [element("isis", { isDeleted: true }), element("thot")];
+    removeNodes(["isis"]);
+    expect(check([element("thot")], ["isis"]).ask).toEqual({ agents: ["isis"], remove: ["isis"] });
+  });
+
   it("« Fermer le groupe », confirmed, lets the frame and its agents go", () => {
     scene = [element("g", { type: "frame", customData: undefined }), element("ra", { frameId: "g" }), element("thot", { frameId: "g" })];
     const check = createRemovalGuard(isRunning, scene);

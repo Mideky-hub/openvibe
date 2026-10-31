@@ -52,7 +52,7 @@ export function edges(notes: readonly LinkedNote[]): Edge[] {
     for (const link of linksIn(note.text)) {
       const target = noteNamed(notes, link.target);
       if (!target || target === note) continue;
-      const pair = [note.name, target.name].sort().join("/");
+      const pair = [note.name, target.name].sort().join("\0");
       if (!found.has(pair)) found.set(pair, { from: note.name, to: target.name });
     }
   }

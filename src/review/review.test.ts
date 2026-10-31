@@ -58,7 +58,7 @@ describe("reviewMessage", () => {
         { file: "README.md", text: "Documente l'option." },
       ]),
     ).toBe(
-      "Revue de code de tes changements :\n- src/a.ts:12 — Renomme z.\n- src/a.ts (ligne 11 supprimée) — Pourquoi retirer y ?\n- README.md — Documente l'option.\nCorrige ce qui doit l'être, puis dis-moi ce que tu as changé.",
+      "Revue de code de tes changements :\n- src/a.ts:12 — Renomme z.\n- src/a.ts (ligne 11 supprimée, numérotée dans la version avant tes changements) — Pourquoi retirer y ?\n- README.md — Documente l'option.\nCorrige ce qui doit l'être, puis dis-moi ce que tu as changé.",
     );
   });
 });
@@ -68,7 +68,7 @@ describe("reviewMessage in English (spec première version §7.1)", () => {
     langStore.setState({ lang: "en" });
     try {
       expect(reviewMessage([{ file: "src/a.ts", line: 11, side: "old", text: "Why?" }, { file: "README.md", text: "Document it." }])).toBe(
-        "Code review of your changes:\n- src/a.ts (line 11 removed) — Why?\n- README.md — Document it.\nFix what needs fixing, then tell me what you changed.",
+        "Code review of your changes:\n- src/a.ts (line 11 removed, numbered in the version before your changes) — Why?\n- README.md — Document it.\nFix what needs fixing, then tell me what you changed.",
       );
     } finally {
       langStore.setState({ lang: "fr" });

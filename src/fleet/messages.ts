@@ -38,7 +38,7 @@ export const fleetMessages = defineMessages(
       roman: "Romain",
       yoruba: "Yoruba",
     },
-    filters: { all: "Tous", working: "En cours", waiting: "Attend", idle: "Prêts", stopped: "Arrêtés" },
+    filters: { all: "Tous", working: "En cours", waiting: "Attend", active: "Actifs", idle: "Prêts", stopped: "Arrêtés" },
     outsideGroup: "Hors groupe",
     summary: {
       counts: (members: number, working: number) => `${members} · ${working > 0 ? `${working} en cours` : "inactif"}`,
@@ -63,6 +63,11 @@ export const fleetMessages = defineMessages(
     broadcast: {
       skipped: (names: readonly string[]) =>
         names.length === 1 ? `1 agent arrêté ignoré : ${names[0]}` : `${names.length} agents arrêtés ignorés : ${names.join(", ")}`,
+      starting: (names: readonly string[]) =>
+        names.length === 1
+          ? `1 agent en démarrage ignoré : ${names[0]} — réessaie dans un instant`
+          : `${names.length} agents en démarrage ignorés : ${names.join(", ")} — réessaie dans un instant`,
+      resumeFailed: (name: string) => `${name} n'a pas pu reprendre : le processus vient de s'arrêter`,
       waiting: (names: readonly string[]) =>
         names.length === 1
           ? `1 agent en attente ignoré : ${names[0]} — réponds-lui dans son terminal`
@@ -146,6 +151,7 @@ export const fleetMessages = defineMessages(
       remove: (label: string) => `Retirer ${label}`,
       send: "Envoyer",
       writeInstruction: "Écris une consigne",
+      noAgents: "Aucun agent dans cette cible",
     },
     compose: {
       title: "Composer un groupe",
@@ -158,6 +164,10 @@ export const fleetMessages = defineMessages(
     },
     groupMenu: {
       rename: "Renommer",
+      speciality: "Spécialité",
+      specialityLabel: "Spécialité du groupe",
+      specialityCustom: "La tienne, puis Entrée",
+      specialityNone: "Aucune",
       addAgent: "Ajouter un agent",
       linkOrchestrator: "Relier un orchestrateur",
       pauseAll: "Tout mettre en pause",
@@ -182,9 +192,32 @@ export const fleetMessages = defineMessages(
       chat: "Discussion",
       aiderNotFound: "aider introuvable dans le PATH",
       reading: "Lecture des modèles…",
-      unreachable: (error: string) => `Ollama ne répond pas : ${error}`,
-      noModelsBefore: "Aucun modèle — lance ",
-      pullCommand: "ollama pull <modèle>",
+      serverDown: "Le serveur Ollama ne répond pas : ouvre l'application Ollama, puis réessaie.",
+      retry: "Réessayer",
+      noModels: "Aucun modèle installé : télécharges-en un ci-dessous.",
+      pullLabel: "Télécharger un modèle",
+      pullPlaceholder: "nom:tag",
+      pull: "Télécharger",
+      pullInvalid: "Ce nom n'est pas un modèle Ollama.",
+      pullHint: "Le téléchargement s'affiche dans un terminal du canvas.",
+      suggestions: "Suggestions",
+      sizeGb: (size: number) => `${String(size).replace(".", ",")} Go`,
+      uses: { code: "code", light: "machine modeste", chat: "discussion", reasoning: "raisonnement", agent: "agent de code" },
+      pulled: (model: string) => `Modèle prêt : ${model}`,
+    },
+    install: {
+      button: "Installer",
+      installAgent: (label: string) => `Installer ${label}`,
+      runsIn: (shell: string) => `Cette commande officielle va s'exécuter dans un terminal du canvas (${shell}) :`,
+      needsNode: "Nécessite Node.js et npm.",
+      npmMissing: "npm est introuvable : installe d'abord Node.js, qui l'apporte.",
+      getNode: "Télécharger Node.js",
+      recheck: "Vérifier à nouveau",
+      officialPage: "Page officielle",
+      run: "Lancer dans un terminal",
+      terminalTitle: (label: string) => `Installation · ${label}`,
+      installed: (label: string) => `${label} est installé`,
+      noCanvas: "Ouvre un projet : l'installation se fait dans un terminal de son canvas.",
     },
     placement: {
       addToGroup: (name: string) => `Clique pour l'ajouter au groupe ${name} · Échap pour annuler`,
@@ -235,7 +268,7 @@ export const fleetMessages = defineMessages(
       roman: "Roman",
       yoruba: "Yoruba",
     },
-    filters: { all: "All", working: "Working", waiting: "Waiting", idle: "Ready", stopped: "Stopped" },
+    filters: { all: "All", working: "Working", waiting: "Waiting", active: "Active", idle: "Ready", stopped: "Stopped" },
     outsideGroup: "No group",
     summary: {
       counts: (members: number, working: number) => `${members} · ${working > 0 ? `${working} working` : "idle"}`,
@@ -260,6 +293,9 @@ export const fleetMessages = defineMessages(
     broadcast: {
       skipped: (names: readonly string[]) =>
         names.length === 1 ? `1 stopped agent ignored: ${names[0]}` : `${names.length} stopped agents ignored: ${names.join(", ")}`,
+      starting: (names: readonly string[]) =>
+        names.length === 1 ? `1 agent still starting ignored: ${names[0]} — try again in a moment` : `${names.length} agents still starting ignored: ${names.join(", ")} — try again in a moment`,
+      resumeFailed: (name: string) => `${name} could not resume: its process just stopped`,
       waiting: (names: readonly string[]) =>
         names.length === 1
           ? `1 waiting agent ignored: ${names[0]} — answer it in its terminal`
@@ -341,6 +377,7 @@ export const fleetMessages = defineMessages(
       remove: (label: string) => `Remove ${label}`,
       send: "Send",
       writeInstruction: "Write an instruction",
+      noAgents: "No agent in this target",
     },
     compose: {
       title: "Compose a group",
@@ -353,6 +390,10 @@ export const fleetMessages = defineMessages(
     },
     groupMenu: {
       rename: "Rename",
+      speciality: "Speciality",
+      specialityLabel: "Group speciality",
+      specialityCustom: "Your own, then Enter",
+      specialityNone: "None",
       addAgent: "Add an agent",
       linkOrchestrator: "Link an orchestrator",
       pauseAll: "Pause all",
@@ -377,9 +418,32 @@ export const fleetMessages = defineMessages(
       chat: "Chat",
       aiderNotFound: "aider not found in PATH",
       reading: "Reading the models…",
-      unreachable: (error: string) => `Ollama is not responding: ${error}`,
-      noModelsBefore: "No model — run ",
-      pullCommand: "ollama pull <model>",
+      serverDown: "The Ollama server is not responding: open the Ollama app, then try again.",
+      retry: "Try again",
+      noModels: "No model installed: download one below.",
+      pullLabel: "Download a model",
+      pullPlaceholder: "name:tag",
+      pull: "Download",
+      pullInvalid: "This is not an Ollama model name.",
+      pullHint: "The download shows in a terminal on the canvas.",
+      suggestions: "Suggestions",
+      sizeGb: (size: number) => `${size} GB`,
+      uses: { code: "code", light: "modest machine", chat: "chat", reasoning: "reasoning", agent: "coding agent" },
+      pulled: (model: string) => `Model ready: ${model}`,
+    },
+    install: {
+      button: "Install",
+      installAgent: (label: string) => `Install ${label}`,
+      runsIn: (shell: string) => `This official command will run in a terminal on the canvas (${shell}):`,
+      needsNode: "Requires Node.js and npm.",
+      npmMissing: "npm was not found: install Node.js first, which brings it.",
+      getNode: "Download Node.js",
+      recheck: "Check again",
+      officialPage: "Official page",
+      run: "Run in a terminal",
+      terminalTitle: (label: string) => `Install · ${label}`,
+      installed: (label: string) => `${label} is installed`,
+      noCanvas: "Open a project: the install runs in a terminal on its canvas.",
     },
     placement: {
       addToGroup: (name: string) => `Click to add it to the group ${name} · Esc to cancel`,

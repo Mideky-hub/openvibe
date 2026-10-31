@@ -13,6 +13,8 @@ export interface Changes {
   /** `HEAD`, or the commit where the base forked. */
   compared: string;
   files: ChangedFile[];
+  /** More changes than the list holds: it is cut. */
+  truncated: boolean;
 }
 
 /** A file of the repository; `text` null for a binary file. */

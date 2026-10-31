@@ -13,11 +13,15 @@ export const shellMessages = defineMessages(
       active: "Agents actifs du projet",
       activeCount: (count: number) => plural("fr", count, "actif", "actifs"),
     },
+    waitingNotice: {
+      question: (name: string) => `${name} a une question`,
+      others: (count: number) => `+ ${plural("fr", count, "autre", "autres")}`,
+    },
     closeAgent: {
       fallbackName: "cet agent",
       several: (names: string[]) => `Ces agents tournent encore ; les fermer met fin à leur session : ${names.join(", ")}.`,
       inMission: (name: string) =>
-        `${name} mène une mission en cours. Le fermer arrête sa session ; ses agents continuent, mais personne ne lira leurs comptes rendus.`,
+        `${name} mène une mission en cours. Le fermer arrête sa session ; ses agents continuent, mais personne ne lira leurs comptes rendus. Les worktrees et les branches de la mission restent sur le disque.`,
       orchestrator: (name: string) => `${name} tourne encore. Le fermer met fin à sa session.`,
       agent: (name: string) => `${name} tourne encore. La fermer met fin à sa session.`,
       agentWorking: (name: string) => `${name} est en cours. La fermer met fin à sa session.`,
@@ -51,7 +55,8 @@ export const shellMessages = defineMessages(
       agentsKeepRunning: "Tes agents continuent de tourner : recharger l'interface les retrouve.",
       reload: "Recharger l'interface",
     },
-    projectPicker: { project: "Projet", allProjects: "Tous les projets…", closeProject: "Fermer le projet" },
+    modeExit: { zen: "Quitter le mode zen", reading: "Quitter le mode lecture" },
+    projectPicker: { project: "Projet", allProjects: "Tous les projets…", closeProject: "Fermer le projet", openFailed: (error: string) => `Ouverture impossible : ${error}` },
     searchField: { project: "Rechercher un projet", inProject: (name: string) => `Rechercher dans ${name}` },
     settings: {
       theme: "Thème",
@@ -59,6 +64,7 @@ export const shellMessages = defineMessages(
       light: "Clair (Ivoire)",
       dark: "Sombre (Argile)",
       transparency: "Effets de transparence",
+      nativeNotifications: "Notifications Windows",
       exportScene: "Exporter la scène…",
       importScene: "Importer une scène…",
       exportPng: "Exporter en PNG…",
@@ -157,6 +163,8 @@ export const shellMessages = defineMessages(
     tabs: {
       deleteWorkspace: "Supprimer le workspace",
       rename: "Renommer",
+      moveLeft: "Déplacer à gauche",
+      moveRight: "Déplacer à droite",
       delete: "Supprimer",
       newWorkspace: "Nouveau workspace",
       activeAgents: (count: number) => plural("fr", count, "agent actif", "agents actifs"),
@@ -165,10 +173,11 @@ export const shellMessages = defineMessages(
       createFailed: "Création impossible",
     },
     removeWorkspace: {
-      confirm: (name: string, running: number) => {
+      confirm: (name: string, running: number, names: string[] = []) => {
+        const who = names.length > 0 ? ` (${names.join(", ")})` : "";
         const consequence =
           running > 0
-            ? `${plural("fr", running, "agent sera arrêté", "agents seront arrêtés")} et son contenu effacé.`
+            ? `${plural("fr", running, "agent sera arrêté", "agents seront arrêtés")}${who} et son contenu effacé.`
             : "Son contenu sera effacé.";
         return `Supprimer « ${name} » ? ${consequence}`;
       },
@@ -219,11 +228,15 @@ export const shellMessages = defineMessages(
       active: "Active agents in the project",
       activeCount: (count: number) => plural("en", count, "active", "active"),
     },
+    waitingNotice: {
+      question: (name: string) => `${name} has a question`,
+      others: (count: number) => `+ ${plural("en", count, "more", "more")}`,
+    },
     closeAgent: {
       fallbackName: "this agent",
       several: (names: string[]) => `These agents are still running; closing them ends their session: ${names.join(", ")}.`,
       inMission: (name: string) =>
-        `${name} is leading a mission in progress. Closing it stops its session; its agents keep going, but nobody will read their reports.`,
+        `${name} is leading a mission in progress. Closing it stops its session; its agents keep going, but nobody will read their reports. The mission's worktrees and branches stay on disk.`,
       orchestrator: (name: string) => `${name} is still running. Closing it ends its session.`,
       agent: (name: string) => `${name} is still running. Closing it ends its session.`,
       agentWorking: (name: string) => `${name} is working. Closing it ends its session.`,
@@ -257,7 +270,8 @@ export const shellMessages = defineMessages(
       agentsKeepRunning: "Your agents keep running: reloading the interface finds them again.",
       reload: "Reload the interface",
     },
-    projectPicker: { project: "Project", allProjects: "All projects…", closeProject: "Close the project" },
+    modeExit: { zen: "Leave zen mode", reading: "Leave reading mode" },
+    projectPicker: { project: "Project", allProjects: "All projects…", closeProject: "Close the project", openFailed: (error: string) => `Could not open: ${error}` },
     searchField: { project: "Search for a project", inProject: (name: string) => `Search in ${name}` },
     settings: {
       theme: "Theme",
@@ -265,6 +279,7 @@ export const shellMessages = defineMessages(
       light: "Light (Ivory)",
       dark: "Dark (Clay)",
       transparency: "Transparency effects",
+      nativeNotifications: "Windows notifications",
       exportScene: "Export the scene…",
       importScene: "Import a scene…",
       exportPng: "Export as PNG…",
@@ -363,6 +378,8 @@ export const shellMessages = defineMessages(
     tabs: {
       deleteWorkspace: "Delete the workspace",
       rename: "Rename",
+      moveLeft: "Move left",
+      moveRight: "Move right",
       delete: "Delete",
       newWorkspace: "New workspace",
       activeAgents: (count: number) => plural("en", count, "active agent", "active agents"),
@@ -371,10 +388,11 @@ export const shellMessages = defineMessages(
       createFailed: "Could not create",
     },
     removeWorkspace: {
-      confirm: (name: string, running: number) => {
+      confirm: (name: string, running: number, names: string[] = []) => {
+        const who = names.length > 0 ? ` (${names.join(", ")})` : "";
         const consequence =
           running > 0
-            ? `${plural("en", running, "agent will be stopped", "agents will be stopped")} and its contents erased.`
+            ? `${plural("en", running, "agent will be stopped", "agents will be stopped")}${who} and its contents erased.`
             : "Its contents will be erased.";
         return `Delete "${name}"? ${consequence}`;
       },

@@ -29,6 +29,8 @@ export const catalogMessages = defineMessages(
     },
     launch: (label: string) => `Lancer ${label}`,
     launchKeywords: ["agent", "lancer"],
+    install: (label: string) => `Installer ${label}…`,
+    installKeywords: ["installer", "installation"],
     maximize: "Agrandir",
     restore: "Restaurer",
     showAgentsPanel: "Afficher le panneau Agents",
@@ -53,6 +55,7 @@ export const catalogMessages = defineMessages(
     commands: {
       "terminal.next": e("Terminal suivant", "suivant", "terminal", "agent"),
       "terminal.previous": e("Terminal précédent", "précédent", "terminal", "agent"),
+      "agent.nextWaiting": e("Aller à l'agent en attente suivant", "attente", "attend", "question", "réponse", "permission", "agent"),
       "palette.goTo": e("Aller à…", "chercher", "rechercher", "terminal", "groupe", "workspace", "projet"),
       "canvas.overview": e("Vue d'ensemble", "ensemble", "tout", "voir", "agents"),
       "canvas.release": e("Rendre la main au canvas", "canvas", "clavier", "dessin"),
@@ -152,6 +155,8 @@ export const catalogMessages = defineMessages(
     },
     launch: (label: string) => `Launch ${label}`,
     launchKeywords: ["agent", "launch", "start", "run"],
+    install: (label: string) => `Install ${label}…`,
+    installKeywords: ["install", "setup"],
     maximize: "Maximize",
     restore: "Restore",
     showAgentsPanel: "Show the Agents panel",
@@ -176,6 +181,7 @@ export const catalogMessages = defineMessages(
     commands: {
       "terminal.next": e("Next terminal", "next", "terminal", "agent"),
       "terminal.previous": e("Previous terminal", "previous", "terminal", "agent"),
+      "agent.nextWaiting": e("Go to the next waiting agent", "waiting", "question", "answer", "permission", "agent"),
       "palette.goTo": e("Go to…", "find", "search", "terminal", "group", "workspace", "project"),
       "canvas.overview": e("Overview", "all", "see", "agents", "zoom out"),
       "canvas.release": e("Give control back to the canvas", "canvas", "keyboard", "drawing"),

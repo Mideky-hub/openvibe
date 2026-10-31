@@ -5,9 +5,13 @@ import { useUiRequest } from "@/commands/uiRequests";
 import { messages, useMessages } from "@/i18n";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { AgentId } from "@/ipc/pty";
+import { AccentButton } from "@/shell/buttons";
 import { uiStore } from "@/store/ui";
 import { agentsStore, useAgents } from "./agentsStore";
 import { AGENT_ORDER, agentInk, AGENTS, defaultAgent } from "./catalog";
+import { installAgent, pullOllamaModel } from "./installAgent";
+import { AGENT_INSTALLS } from "./installCommands";
+import { InstallPrompt } from "./InstallPrompt";
 import { defaultLaunchOptions, launchAgent, type LaunchOptions } from "./launchAgent";
 import { fleetMessages } from "./messages";
 import { LaunchOptionsForm } from "./LaunchOptionsForm";
@@ -15,7 +19,7 @@ import { OllamaPicker } from "./OllamaPicker";
 import { launchFour, newConsole, placeOrchestrator } from "./quickActions";
 import type { Point } from "./terminals";
 
-type View = "agents" | "options" | "ollama";
+type View = "agents" | "options" | "ollama" | { install: AgentId };
 
 /** "Lancer un agent", opened from the tool rail's ＋ or the agents panel (spec identité §5.4, §5.6). */
 export function AgentMenu({
@@ -37,6 +41,8 @@ export function AgentMenu({
   const current = options ?? defaultLaunchOptions();
   const fallback = defaultAgent(agents);
   const available = (id: AgentId) => agents.find((a) => a.id === id)?.available ?? false;
+  // Before the first detection nothing is known to be missing.
+  const missing = (id: AgentId) => agents.some((a) => a.id === id && !a.available) && id in AGENT_INSTALLS;
 
   const requestedView = useRef<View | null>(null);
   const [placeAt, setPlaceAt] = useState<Point | null>(null);
@@ -54,7 +60,9 @@ export function AgentMenu({
   useUiRequest(
     "agentMenu",
     (request) => {
-      requestedView.current = request.view;
+      // Already open, the effect above will not run again.
+      if (open) setView(request.view);
+      else requestedView.current = request.view;
       setPlaceAt(request.at ?? null);
       setOpen(true);
       return true;
@@ -75,6 +83,11 @@ export function AgentMenu({
     else place(agent, current);
   };
 
+  const inTerminal = (run: (at?: Point) => void) => {
+    setOpen(false);
+    run(placeAt ?? undefined);
+  };
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{trigger(open)}</PopoverTrigger>
@@ -87,26 +100,39 @@ export function AgentMenu({
                 const meta = AGENTS[id];
                 const usable = available(id);
                 return (
-                  <button
-                    key={id}
-                    type="button"
-                    disabled={!usable}
-                    title={usable ? undefined : t.agentMenu.notFound(meta.binary)}
-                    onClick={() => pick(id)}
-                    className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-ov-hover disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <span
-                      className="grid size-7 place-items-center rounded-md"
-                      style={{ backgroundColor: `color-mix(in srgb, ${meta.tint} 18%, transparent)`, color: agentInk(meta.tint) }}
+                  <div key={id} className="relative">
+                    <button
+                      type="button"
+                      disabled={!usable}
+                      title={usable ? undefined : t.agentMenu.notFound(meta.binary)}
+                      onClick={() => pick(id)}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-ov-hover disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      <meta.Icon className="size-4" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[13px] font-medium text-ov-text">{meta.label}</span>
-                      <span className="block text-[11px] text-ov-text-2">{meta.vendor}</span>
-                    </span>
-                    {id === fallback && <Check className="size-3.5 text-ov-accent" />}
-                  </button>
+                      <span
+                        className="grid size-7 place-items-center rounded-md"
+                        style={{ backgroundColor: `color-mix(in srgb, ${meta.tint} 18%, transparent)`, color: agentInk(meta.tint) }}
+                      >
+                        <meta.Icon className="size-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px] font-medium text-ov-text">{meta.label}</span>
+                        <span className="block text-[11px] text-ov-text-2">{meta.vendor}</span>
+                      </span>
+                      {id === fallback && <Check className="size-3.5 text-ov-accent" />}
+                    </button>
+                    {/* Beside the row and not inside it: the row is disabled, this button is not. */}
+                    {missing(id) && (
+                      <button
+                        type="button"
+                        data-install={id}
+                        aria-label={t.install.installAgent(meta.label)}
+                        onClick={() => setView({ install: id })}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-[9px] bg-ov-accent-soft px-2 py-0.5 text-[11px] font-semibold text-ov-accent hover:underline"
+                      >
+                        {t.install.button}
+                      </button>
+                    )}
+                  </div>
                 );
               })}
               <button
@@ -169,14 +195,9 @@ export function AgentMenu({
             onChange={setOptions}
             onBack={() => setView("agents")}
             footer={
-              <button
-                type="button"
-                disabled={!current.command.trim()}
-                onClick={() => place("custom", current)}
-                className="h-8 rounded-full bg-ov-accent text-xs font-semibold text-white disabled:opacity-40"
-              >
+              <AccentButton disabled={!current.command.trim()} onClick={() => place("custom", current)} className="justify-center text-xs">
                 {t.agentMenu.launchCustom}
-              </button>
+              </AccentButton>
             }
           />
         )}
@@ -185,7 +206,11 @@ export function AgentMenu({
             aiderAvailable={available("aider")}
             onBack={() => setView("agents")}
             onPick={(ollama) => place("ollama", { ...current, ollama })}
+            onPull={(model) => inTerminal((at) => void pullOllamaModel(model, at))}
           />
+        )}
+        {typeof view === "object" && (
+          <InstallPrompt agent={view.install} onBack={() => setView("agents")} onRun={() => inTerminal((at) => void installAgent(view.install, at))} />
         )}
       </PopoverContent>
     </Popover>

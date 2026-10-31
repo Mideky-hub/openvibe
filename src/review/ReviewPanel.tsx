@@ -26,6 +26,9 @@ const STATUS: Record<ChangedFile["status"], { letter: string; color: string }> =
   renamed: { letter: "R", color: "var(--ov-wait)" },
 };
 
+/** The panel's own toasts show at the top: the default corner is where « Envoyer » is. */
+const TOAST_AWAY = { position: "top-center" } as const;
+
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** What an agent changed and its folder's files, with remarks sent back to it (spec maj §5). */
@@ -143,12 +146,14 @@ function ChangesTab({ cwd, base, refresh }: { cwd: string; base: string | null; 
   const [files, setFiles] = useState<ChangedFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<ChangedFile | null>(null);
+  const [cut, setCut] = useState(false);
 
   useEffect(() => {
     let alive = true;
     reviewChanges(cwd, base).then(
       (changes) => {
         if (!alive) return;
+        setCut(changes.truncated === true);
         setError(null);
         setFiles(changes.files);
         // A refresh stays on the file being read when it is still changed.
@@ -167,6 +172,7 @@ function ChangesTab({ cwd, base, refresh }: { cwd: string; base: string | null; 
   return (
     <div className="flex min-h-0 flex-1">
       <ul className="w-[260px] shrink-0 overflow-y-auto border-r border-ov-line py-1">
+        {cut && <li className="px-3 py-1 text-[11px] text-ov-text-3">{t.listCut(files.length)}</li>}
         {files.map((file) => {
           const status = STATUS[file.status];
           return (
@@ -416,12 +422,13 @@ function Remarks({ nodeId, name }: { nodeId: string; name: string }) {
   const remarks = useReview((s) => s.remarks);
   if (remarks.length === 0) return null;
   const send = async () => {
-    const { sent, skipped, waiting } = await sendToAgents([nodeId], reviewMessage(remarks));
+    const { sent, skipped, waiting, starting } = await sendToAgents([nodeId], reviewMessage(remarks));
     if (sent > 0) {
       reviewStore.getState().clear();
-      toast(messages(reviewMessages).sent(name));
-    } else if (waiting.length > 0) toast.warning(messages(reviewMessages).waiting(name));
-    else if (skipped.length > 0) toast.warning(messages(reviewMessages).stopped(name));
+      toast(messages(reviewMessages).sent(name), TOAST_AWAY);
+    } else if (waiting.length > 0) toast.warning(messages(reviewMessages).waiting(name), TOAST_AWAY);
+    else if (starting.length > 0) toast.warning(messages(reviewMessages).starting(name));
+    else if (skipped.length > 0) toast.warning(messages(reviewMessages).stopped(name), TOAST_AWAY);
   };
   return (
     <footer className="flex max-h-[30%] shrink-0 flex-col gap-1.5 border-t border-ov-line px-3 py-2">

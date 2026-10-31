@@ -48,7 +48,7 @@ const ARGS: Record<string, Record<string, string>> = {
   terminer: { summary: "bilan" },
   remote_control: { on: "actif" },
 };
-const SUBTASK_ARGS: Record<string, string> = { title: "titre", brief: "consigne", level: "niveau" };
+const SUBTASK_ARGS: Record<string, string> = { title: "titre", brief: "consigne", level: "niveau", group: "groupe" };
 
 const STEP_IN: Record<string, StepState> = { in_progress: "en_cours", done: "fait", failed: "echec" };
 const REPORT_IN: Record<string, ReportStatus> = { done: "termine", blocked: "bloque", failed: "echec" };

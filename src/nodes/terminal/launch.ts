@@ -33,6 +33,7 @@ export interface LaunchInput {
   command: string;
   shell: ShellKind;
   ollama?: OllamaLaunch;
+  oneShot?: boolean;
 }
 
 /** The payload of a new terminal; a Claude terminal gets its own conversation id. */
@@ -47,6 +48,7 @@ export function newTerminalPayload(input: LaunchInput, name = ""): TerminalPaylo
   };
   if (input.agent === "claude") payload.claudeSessionId = crypto.randomUUID();
   if (input.agent === "ollama" && input.ollama) payload.ollama = input.ollama;
+  if (input.oneShot) payload.oneShot = true;
   return payload;
 }
 
@@ -55,10 +57,10 @@ export function newConversation(): Partial<TerminalPayload> {
   return { claudeSessionId: crypto.randomUUID(), steps: undefined };
 }
 
-/** Another agent in the same terminal: the steps go with the old one; Claude gets a conversation if it has none. */
+/** Another agent in the same terminal: the steps and a one-shot mark go with the old one; Claude gets a conversation if it has none. */
 export function switchedAgent(payload: TerminalPayload, agent: AgentId): Partial<TerminalPayload> {
-  const needsSession = agent === "claude" && !payload.claudeSessionId;
-  return needsSession ? { agent, claudeSessionId: crypto.randomUUID(), steps: undefined } : { agent, steps: undefined };
+  const left = { agent, steps: undefined, oneShot: undefined };
+  return agent === "claude" && !payload.claudeSessionId ? { ...left, claudeSessionId: crypto.randomUUID() } : left;
 }
 
 export function buildSpawnSpec(payload: TerminalPayload, mode: LaunchMode): SpawnSpec {

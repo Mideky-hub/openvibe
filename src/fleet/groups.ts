@@ -1,7 +1,8 @@
 import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { canvasStore } from "@/canvas/canvasStore";
-import { createGroupFrame, isGroup } from "@/canvas/groups";
+import { returnKeyboardToCanvas } from "@/canvas/keyboardFocus";
+import { createGroupFrame, groupInfoOf, isGroup, withGroupFolded, withGroupSpeciality } from "@/canvas/groups";
 import { allowRemoval } from "@/canvas/removalGuard";
 import { createNodeElement } from "@/canvas/nodeElement";
 import type { AgentId } from "@/ipc/pty";
@@ -125,6 +126,37 @@ export function renameGroup(groupId: string, name: string) {
   });
 }
 
+/** Gives a group its speciality, or takes it away when blank, as one undoable step (spec groupes spécialisés §2). */
+export function setGroupSpeciality(groupId: string, speciality: string) {
+  const api = canvasStore.getState().api;
+  if (!api) return;
+  api.updateScene({
+    elements: api
+      .getSceneElementsIncludingDeleted()
+      .map((e) => (e.id === groupId && groupInfoOf(e) ? newElementWith(e, { customData: withGroupSpeciality(e.customData, speciality) }) : e)),
+    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+  });
+}
+
+/** Folds a group onto its label, or unfolds it: one undoable step, nothing stops (spec replier un groupe). */
+export function setGroupFolded(groupId: string, folded: boolean) {
+  const api = canvasStore.getState().api;
+  if (!api) return;
+  api.updateScene({
+    elements: api
+      .getSceneElementsIncludingDeleted()
+      .map((e) => (e.id === groupId && groupInfoOf(e) ? newElementWith(e, { customData: withGroupFolded(e.customData, folded) }) : e)),
+    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+  });
+}
+
+/** Frames these groups whole: an agent out of sight does not start (spec groupes spécialisés §4). */
+export function showGroups(groupIds: readonly string[]) {
+  const api = canvasStore.getState().api;
+  const frames = api?.getSceneElements().filter((e) => groupIds.includes(e.id)) ?? [];
+  if (frames.length > 0) api?.scrollToContent(frames, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true, duration: 300, maxZoom: 1 });
+}
+
 /** "Dégrouper": the frame goes, its terminals stay where they are (spec §11.4). */
 export function ungroup(groupId: string) {
   const api = canvasStore.getState().api;
@@ -137,6 +169,7 @@ export function ungroup(groupId: string) {
     }),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
+  returnKeyboardToCanvas();
 }
 
 /**
@@ -158,6 +191,7 @@ export function closeGroup(groupId: string) {
     elements: elements.map((e) => (going.has(e.id) ? newElementWith(e, { isDeleted: true }) : e)),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
+  returnKeyboardToCanvas();
 }
 
 /** Asks first when agents of the group are still running (spec §11.4). */

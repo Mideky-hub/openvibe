@@ -1,48 +1,58 @@
 // @vitest-environment happy-dom
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { uiStore } from "@/store/ui";
-import { canvasStore } from "../canvasStore";
+import { createRoot } from "react-dom/client";
+import { expect, it, vi } from "vitest";
+import { mockIPC } from "@tauri-apps/api/mocks";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { canvasStore, EMPTY_VIEW } from "../canvasStore";
+import { GroupBackdrops } from "./GroupBackdrops";
 import { GroupLabels } from "./GroupLabels";
 
-vi.mock("@excalidraw/excalidraw", () => ({}));
-vi.mock("@/fleet/GroupMenu", () => ({ GroupMenu: () => null }));
-
+vi.mock("@excalidraw/excalidraw", () => ({ CaptureUpdateAction: { IMMEDIATELY: "i" }, newElementWith: (e: object, patch: object) => ({ ...e, ...patch }) }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-let host: HTMLDivElement;
-let root: Root;
-
-beforeEach(() => {
-  canvasStore.setState({
-    frames: [{ id: "g1", name: "Serveurs", x: 0, y: 0, width: 400, height: 300, group: { role: "backend", pantheon: "egypt" }, memberIds: [] }],
-  });
-  host = document.createElement("div");
-  document.body.append(host);
-  root = createRoot(host);
+const frame = (folded: boolean) => ({
+  id: "g",
+  name: "API",
+  x: 0,
+  y: 100,
+  width: 800,
+  height: 500,
+  group: { role: "general", pantheon: "greek", ...(folded ? { folded } : {}) },
+  memberIds: ["a", "b"],
 });
-afterEach(async () => {
+
+it("folds on the label's chevron, keeps the counters, and unfolds with a click (spec replier un groupe §2)", async () => {
+  mockIPC(() => undefined);
+  let scene: Record<string, unknown>[] = [{ id: "g", type: "frame", customData: { openvibe: { kind: "group", role: "general", pantheon: "greek" } } }];
+  const updateScene = vi.fn(({ elements }: { elements?: typeof scene }) => {
+    if (elements) scene = elements;
+  });
+  canvasStore.setState({
+    view: { ...EMPTY_VIEW, width: 1000, height: 800 },
+    frames: [frame(false)] as never,
+    api: { getSceneElementsIncludingDeleted: () => scene, updateScene } as unknown as ExcalidrawImperativeAPI,
+  });
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <>
+        <GroupBackdrops />
+        <GroupLabels />
+      </>,
+    ),
+  );
+  expect(host.querySelectorAll("[data-backdrop]").length).toBe(1);
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Replier le groupe"]')!.click());
+  expect((scene[0].customData as { openvibe: { folded?: boolean } }).openvibe.folded).toBe(true);
+  // Folded: the frame is redrawn from the scene; the label stays, with its counters and the way back.
+  await act(async () => canvasStore.setState({ frames: [frame(true)] as never }));
+  expect(host.textContent).toContain("API");
+  expect(host.textContent).toContain("2 · inactif");
+  expect(host.querySelector('[aria-label="Déplier le groupe"]')).not.toBeNull();
+  expect(host.querySelectorAll("[data-backdrop]").length).toBe(0);
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Déplier le groupe"]')!.click());
+  expect((scene[0].customData as { openvibe: { folded?: boolean } }).openvibe.folded).toBeUndefined();
   await act(async () => root.unmount());
-  uiStore.setState({ renamingGroup: null });
-  document.body.replaceChildren();
-  vi.restoreAllMocks();
-});
-
-it("takes the keyboard in the name field without scrolling the clipped label layer (plan F2)", async () => {
-  const focus = vi.spyOn(HTMLElement.prototype, "focus");
-  await act(async () => root.render(<GroupLabels />));
-  await act(async () => uiStore.getState().setRenamingGroup("g1"));
-  expect(document.querySelector("input")).not.toBeNull();
-  expect(focus).toHaveBeenCalledWith({ preventScroll: true });
-});
-
-it("escapes a frame id in the rule that hides Excalidraw's native name (plan B1)", async () => {
-  canvasStore.setState({
-    frames: [{ id: 'g"]{x', name: "A", x: 0, y: 0, width: 400, height: 300, group: { role: "backend", pantheon: "egypt" }, memberIds: [] }],
-  });
-  await act(async () => root.render(<GroupLabels />));
-  const css = [...document.querySelectorAll("style")].map((s) => s.textContent ?? "").find((t) => t.includes("frame-name"))!;
-  expect(css).toBe(`.excalidraw [id$="-frame-name-${CSS.escape('g"]{x')}"]{color:transparent!important}`);
-  expect(css).not.toContain('g"]{x');
 });

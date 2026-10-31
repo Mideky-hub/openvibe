@@ -91,14 +91,20 @@ function nameOf(id: string): string {
 export async function sendToAgents(
   ids: readonly string[],
   text: string,
-): Promise<{ sent: number; skipped: string[]; waiting: string[]; unsuited: string[] }> {
+): Promise<{ sent: number; skipped: string[]; waiting: string[]; unsuited: string[]; starting: string[] }> {
   const waiting: string[] = [];
   const unsuited: string[] = [];
+  const starting: string[] = [];
   const command = isSlashCommand(text);
   const results = await Promise.all(
     ids.map(async (id) => {
       const facts = factsOf(id);
       if (!facts) return null;
+      if (statusOf(id).state === "starting") {
+        // Waiting for its staggered start: not stopped, only not there yet.
+        starting.push(nameOf(id));
+        return null;
+      }
       if (!facts.running) return nameOf(id);
       if (command && !takesCommands(facts.agent)) {
         unsuited.push(nameOf(id));
@@ -121,6 +127,7 @@ export async function sendToAgents(
     skipped: results.filter((result): result is string => typeof result === "string"),
     waiting,
     unsuited,
+    starting,
   };
 }
 
@@ -154,7 +161,13 @@ export async function resumeAgents(ids: readonly string[], now = Date.now()): Pr
 export async function resumeAgent(id: string): Promise<boolean> {
   const facts = factsOf(id);
   if (!facts || !canResume(facts)) return false;
-  await ptySendText(id, RESUME_TEXT);
+  try {
+    await ptySendText(id, RESUME_TEXT);
+  } catch {
+    // The process died between the click and the send.
+    toast.warning(messages(fleetMessages).broadcast.resumeFailed(nameOf(id)));
+    return false;
+  }
   pausedStore.getState().clear([id]);
   return true;
 }
@@ -162,6 +175,11 @@ export async function resumeAgent(id: string): Promise<boolean> {
 /** "2 agents arrêtés ignorés : Thot, Anubis" (spec §12). */
 export function skippedText(names: readonly string[]): string | null {
   return names.length === 0 ? null : messages(fleetMessages).broadcast.skipped(names);
+}
+
+/** "1 agent en démarrage ignoré : Thot — réessaie dans un instant". */
+export function startingText(names: readonly string[]): string | null {
+  return names.length === 0 ? null : messages(fleetMessages).broadcast.starting(names);
 }
 
 /** "1 agent en attente ignoré : Horus — réponds-lui dans son terminal" (spec §12). */
@@ -184,8 +202,8 @@ export function resumedText(count: number): string {
 
 /** The command bar's and the orchestrator's send, with the toasts of ignored agents. */
 export async function sendCommand(ids: readonly string[], text: string) {
-  const { skipped, waiting, unsuited } = await sendToAgents(ids, text);
-  for (const warning of [skippedText(skipped), waitingText(waiting), unsuitedText(unsuited)]) {
+  const { skipped, waiting, unsuited, starting } = await sendToAgents(ids, text);
+  for (const warning of [skippedText(skipped), startingText(starting), waitingText(waiting), unsuitedText(unsuited)]) {
     if (warning) toast.warning(warning);
   }
 }

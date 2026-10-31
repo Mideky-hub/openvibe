@@ -63,6 +63,9 @@ export function declareSteps(nodeId: string, args: Record<string, unknown>): Too
   return said(t().agent.declared(steps.length));
 }
 
+/** The internal identifiers, said with their accents. */
+const FRENCH_STEP: Record<string, string> = { a_venir: "à venir", en_cours: "en cours", fait: "fait", echec: "échec" };
+
 export function markStep(nodeId: string, args: Record<string, unknown>): ToolResult {
   const current = terminalOf(nodesStore.getState().nodes[nodeId])?.steps ?? [];
   const steps = markedSteps(current, args.titre, args.etat);
@@ -70,7 +73,7 @@ export function markStep(nodeId: string, args: Record<string, unknown>): ToolRes
   nodesStore.getState().update(nodeId, { steps });
   const step = steps.find((s) => s.title.toLowerCase() === String(args.titre).trim().toLowerCase())!;
   // French reads « en cours », English the protocol's "in_progress".
-  const state = langStore.getState().lang === "fr" ? step.state.replace("_", " ") : outStep(step.state);
+  const state = langStore.getState().lang === "fr" ? FRENCH_STEP[step.state] : outStep(step.state);
   return said(t().agent.marked(step.title, state));
 }
 

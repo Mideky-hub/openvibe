@@ -58,3 +58,21 @@ it("does nothing for a scene that needs nothing", () => {
   scheduleWireUpkeep(api(elements), elements);
   expect(frames).toHaveLength(0);
 });
+
+it("brings a dropped wire back when its ends come back, as an undo does (plan B3)", () => {
+  const wired = withWire([orchestrator, frame, lone], orchestrator.id, frame.id);
+  const wire = wired[wired.length - 1];
+  const gone = wired.filter((e) => e.id !== frame.id);
+  scheduleWireUpkeep(api(gone), gone);
+  frames.shift()!(0);
+  const dropped = updateScene.mock.calls[0][0].elements.find((e: ExcalidrawElement) => e.id === wire.id);
+  expect(dropped.customData.openvibe).toMatchObject({ kind: "wire", orphaned: true });
+  // Undo: the frame is back, the wire still deleted.
+  updateScene.mockClear();
+  const undone = [...wired.filter((e) => e.id !== wire.id), dropped];
+  scheduleWireUpkeep(api(undone), undone);
+  frames.shift()!(0);
+  const revived = updateScene.mock.calls[0][0].elements.find((e: ExcalidrawElement) => e.id === wire.id);
+  expect(revived.isDeleted).toBe(false);
+  expect(revived.customData.openvibe.orphaned).toBeUndefined();
+});

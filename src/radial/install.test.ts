@@ -36,7 +36,7 @@ beforeEach(() => {
   updateScene.mockClear();
   canvasStore.setState({
     api: { getSceneElements: () => [rect], getAppState: () => ({ selectedElementIds: {} }), updateScene } as unknown as ExcalidrawImperativeAPI,
-    view: { scrollX: 0, scrollY: 0, zoom: 1, width: 1000, height: 800, offsetLeft: 0, offsetTop: 0, tool: "selection", selectedIds: [], editingFrame: null },
+    view: { scrollX: 0, scrollY: 0, zoom: 1, width: 1000, height: 800, offsetLeft: 0, offsetTop: 0, tool: "selection", selectedIds: [], editingFrame: null, mode: null },
     frames: [],
     nodeIds: ["isis"],
   });

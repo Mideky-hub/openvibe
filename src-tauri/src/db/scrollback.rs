@@ -18,6 +18,22 @@ pub fn save(conn: &Connection, node_id: &str, data: &[u8], captured_at: i64) -> 
     Ok(stored > 0)
 }
 
+/// `save`, with a refusal (an older capture, a clock set back, a deleted node)
+/// left in the log instead of passing silently.
+pub fn save_logged(
+    conn: &Connection,
+    node_id: &str,
+    data: &[u8],
+    captured_at: i64,
+) -> AppResult<()> {
+    if !save(conn, node_id, data, captured_at)? {
+        log::warn!(
+            "scrollback of {node_id} not stored: a newer capture exists or the terminal is gone"
+        );
+    }
+    Ok(())
+}
+
 pub fn load(conn: &Connection, node_id: &str) -> AppResult<Option<Vec<u8>>> {
     Ok(conn
         .query_row(
@@ -33,6 +49,42 @@ mod tests {
     use super::*;
     use crate::db::nodes::{self, NodeKind};
     use crate::db::{Db, test_workspace};
+
+    struct Capture(std::sync::Mutex<Vec<String>>);
+
+    impl log::Log for Capture {
+        fn enabled(&self, _: &log::Metadata) -> bool {
+            true
+        }
+        fn log(&self, record: &log::Record) {
+            self.0.lock().unwrap().push(record.args().to_string());
+        }
+        fn flush(&self) {}
+    }
+
+    #[test]
+    fn a_refused_save_leaves_a_trace_in_the_log() {
+        static LOGGER: Capture = Capture(std::sync::Mutex::new(Vec::new()));
+        log::set_logger(&LOGGER).unwrap();
+        log::set_max_level(log::LevelFilter::Warn);
+        Db::open_in_memory()
+            .unwrap()
+            .with(|conn| {
+                let w = test_workspace(conn, "A")?;
+                nodes::save(conn, "t1", &w.id, NodeKind::Terminal, "{}")?;
+                save_logged(conn, "t1", b"final", 200)?;
+                assert!(LOGGER.0.lock().unwrap().is_empty());
+                save_logged(conn, "t1", b"older", 100)?;
+                Ok(())
+            })
+            .unwrap();
+        let lines = LOGGER.0.lock().unwrap();
+        assert_eq!(lines.len(), 1);
+        assert!(
+            lines[0].contains("scrollback of t1 not stored"),
+            "{lines:?}"
+        );
+    }
 
     #[test]
     fn saves_and_replaces_the_scrollback_of_a_known_node() {

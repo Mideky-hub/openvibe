@@ -44,7 +44,7 @@ describe("catalogs in English", () => {
     expect(PANTHEONS.find((p) => p.id === "egyptian")!.label).toBe("Egyptian");
     // The gods keep their names.
     expect(PANTHEONS.find((p) => p.id === "greek")!.names[0]).toBe("Athéna");
-    expect(FLEET_FILTERS.map((f) => f.label)).toEqual(["All", "Working", "Waiting", "Ready", "Stopped"]);
+    expect(FLEET_FILTERS.map((f) => f.label)).toEqual(["All", "Working", "Waiting", "Active", "Ready", "Stopped"]);
     expect(fleetSections([{ id: "a", name: "Isis", agent: "claude", state: "idle" }], [], "all")[0].name).toBe("No group");
   });
 
@@ -150,7 +150,7 @@ describe("components in English", () => {
       expect(byLabel(label), label).not.toBeNull();
     }
     const filters = [...host.querySelectorAll<HTMLButtonElement>("[data-filter]")];
-    expect(filters.map((f) => f.textContent?.replace(/\d+$/, ""))).toEqual(["All", "Working", "Waiting", "Ready", "Stopped"]);
+    expect(filters.map((f) => f.textContent?.replace(/\d+$/, ""))).toEqual(["All", "Working", "Waiting", "Active", "Ready", "Stopped"]);
     await act(async () => agentsPanelStore.setState({ filter: "working" }));
     expect(host.textContent).toContain("No agent in this filter");
     // Hovering buttons of the row.
