@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { Copy, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCanvas } from "@/canvas/canvasStore";
@@ -9,28 +9,12 @@ import { terminalOf, useNodes } from "@/store/nodes";
 import { useTerminalStatus } from "@/store/terminalStatus";
 import { ArrivalFlash } from "./ArrivalFlash";
 import { frameStyle, WAITING_GLOW } from "./frame";
+import { MissingNode } from "./MissingNode";
 import { ResumeCard } from "./ResumeCard";
 import { HeaderButton, TerminalHeader } from "./TerminalHeader";
 import { useTerminalHost } from "./useTerminalHost";
 import { useMessages } from "@/i18n";
 import { nodesMessages } from "@/nodes/messages";
-
-/** A copy's record arrives a moment after its element: the placeholder only speaks if the node stays missing. */
-export const MISSING_GRACE_MS = 600;
-
-function MissingTerminal() {
-  const t = useMessages(nodesMessages).terminal;
-  const [late, setLate] = useState(false);
-  useEffect(() => {
-    const timer = setTimeout(() => setLate(true), MISSING_GRACE_MS);
-    return () => clearTimeout(timer);
-  }, []);
-  return (
-    <div className="grid h-full place-items-center rounded-xl border border-ov-line bg-ov-surface text-sm text-ov-text-2">
-      {late ? t.notFound : null}
-    </div>
-  );
-}
 
 export function TerminalNode({ nodeId }: { nodeId: string }) {
   const payload = useNodes((s) => terminalOf(s.nodes[nodeId]));
@@ -45,7 +29,7 @@ export function TerminalNode({ nodeId }: { nodeId: string }) {
   useTerminalHost(nodeId, hostRef, hasPayload);
 
   if (!payload) {
-    return <MissingTerminal />;
+    return <MissingNode text={t.notFound} />;
   }
 
   const waiting = status.state === "running" && activity?.activity === "waiting";

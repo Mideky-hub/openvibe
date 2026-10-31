@@ -16,6 +16,7 @@ import { AgentCounts } from "./AgentCounts";
 import { CommandBar, CommandHint } from "./CommandBar";
 import { CrashNotice } from "./CrashNotice";
 import { GitChip } from "./GitChip";
+import { ModeExit } from "./ModeExit";
 import { ProjectDialogs } from "./ProjectDialogs";
 import { ProjectPicker } from "./ProjectPicker";
 import { SearchField } from "./SearchField";
@@ -83,6 +84,7 @@ export function ProjectView() {
           <div className="absolute bottom-[14px] right-3 z-30">
             <ZoomControl />
           </div>
+          <ModeExit />
           <PlacementGhost />
           <LinkMode />
           <RadialMenu />
