@@ -32,6 +32,7 @@ export const missionMessages = defineMessages(
     reviewLabel: (name: string) => `Revue de ${name}`,
     diff: "diff",
     merged: " · fusionné",
+    finishedBefore: (tasks: string) => `Déjà finies : ${tasks}`,
     spent: (spent: number, budget: number) => `${spent} / ${budget} min`,
     cleanFailed: (error: string) => `Nettoyage impossible : ${error}`,
     cleaned: (removed: string[], kept: string[]) =>
@@ -71,6 +72,7 @@ export const missionMessages = defineMessages(
     reviewLabel: (name: string) => `Review of ${name}`,
     diff: "diff",
     merged: " · merged",
+    finishedBefore: (tasks: string) => `Already finished: ${tasks}`,
     spent: (spent: number, budget: number) => `${spent} / ${budget} min`,
     cleanFailed: (error: string) => `Cleanup failed: ${error}`,
     cleaned: (removed: string[], kept: string[]) =>

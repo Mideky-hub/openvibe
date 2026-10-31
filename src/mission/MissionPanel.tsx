@@ -167,6 +167,11 @@ function Team({ mission }: { mission: Mission }) {
           <li key={member.nodeId || member.name} data-member={member.name} className="flex items-center gap-2 rounded bg-ov-card px-2 py-1">
             <span className="font-medium text-ov-text">{member.name}</span>
             <span className="min-w-0 truncate">{member.task}</span>
+            {member.done && member.done.length > 0 && (
+              <span data-finished className="shrink-0 text-[11px] text-ov-text-3" title={t.finishedBefore(member.done.join(", "))}>
+                ✓ {member.done.length}
+              </span>
+            )}
             {member.model && <span className="shrink-0 font-mono text-[11px]">{modelLabel(member.model)}</span>}
             <span className="ml-auto shrink-0">{t.agent[agentState(member.nodeId)]}</span>
             {steps.length > 0 && (
