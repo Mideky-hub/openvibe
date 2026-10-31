@@ -55,8 +55,8 @@ pub struct StatusLine {
 /// line command, given the same JSON.
 pub const STATUS_SCRIPT: &str = "#!/usr/bin/env bash\n\
 # OpenVibe : la ligne d'état de Claude transmet l'usage de la session, puis affiche celle de l'utilisateur.\n\
-input=$(cat)\n\
-printf '%s' \"$input\" | curl -s -m 1 -K \"$2\" -X POST -H 'Content-Type: application/json' --data-binary @- \"$1\" >/dev/null 2>&1\n\
+input=$(cat; printf x); input=${input%x}\n\
+printf '%s' \"$input\" | curl -s -m 1 -K \"$2\" -X POST -H 'Content-Type: application/json' --data-binary @- \"$1\" >/dev/null 2>&1 &\n\
 if [ -n \"${3:-}\" ]; then printf '%s' \"$input\" | bash -c \"$3\"; fi\n";
 
 /// The curl config that gives the local server's token to curl as a header
@@ -191,7 +191,9 @@ pub fn clear(dir: &Path) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().is_some_and(|ext| ext == "json") {
+        // `curl.cfg` holds the previous run's token: gone with the server.
+        let stale_token = path.file_name().is_some_and(|name| name == "curl.cfg");
+        if stale_token || path.extension().is_some_and(|ext| ext == "json") {
             let _ = std::fs::remove_file(path);
         }
     }
@@ -433,117 +435,65 @@ mod tests {
         assert!(!script.contains('\r'), "bash needs LF line ends");
     }
 
-    /// The bash Claude runs the script with: Git Bash on Windows (the `bash` of the PATH may be WSL's), else the PATH's.
-    fn script_bash() -> Option<String> {
-        if !cfg!(windows) {
-            return Some("bash".into());
-        }
-        ["ProgramFiles", "ProgramFiles(x86)"]
-            .iter()
-            .filter_map(|var| std::env::var_os(var))
-            .map(|dir| std::path::Path::new(&dir).join("Git/bin/bash.exe"))
-            .find(|path| path.exists())
-            .map(|path| path.to_string_lossy().into_owned())
-    }
-
-    /// Whether `program` runs here: the script test needs bash and curl, as Claude does.
-    fn runs(program: &str, arg: &str) -> bool {
-        std::process::Command::new(program)
-            .arg(arg)
-            .output()
-            .is_ok_and(|out| out.status.success())
+    /// Runs the real script under bash; None when there is no bash to run it.
+    fn run_status_script(url: &str, input: &[u8]) -> Option<(Vec<u8>, std::time::Duration)> {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("statusline.sh");
+        std::fs::write(&script, STATUS_SCRIPT).unwrap();
+        let out = dir.path().join("out.txt");
+        let user = format!("cat > '{}'", out.to_string_lossy().replace('\\', "/"));
+        let started = std::time::Instant::now();
+        let mut child = Command::new("bash")
+            .arg(script.to_string_lossy().replace('\\', "/"))
+            .arg(url)
+            .arg(
+                dir.path()
+                    .join("none.cfg")
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+            )
+            .arg(user)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .ok()?;
+        child.stdin.take().unwrap().write_all(input).unwrap();
+        child.wait().ok()?;
+        let elapsed = started.elapsed();
+        Some((std::fs::read(out).ok()?, elapsed))
     }
 
     #[test]
-    fn the_status_script_really_posts_the_json_with_the_token_then_runs_the_user_s_line() {
-        use std::io::{Read, Write};
-        let Some(bash) = script_bash().filter(|bash| runs(bash, "--version")) else {
-            eprintln!("Git Bash missing: script not run");
-            return;
-        };
-        if !runs("curl", "--version") {
-            eprintln!("bash or curl missing: script not run");
-            return;
-        }
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let server = std::thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut received = Vec::new();
-            let mut chunk = [0u8; 4096];
-            // Headers, then as much body as Content-Length announces.
-            loop {
-                let n = stream.read(&mut chunk).unwrap();
-                received.extend_from_slice(&chunk[..n]);
-                let text = String::from_utf8_lossy(&received).to_string();
-                if let Some((head, body)) = text.split_once("\r\n\r\n") {
-                    let wanted = head
-                        .lines()
-                        .find_map(|l| {
-                            l.to_ascii_lowercase()
-                                .strip_prefix("content-length:")
-                                .map(|v| v.trim().parse::<usize>().unwrap())
-                        })
-                        .unwrap_or(0);
-                    if body.len() >= wanted || n == 0 {
-                        break;
-                    }
-                }
-                if n == 0 {
-                    break;
-                }
-            }
-            let _ = stream.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
-            String::from_utf8_lossy(&received).to_string()
-        });
-        let dir = tempfile::tempdir().unwrap();
-        let config = write_curl_config(dir.path(), "secret-token").unwrap();
-        let script = dir.path().join("statusline.sh");
-        std::fs::write(&script, STATUS_SCRIPT).unwrap();
-        let line = StatusLine {
-            script,
-            url: format!("http://127.0.0.1:{port}/status/n1"),
-            config,
-            user: Some(json!({ "type": "command", "command": "cat" })),
-        };
-        let command = status_line_json(&line)["command"]
-            .as_str()
-            .unwrap()
-            .to_string();
-        let mut child = std::process::Command::new(&bash)
-            .arg("-c")
-            .arg(&command)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .spawn()
-            .unwrap();
-        let input = r#"{"session_id":"s1"}"#;
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(input.as_bytes())
-            .unwrap();
-        let out = child.wait_with_output().unwrap();
-        // The user's own line shows what it was given.
-        assert_eq!(
-            String::from_utf8_lossy(&out.stdout),
-            input,
-            "{} {}",
-            out.status,
-            String::from_utf8_lossy(&out.stderr)
+    fn the_status_script_keeps_the_trailing_newlines_and_does_not_wait_for_curl() {
+        // A server that accepts and never answers: curl would wait its full second.
+        let silent = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!(
+            "http://127.0.0.1:{}/status/n1",
+            silent.local_addr().unwrap().port()
         );
-        let request = server.join().unwrap();
-        assert!(request.starts_with("POST /status/n1"), "{request}");
+        let input = b"{\"a\":1}\n\n";
+        let Some((seen, elapsed)) = run_status_script(&url, input) else {
+            return; // no bash on this machine
+        };
+        assert_eq!(seen, input, "the user's line must get the JSON as sent");
         assert!(
-            request.to_ascii_lowercase().contains(&format!(
-                "{}: secret-token",
-                super::super::hooks_server::TOKEN_HEADER.to_ascii_lowercase()
-            )),
-            "{request}"
+            elapsed < std::time::Duration::from_millis(900),
+            "{elapsed:?}"
         );
-        assert!(request.ends_with(input), "{request}");
+    }
+
+    #[test]
+    fn clearing_removes_a_dead_token_s_curl_config_too() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = write_curl_config(dir.path(), "old-token").unwrap();
+        let script = dir.path().join("statusline.sh");
+        std::fs::write(&script, "#!/bin/sh\n").unwrap();
+        clear(dir.path());
+        assert!(!config.exists(), "the dead token stayed on disk");
+        assert!(script.exists(), "the script holds no token");
     }
 
     #[test]

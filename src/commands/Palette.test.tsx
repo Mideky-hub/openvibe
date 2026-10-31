@@ -156,14 +156,22 @@ describe("the palette (spec fenêtre §7.1, §7.2)", () => {
     expect(document.body.textContent).not.toContain("Chargement…");
   });
 
-  it("greys an agent not found on this computer, with why, and never chooses it", async () => {
+  it("greys what cannot be installed, with why, and never chooses it", async () => {
+    agentsStore.setState({ agents: [{ id: "shell", available: false }], loaded: true } as never);
+    await act(async () => openPalette("functions", busy));
+    await act(async () => setPaletteQuery("> lancer shell"));
+    const line = items().find((i) => i.textContent?.startsWith("Lancer Shell"))!;
+    expect(line.getAttribute("data-disabled")).toBe("true");
+    expect(line.textContent).toContain("introuvable dans le PATH");
+    expect(selected()).not.toBe(line);
+  });
+
+  it("offers to install a missing agent (spec installation §4.1)", async () => {
     agentsStore.setState({ agents: [{ id: "claude", available: false }], loaded: true } as never);
     await act(async () => openPalette("functions", busy));
-    await act(async () => setPaletteQuery("> lancer claude"));
-    const line = items().find((i) => i.textContent?.startsWith("Lancer Claude"))!;
-    expect(line.getAttribute("data-disabled")).toBe("true");
-    expect(line.textContent).toContain("claude introuvable dans le PATH");
-    expect(selected()).not.toBe(line);
+    await act(async () => setPaletteQuery("> installer claude"));
+    const line = items().find((i) => i.textContent?.startsWith("Installer Claude…"))!;
+    expect(line.getAttribute("data-disabled")).not.toBe("true");
   });
 
   it("offers the last function again first: Ctrl+Maj+P then Entrée repeats it (retours J8b)", async () => {

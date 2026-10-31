@@ -25,6 +25,7 @@ import { GroupMenu } from "./GroupMenu";
 import { countsText } from "./groupSummary";
 import { fleetMessages } from "./messages";
 import { launchFour, newConsole } from "./quickActions";
+import { RESUME_OFFER_ROOM, resumeOfferStore } from "./ResumeAllToast";
 
 const OUTSIDE = "outside";
 
@@ -32,6 +33,7 @@ const OUTSIDE = "outside";
 export function AgentsPanel() {
   const t = useMessages(fleetMessages).panel;
   const filter = useAgentsPanel((s) => s.filter);
+  const offer = useStore(resumeOfferStore, (s) => s.open);
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
   const now = useNow(15_000);
   const nodeIds = useCanvas((s) => s.nodeIds);
@@ -72,7 +74,7 @@ export function AgentsPanel() {
   return (
     <aside
       className="ov-glass-strong absolute right-[72px] z-30 flex w-[318px] flex-col overflow-hidden rounded-[14px]"
-      style={{ top: TOP_ROW_HEIGHT + 14, maxHeight: `calc(100% - ${TOP_ROW_HEIGHT + 14 + BOTTOM_BAR_HEIGHT + 14}px)` }}
+      style={{ top: TOP_ROW_HEIGHT + 14, maxHeight: `calc(100% - ${TOP_ROW_HEIGHT + 14 + (offer ? RESUME_OFFER_ROOM : BOTTOM_BAR_HEIGHT) + 14}px)` }}
     >
       <header className="flex h-9 shrink-0 items-center border-b border-ov-line pl-3 pr-1.5">
         <span className="ov-label">{t.title}</span>

@@ -16,6 +16,7 @@ import {
   RESUME_WINDOW_MS,
   resumeAgent,
   resumeAgents,
+  sendCommand,
   resumedText,
   sendToAgents,
   skippedText,
@@ -177,6 +178,21 @@ describe("resumeAgent when the process just died (plan B3)", () => {
     await expect(resumeAgent("anubis2")).resolves.toBe(false);
     expect(warning).toHaveBeenCalledWith("Anubis2 n'a pas pu reprendre : le processus vient de s'arrêter");
     expect(pausedStore.getState().pausedAt.anubis2).toBe(1);
+    warning.mockRestore();
+  });
+});
+
+describe("sendCommand and agents still starting (plan B3)", () => {
+  it("warns about them apart from the stopped ones", async () => {
+    const warning = vi.spyOn(toast, "warning").mockImplementation(() => "");
+    await agent("isis", "claude", "running", "idle");
+    await agent("thot", "claude", "starting");
+    await agent("anubis", "claude", "stopped");
+    await sendCommand(["isis", "thot", "anubis"], "go");
+    expect(warning.mock.calls.map(([text]) => text)).toEqual([
+      "1 agent arrêté ignoré : Anubis",
+      "1 agent en démarrage ignoré : Thot — réessaie dans un instant",
+    ]);
     warning.mockRestore();
   });
 });

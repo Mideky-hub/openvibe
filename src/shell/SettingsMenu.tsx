@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { ArrowDownCircle, Download, FileText, ImageDown, Info, LifeBuoy, Upload } from "lucide-react";
 import { showAbout } from "@/app/about";
 import { openLogDir } from "@/app/logs";
+import { setNativeNotifications, useNativeNotifications } from "@/app/nativeNotifications";
 import { checkForUpdate, setAutoUpdates, useUpdates } from "@/app/updates";
 import { readThemeChoice, setThemeChoice, setTransparency, useThemeSettings } from "@/app/theme";
 import {
@@ -36,6 +37,7 @@ export function SettingsMenu({
   const { choice, transparency } = useThemeSettings();
   const languageChoice = useStore(langStore, (s) => s.choice);
   const autoUpdates = useUpdates((s) => s.auto);
+  const nativeNotifications = useNativeNotifications();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
@@ -67,6 +69,9 @@ export function SettingsMenu({
           <ImageDown /> {t.exportPng}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuCheckboxItem checked={nativeNotifications} onCheckedChange={(on) => void setNativeNotifications(on === true)}>
+          {t.nativeNotifications}
+        </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem checked={autoUpdates} onCheckedChange={(on) => void setAutoUpdates(on === true)}>
           {t.autoUpdates}
         </DropdownMenuCheckboxItem>

@@ -33,12 +33,14 @@ Vérifiée le 2026-10-31.
 
 - **Pourquoi cmd pour npm** : dans PowerShell, `npm` résout vers `npm.ps1`, refusé par la stratégie d'exécution par défaut d'un Windows neuf. `npm.cmd` n'a pas ce problème, et la commande reste exactement celle de l'éditeur.
 - **Cursor** : la documentation ne parle que d'`agent`, mais l'installeur Windows pose aussi `cursor-agent.cmd`, le programme qu'OpenVibe cherche (lu dans le script le 2026-10-31).
-- **Gemini CLI et OpenCode** demandent Node.js : l'écran de confirmation le dit. Si npm manque, l'erreur s'affiche dans le terminal.
+- **Gemini CLI et OpenCode** demandent Node.js. L'écran de confirmation cherche npm (après avoir relu le PATH) : s'il manque, il le dit, propose la page de Node.js et « Vérifier à nouveau », et le lancement reste grisé tant que npm n'est pas trouvé. Une recherche qui échoue ne bloque rien.
 - **OpenCode** n'était pas dans la demande de départ ; il est au catalogue et sa commande est vérifiée, donc il y est.
 
 ## 4. Parcours
 
 ### 4.1 Menu « Lancer un agent »
+
+La palette (`agent.launch.*`) propose « Installer X… » pour un agent absent et ouvre cette même confirmation dans le menu ; elle ne lance jamais rien directement.
 
 Un agent absent reste grisé et gagne un bouton **Installer** à droite de sa ligne. Le bouton ouvre une vue de confirmation dans le menu (règle 2) : commande, shell, page officielle, prérequis, bouton **Lancer dans un terminal**. Le terminal se pose aussitôt, là où le clic droit a été fait, sinon au centre de la vue ; il ne passe pas par le placement au clic, pour que l'installation commence sans étape de plus, et il prend la vue et le clavier : l'installeur peut poser une question.
 
@@ -56,6 +58,8 @@ La carte de Claude Code montre déjà sa commande : un clic suffit. Les autres a
 La commande est tapée dans un shell qui reste ouvert : `pty-exit` n'arrive pas à la fin de l'installation, et ajouter `; exit` modifierait la commande officielle et fermerait la sortie à lire en cas d'échec. OpenVibe interroge donc la détection (`refresh_path` puis `list_agents`) toutes les 4 secondes, tant que le terminal tourne. L'agent trouvé, le menu l'active et un message le dit. La surveillance s'arrête aussi quand le terminal s'arrête (après une dernière vérification), ou au bout de 30 minutes. « Vérifier à nouveau » reste disponible.
 
 ## 5. Ollama
+
+Si le serveur Ollama ne répond pas, le sélecteur le dit, propose « Réessayer » et n'offre aucun téléchargement : `ollama pull` échouerait dans le terminal.
 
 Le sélecteur Ollama garde la liste des modèles installés et gagne :
 

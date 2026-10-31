@@ -92,11 +92,20 @@ it("does nothing on an empty name", async () => {
   expect(host.textContent).not.toContain("Ce nom n'est pas");
 });
 
-it("still offers the download when Ollama does not answer", async () => {
+it("says the server is down, offers no download that would fail, and tries again (spec installation §5)", async () => {
   models = new Error("connection refused");
   await render();
-  expect(host.textContent).toContain("Ollama ne répond pas");
-  expect(host.querySelector("form")).not.toBeNull();
+  expect(host.textContent).toContain("Le serveur Ollama ne répond pas : ouvre l'application Ollama, puis réessaie.");
+  expect(host.querySelector("[data-suggestion]")).toBeNull();
+  expect(button("Télécharger")!.disabled).toBe(true);
+  await type("mistral:7b");
+  await submit();
+  expect(onPull).not.toHaveBeenCalled();
+  models = ["llama3.2:3b"];
+  await act(async () => button("Réessayer")!.click());
+  expect(host.textContent).not.toContain("ne répond pas");
+  expect(host.querySelector("[data-model]")).not.toBeNull();
+  expect(button("Télécharger")!.disabled).toBe(false);
 });
 
 it("speaks English", async () => {
@@ -104,5 +113,12 @@ it("speaks English", async () => {
   await render();
   expect(host.textContent).toContain("No model installed");
   expect(host.textContent).toContain("Download a model");
+  models = new Error("connection refused");
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await render();
+  expect(host.textContent).toContain("The Ollama server is not responding: open the Ollama app, then try again.");
+  models = [];
+  await act(async () => button("Try again")!.click());
   expect(button("qwen2.5-coder:7b")!.textContent).toContain("4.7 GB");
 });

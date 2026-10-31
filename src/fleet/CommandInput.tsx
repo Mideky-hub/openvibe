@@ -114,6 +114,8 @@ export function CommandInput(props: {
   const unknown = isCommandAfterMentions(typed.text) ? /(?:^|\s)(@[^\s@,;:.!?…]+)/.exec(typed.text)?.[1] : undefined;
   const canSend = typed.text.length > 0 && ids.length > 0 && unknown === undefined;
   const nothingTargeted = allTargets.length === 0 && fallback.length === 0;
+  // Targets were chosen, but they hold no agent (an empty group).
+  const noAgents = allTargets.length > 0 && ids.length === 0;
 
   useLayoutEffect(() => {
     const element = field.current;
@@ -176,6 +178,8 @@ export function CommandInput(props: {
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
+    // The Enter (or arrow) of an IME composition picks a candidate: it is not ours.
+    if (e.isComposing || e.keyCode === 229) return;
     if (suggestions.length > 0 && menuStart !== null) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
@@ -244,6 +248,7 @@ export function CommandInput(props: {
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {text.trim() && nothingTargeted && <p className="text-[11px] text-ov-text-2">{emptyHint}</p>}
+        {text.trim() && noAgents && !unknown && <p className="text-[11px] text-ov-text-2">{t.noAgents}</p>}
         {unknown && <p className="text-[11px] text-ov-text-2">{t.unknownTarget(unknown)}</p>}
         <div className="flex min-w-0 flex-wrap items-center gap-1">
           {chips.map((target) => (
@@ -283,7 +288,7 @@ export function CommandInput(props: {
       <button
         type="button"
         aria-label={t.send}
-        title={canSend ? t.send : nothingTargeted ? emptyHint : t.writeInstruction}
+        title={canSend ? t.send : nothingTargeted ? emptyHint : noAgents ? t.noAgents : t.writeInstruction}
         disabled={!canSend}
         onClick={send}
         className={cn(

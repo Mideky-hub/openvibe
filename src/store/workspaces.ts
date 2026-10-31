@@ -10,11 +10,14 @@ import {
   type Workspace,
 } from "@/ipc/db";
 import { nextPantheon } from "@/fleet/names";
+import { messages } from "@/i18n";
+import { storeMessages } from "./messages";
 
 export type { Workspace };
 
 /** Plan 2 kept a single active workspace; it seeds the first project opened. */
 const LEGACY_ACTIVE_KEY = "ui.activeWorkspaceId";
+const orderKey = (projectId: string) => `ui.workspaceOrder.${projectId}`;
 const activeKey = (projectId: string) => `ui.activeWorkspaceId.${projectId}`;
 
 export interface WorkspacesState {
@@ -30,12 +33,24 @@ export interface WorkspacesState {
   /** Deletes a workspace (never the last one) and selects its neighbor if it was active. */
   remove: (id: string) => Promise<void>;
   select: (id: string) => void;
+  /** Puts a tab at `index` (clamped); the order is saved in the settings, per project. */
+  move: (id: string, index: number) => Promise<void>;
   setPantheon: (id: string, pantheon: string) => Promise<void>;
   /**
    * The pantheon of the agents outside any group, chosen and saved on first
    * use; it avoids `taken`, the pantheons of the workspace's groups.
    */
   ensurePantheon: (id: string, taken?: readonly string[]) => Promise<string>;
+}
+
+/** The workspaces in the order saved for the project; unknown ids are dropped, new ones go last. */
+export function inSavedOrder(workspaces: Workspace[], saved: unknown): Workspace[] {
+  if (!Array.isArray(saved)) return workspaces;
+  const rank = (w: Workspace) => {
+    const i = saved.indexOf(w.id);
+    return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  return [...workspaces].sort((a, b) => rank(a) - rank(b));
 }
 
 /** "Workspace N" with the smallest N not already taken. */
@@ -65,6 +80,7 @@ export function createWorkspacesStore() {
         try {
           let workspaces = await listWorkspaces(projectId);
           if (workspaces.length === 0) workspaces = [await createWorkspace(projectId, nextDefaultName([]))];
+          workspaces = inSavedOrder(workspaces, await getSetting<unknown>(orderKey(projectId)).catch(() => null));
           const saved = (await getSetting<string>(activeKey(projectId))) ?? (await getSetting<string>(LEGACY_ACTIVE_KEY));
           const activeId = workspaces.some((w) => w.id === saved) ? saved! : workspaces[0].id;
           if (get().projectId === projectId) set({ workspaces, activeId, status: "ready" });
@@ -84,6 +100,9 @@ export function createWorkspacesStore() {
       rename: async (id, name) => {
         const trimmed = name.trim();
         if (!trimmed) return;
+        // Two tabs of one project with the same name cannot be told apart.
+        const clash = get().workspaces.some((w) => w.id !== id && w.name.toLowerCase() === trimmed.toLowerCase());
+        if (clash) throw new Error(messages(storeMessages).duplicateName(trimmed));
         await renameWorkspace(id, trimmed);
         set((s) => ({ workspaces: s.workspaces.map((w) => (w.id === id ? { ...w, name: trimmed } : w)) }));
       },
@@ -103,6 +122,17 @@ export function createWorkspacesStore() {
         if (id === get().activeId || !get().workspaces.some((w) => w.id === id)) return;
         set({ activeId: id });
         rememberActive(id);
+      },
+
+      move: async (id, index) => {
+        const { workspaces, projectId } = get();
+        const from = workspaces.findIndex((w) => w.id === id);
+        if (from === -1 || !projectId) return;
+        const next = workspaces.filter((w) => w.id !== id);
+        next.splice(Math.max(0, Math.min(index, next.length)), 0, workspaces[from]);
+        set({ workspaces: next });
+        // The order is a convenience: a refused save keeps it for the session.
+        await setSetting(orderKey(projectId), next.map((w) => w.id)).catch((error: unknown) => console.warn("workspace order not saved", error));
       },
 
       setPantheon: async (id, pantheon) => {

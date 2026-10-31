@@ -11,12 +11,13 @@ import { ReviewPanel } from "./ReviewPanel";
 import { reviewStore } from "./reviewStore";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
-vi.mock("@/fleet/broadcast", () => ({ sendToAgents: vi.fn(() => Promise.resolve({ sent: 1, skipped: [], waiting: [], unsuited: [] })) }));
+vi.mock("@/fleet/broadcast", () => ({ sendToAgents: vi.fn(() => Promise.resolve({ sent: 1, skipped: [], waiting: [], unsuited: [], starting: [] })) }));
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { warning: vi.fn(), error: vi.fn() }) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const DIFF = "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,2 +1,2 @@\n const x = 1;\n-const y = 2;\n+const y = 3;\n";
+let cutList = false;
 let calls: { cmd: string; args: Record<string, unknown> }[];
 let host: HTMLDivElement;
 let root: Root;
@@ -29,13 +30,14 @@ beforeEach(async () => {
     if (cmd === "review_changes")
       return {
         compared: "abc123",
+        truncated: cutList,
         files: [
           { path: "src/a.ts", oldPath: null, status: "modified", added: 1, removed: 1 },
           { path: "notes.md", oldPath: null, status: "untracked", added: 4, removed: 0 },
         ],
       };
     if (cmd === "review_file_diff") return DIFF;
-    if (cmd === "review_files") return ["README.md", "src/a.ts"];
+    if (cmd === "review_files") return { files: ["README.md", "src/a.ts"], truncated: false };
     if (cmd === "review_read_file") return { text: "# Projet\nBonjour\n", size: 17, truncated: false };
     return undefined;
   });
@@ -71,6 +73,14 @@ it("lists what the agent changed since its base, and shows a file's diff (spec m
   expect([...host.querySelectorAll("[data-diff-line]")].map((l) => l.getAttribute("data-diff-line"))).toEqual(["hunk", "ctx", "del", "add"]);
   await act(async () => button("Non commité").click());
   await vi.waitFor(() => expect(calls.filter((c) => c.cmd === "review_changes").pop()?.args).toEqual({ path: "C:/code/proj", base: null }));
+});
+
+it("says when the list of changes was cut", async () => {
+  await vi.waitFor(() => expect(text()).toContain("src/a.ts"));
+  expect(text()).not.toContain("Liste coupée");
+  cutList = true;
+  await act(async () => button("Non commité").click());
+  await vi.waitFor(() => expect(text()).toContain("Liste coupée : seuls les 2 premiers changements"));
 });
 
 it("takes remarks on lines and sends them to the agent in one message", async () => {
@@ -149,4 +159,13 @@ it("keeps the file read and the remark being typed through Refresh and a click o
   await vi.waitFor(() => expect(calls.filter((c) => c.cmd === "review_changes").length).toBe(2));
   expect(host.querySelectorAll("[data-diff-line]").length).toBe(4);
   expect(field().value).toBe("à moitié");
+});
+
+it("tells the remarks wait when the agent is still starting, and keeps them (plan B3)", async () => {
+  vi.mocked(sendToAgents).mockResolvedValueOnce({ sent: 0, skipped: [], waiting: [], unsuited: [], starting: ["Isis"] });
+  vi.mocked(toast.warning).mockClear();
+  await act(async () => reviewStore.getState().add({ file: "src/a.ts", line: 2, text: "Pourquoi 3 ?" }));
+  await act(async () => button("Envoyer à Isis").click());
+  expect(toast.warning).toHaveBeenCalledWith("Isis démarre encore : réessaie dans un instant pour lui envoyer la revue.");
+  expect(reviewStore.getState().remarks).toHaveLength(1);
 });

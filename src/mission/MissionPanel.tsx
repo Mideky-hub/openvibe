@@ -51,7 +51,7 @@ function Settings({ nodeId, mission }: { nodeId: string; mission: Mission }) {
   const claude = linkedAgents(links, frames).agentIds.filter((id) => terminalOf(nodes[id])?.agent === "claude").length;
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <label className="flex items-center gap-1">
+      <label className="flex items-center gap-1" title={t.globalBudgetTitle}>
         {t.globalBudget}
         <input
           type="number"
@@ -99,7 +99,7 @@ function Settings({ nodeId, mission }: { nodeId: string; mission: Mission }) {
         type="button"
         data-link-toggle
         onClick={() => uiStore.getState().setLinking(linking ? null : nodeId)}
-        className="rounded-full bg-ov-accent px-2.5 py-0.5 text-[11px] font-semibold text-white hover:brightness-110"
+        className="rounded-full bg-ov-accent px-2.5 py-0.5 text-[11px] font-semibold text-ov-on-accent hover:brightness-110"
       >
         {linking ? t.done : t.link}
       </button>
@@ -127,7 +127,8 @@ function Plan({ nodeId, mission }: { nodeId: string; mission: Mission }) {
                 </span>
               )}
               <span className="ml-auto shrink-0 font-mono text-[11px] text-ov-text-2">
-                {task.agent} · {task.budgetMin} {t.min}
+                {task.agent}
+                {task.group ? ` → ${task.group.name}` : ""} · {task.budgetMin} {t.min}
               </span>
             </div>
             <p className="line-clamp-2">{task.brief}</p>
@@ -142,7 +143,7 @@ function Plan({ nodeId, mission }: { nodeId: string; mission: Mission }) {
           type="button"
           disabled={launching}
           onClick={() => void launchMission(nodeId)}
-          className="ml-auto rounded-full bg-ov-accent px-3 py-1 text-[11px] font-semibold text-white hover:brightness-110 disabled:opacity-60"
+          className="ml-auto rounded-full bg-ov-accent px-3 py-1 text-[11px] font-semibold text-ov-on-accent hover:brightness-110 disabled:opacity-60"
         >
           {launching ? t.launching : t.launch}
         </button>

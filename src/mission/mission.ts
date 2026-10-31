@@ -14,6 +14,14 @@ export interface SubTask {
   budgetMin: number;
   /** Its difficulty: with the router, its agent's model (spec maj §3). */
   level?: Level;
+  /** The linked group a new agent joins, else it goes in the mission's (spec groupes spécialisés §4). */
+  group?: PlanGroup;
+}
+
+/** A group by its id, which survives a renaming, and the name to show. */
+export interface PlanGroup {
+  id: string;
+  name: string;
 }
 
 export interface Report {
@@ -47,6 +55,8 @@ export interface Member {
   done?: string[];
   /** The model the router started it on (spec maj §3). */
   model?: string;
+  /** The existing group it joined; it closes alone at the end (spec groupes spécialisés §4). */
+  group?: string;
 }
 
 export interface Mission {
@@ -75,6 +85,10 @@ export interface Mission {
   globalOverdue?: boolean;
   /** Each agent gets the model of its sub-task's level (spec maj §3). */
   router?: boolean;
+  /** Launched for the user's absence: the global budget is the time away, agents' budgets are targets (spec mission de nuit §3). */
+  overnight?: boolean;
+  /** The end of the night was told. */
+  windDownTold?: boolean;
 }
 
 export const NEW_AGENT = "nouveau";
@@ -119,6 +133,7 @@ function readMember(raw: unknown): Member | null {
   if (typeof r.handedTo === "string") member.handedTo = r.handedTo;
   if (Array.isArray(r.done)) member.done = r.done.filter((title): title is string => typeof title === "string");
   if (typeof r.model === "string" && r.model) member.model = r.model;
+  if (typeof r.group === "string") member.group = r.group;
   return member;
 }
 
@@ -130,7 +145,15 @@ function isSubTask(raw: unknown): raw is SubTask {
 function readSubTask(task: SubTask): SubTask {
   const { title, brief, agent, budgetMin } = task;
   const level = readLevel(task.level);
-  return level ? { title, brief, agent, budgetMin, level } : { title, brief, agent, budgetMin };
+  const group = task.group as Partial<PlanGroup> | undefined;
+  return {
+    title,
+    brief,
+    agent,
+    budgetMin,
+    ...(level ? { level } : {}),
+    ...(typeof group?.id === "string" && typeof group.name === "string" ? { group: { id: group.id, name: group.name } } : {}),
+  };
 }
 
 /** A saved mission; undefined when absent or unreadable. A launch cut short by a restart is back to its plan. */
@@ -152,14 +175,17 @@ export function readMission(raw: unknown): Mission | undefined {
   if (typeof r.endedAt === "number") mission.endedAt = r.endedAt;
   if (r.globalOverdue === true) mission.globalOverdue = true;
   if (r.router === true) mission.router = true;
+  if (r.overnight === true) mission.overnight = true;
+  if (r.windDownTold === true) mission.windDownTold = true;
   return mission;
 }
 
-/** `propose_plan`'s arguments (internal names, `@/mcp/protocol`) as a plan, or what is wrong (spec §7.2). `linked`: names of the linked Claude agents. */
+/** `propose_plan`'s arguments (internal names, `@/mcp/protocol`) as a plan, or what is wrong (spec §7.2). `linked`: names of the linked Claude agents; `groups`: the linked groups. */
 export function proposedPlan(
   args: Record<string, unknown>,
   mission: Mission,
   linked: readonly string[],
+  groups: readonly PlanGroup[] = [],
 ): { name: string; task: string; plan: SubTask[] } | string {
   const e = messages(agentMessages).plan;
   const name = text(args.nom);
@@ -180,6 +206,8 @@ export function proposedPlan(
     if (!title || title.length > MAX_TITLE) return e.title(n, MAX_TITLE);
     if (!brief) return e.brief(n);
     if (typeof budget !== "number" || !Number.isInteger(budget) || budget < 1) return e.budget(n);
+    // The global budget is real time: agents in parallel share it, only one sub-task alone could not fit (spec mission de nuit §3).
+    if (mission.budgetMin !== undefined && budget > mission.budgetMin) return e.overBudget(n, budget, mission.budgetMin);
     const known = sameName(agent, NEW_AGENT) ? NEW_AGENT : linked.find((l) => sameName(l, agent));
     if (!known) return e.notLinked(n, agent);
     if (known !== NEW_AGENT && plan.some((s) => s.agent === known)) return e.alreadyHas(known);
@@ -187,11 +215,11 @@ export function proposedPlan(
     const level = readLevel(r.niveau);
     if (given && !level) return e.level(n);
     if (mission.router && !level) return e.levelRouter(n);
-    plan.push(level ? { title, brief, agent: known, budgetMin: budget, level } : { title, brief, agent: known, budgetMin: budget });
-  }
-  const total = plan.reduce((sum, s) => sum + s.budgetMin, 0);
-  if (mission.budgetMin !== undefined && total > mission.budgetMin) {
-    return e.overBudget(total, mission.budgetMin);
+    const wanted = text(r.groupe);
+    if (wanted && known !== NEW_AGENT) return e.groupForNew(n);
+    const group = wanted ? groups.find((g) => sameName(g.name, wanted)) : undefined;
+    if (wanted && !group) return e.notLinkedGroup(n, wanted);
+    plan.push({ title, brief, agent: known, budgetMin: budget, ...(level ? { level } : {}), ...(group ? { group: { id: group.id, name: group.name } } : {}) });
   }
   return { name, task, plan };
 }
@@ -242,12 +270,20 @@ export function overruns(mission: Mission, now: number): { members: Overrun[]; g
   return { members, global };
 }
 
-/** What `prolonger` may still take from the global budget; undefined without one. */
-export function remainingGlobal(mission: Mission): number | undefined {
+/** The whole minutes left of the global budget, real time from the go-ahead (spec mission de nuit §3); undefined without one. */
+export function remainingGlobal(mission: Mission, now: number): number | undefined {
   if (mission.budgetMin === undefined) return undefined;
-  // A member who reported only took what it spent (final review H3).
-  const taken = (m: Member) => (m.report ? Math.min(budgetOf(m), Math.ceil(spentMin(m, m.report.at))) : budgetOf(m));
-  return mission.budgetMin - mission.members.filter((m) => !m.handedTo).reduce((sum, m) => sum + taken(m), 0);
+  if (mission.startedAt === undefined) return mission.budgetMin;
+  return Math.max(0, Math.ceil(mission.budgetMin - ((mission.endedAt ?? now) - mission.startedAt) / MINUTE));
+}
+
+/** The last minutes of an overnight mission keep the time to merge and finish: 10 %, 10 min at least, half of a short one. */
+const windDownMin = (budget: number) => Math.min(budget / 2, Math.max(10, budget / 10));
+
+/** An overnight mission near its end: no new work, the orchestrator wraps up (spec mission de nuit §3). */
+export function windingDown(mission: Mission, now: number): boolean {
+  if (!mission.overnight || mission.budgetMin === undefined || mission.startedAt === undefined) return false;
+  return (now - mission.startedAt) / MINUTE >= mission.budgetMin - windDownMin(mission.budgetMin);
 }
 
 export type BudgetTone = "ok" | "late" | "over";

@@ -67,9 +67,14 @@ it("turns the model router on, and shows each sub-task's level and model (spec m
 it("shows the plan and gives the go-ahead (spec §7.3)", async () => {
   await show({ state: "plan", name: "Auth", task: "Ajoute l'authentification", budgetMin: 60, plan: [{ title: "Login", brief: "Fais le login", agent: "Isis", budgetMin: 20 }] });
   expect(host.textContent).toContain("Fais le login");
-  expect(host.textContent).toContain("Total 20 min / 60");
+  expect(host.textContent).toContain("20 min d'agents · 60 min de temps réel");
   await act(async () => button("Lancer la mission").click());
   expect(launchMission).toHaveBeenCalledWith("chef");
+});
+
+it("shows the group a new agent will join (spec groupes spécialisés §3)", async () => {
+  await show({ state: "plan", name: "Auth", plan: [{ title: "Style", brief: "Fais le style", agent: "nouveau", budgetMin: 20, group: { id: "g1", name: "Interface" } }] });
+  expect(host.textContent).toContain("nouveau → Interface · 20 min");
 });
 
 it("shows no runaway time for a mission ended before end times were kept", async () => {

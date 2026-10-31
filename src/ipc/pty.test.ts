@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { getScrollback, ptyInterrupt, ptySendText, ptyWrite, toBytes } from "./pty";
 
@@ -75,4 +75,24 @@ it("types a command after the keystrokes already sent to the terminal", async ()
   await Promise.all([typed, sent]);
   expect(calls).toEqual(["pty_write", "pty_send_text"]);
   expect(await ptyInterrupt("node-3")).toBe(true);
+});
+
+it("ignores the late exit of an older process once the terminal runs under another pid", async () => {
+  const { emit } = await import("@tauri-apps/api/event");
+  const { ptySpawn, onPtyExit } = await import("./pty");
+  let pid = 100;
+  mockIPC((cmd) => (cmd === "pty_spawn" ? pid : undefined), { shouldMockEvents: true });
+  const exits: unknown[] = [];
+  await onPtyExit((event) => exits.push(event));
+  const spec = {} as Parameters<typeof ptySpawn>[1];
+  await ptySpawn("n1", spec, 80, 24, () => {});
+  pid = 200;
+  await ptySpawn("n1", spec, 80, 24, () => {});
+  await emit("pty-exit", { nodeId: "n1", exitCode: 0, pid: 100 });
+  await vi.waitFor(() => expect(exits).toEqual([]));
+  await emit("pty-exit", { nodeId: "n1", exitCode: 0, pid: 200 });
+  await vi.waitFor(() => expect(exits).toHaveLength(1));
+  // A terminal re-attached after a reload has no known pid: its exit counts.
+  await emit("pty-exit", { nodeId: "n2", exitCode: 1, pid: 300 });
+  await vi.waitFor(() => expect(exits).toHaveLength(2));
 });
