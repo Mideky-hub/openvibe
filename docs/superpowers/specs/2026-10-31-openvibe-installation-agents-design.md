@@ -40,7 +40,7 @@ Vérifiée le 2026-10-31.
 
 ### 4.1 Menu « Lancer un agent »
 
-Un agent absent reste grisé et gagne un bouton **Installer** à droite de sa ligne. Le bouton ouvre une vue de confirmation dans le menu (règle 2) : commande, shell, page officielle, prérequis, bouton **Lancer dans un terminal**. Le terminal se pose aussitôt, là où le clic droit a été fait, sinon au centre de la vue ; il ne passe pas par le placement au clic, pour que l'installation commence sans étape de plus.
+Un agent absent reste grisé et gagne un bouton **Installer** à droite de sa ligne. Le bouton ouvre une vue de confirmation dans le menu (règle 2) : commande, shell, page officielle, prérequis, bouton **Lancer dans un terminal**. Le terminal se pose aussitôt, là où le clic droit a été fait, sinon au centre de la vue ; il ne passe pas par le placement au clic, pour que l'installation commence sans étape de plus, et il prend la vue et le clavier : l'installeur peut poser une question.
 
 ### 4.2 Accueil (« Aucun agent de code trouvé »)
 
