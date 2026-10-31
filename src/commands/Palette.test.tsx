@@ -210,3 +210,16 @@ describe("agents in the functions list (plan F2)", () => {
     expect(line?.textContent).not.toContain("introuvable");
   });
 });
+
+describe("while scenes are read (plan F1 finding)", () => {
+  it("does not say « Aucun résultat » next to « Chargement… »", async () => {
+    mockIPC(() => new Promise(() => undefined));
+    workspacesStore.setState({ workspaces: [{ id: "w9", name: "Slow", projectId: "p1", position: 0 }], activeId: "w1" } as never);
+    projectsStore.setState({ view: "project", activeId: "p1" } as never);
+    await act(async () => openPalette("goTo", busy));
+    await act(async () => setPaletteQuery("zzzz"));
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("Chargement…");
+    expect(text).not.toContain("Aucun résultat");
+  });
+});

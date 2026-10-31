@@ -36,3 +36,13 @@ it("takes the keyboard in the name field without scrolling the clipped label lay
   expect(document.querySelector("input")).not.toBeNull();
   expect(focus).toHaveBeenCalledWith({ preventScroll: true });
 });
+
+it("escapes a frame id in the rule that hides Excalidraw's native name (plan B1)", async () => {
+  canvasStore.setState({
+    frames: [{ id: 'g"]{x', name: "A", x: 0, y: 0, width: 400, height: 300, group: { role: "backend", pantheon: "egypt" }, memberIds: [] }],
+  });
+  await act(async () => root.render(<GroupLabels />));
+  const css = document.querySelector("style")!.textContent!;
+  expect(css).toBe(`.excalidraw [id$="-frame-name-${CSS.escape('g"]{x')}"]{color:transparent!important}`);
+  expect(css).not.toContain('g"]{x');
+});

@@ -46,7 +46,7 @@ export function GroupLabels() {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[3] overflow-hidden">
-      <style>{groups.map((g) => `.excalidraw [id$="-frame-name-${g.id}"]{color:transparent!important}`).join("\n")}</style>
+      <style>{groups.map((g) => `.excalidraw [id$="-frame-name-${CSS.escape(g.id)}"]{color:transparent!important}`).join("\n")}</style>
       {groups.map((group) =>
         group.id === view.editingFrame ? null : (
           <GroupLabel

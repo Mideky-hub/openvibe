@@ -129,7 +129,9 @@ function PaletteBody() {
                 </Command.Group>
               ))}
             {mode === "goTo" && goToData.loading && <div className="px-2.5 py-1.5 text-[11.5px] text-ov-text-3">{t.loading}</div>}
-            <Command.Empty className="px-2.5 py-3 text-[12.5px] text-ov-text-3">{t.empty}</Command.Empty>
+            {!(mode === "goTo" && goToData.loading) && (
+              <Command.Empty className="px-2.5 py-3 text-[12.5px] text-ov-text-3">{t.empty}</Command.Empty>
+            )}
           </Command.List>
           <footer className="border-t border-ov-line px-3.5 py-1.5 text-[11px] text-ov-text-2">{t.footer}</footer>
         </Command>
