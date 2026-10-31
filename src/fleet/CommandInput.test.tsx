@@ -131,3 +131,17 @@ it("does not send a command after an unfinished mention (@thot/ /clear, backlog 
   await press("Enter");
   expect(sendCommand).not.toHaveBeenCalled();
 });
+
+it("starts the highlight again at the top when the caret moves (backlog 27 oct)", async () => {
+  await type("/c");
+  await press("ArrowDown");
+  await press("ArrowDown");
+  const selected = () => [...host.querySelectorAll('[role="option"]')].findIndex((o) => o.getAttribute("aria-selected") === "true");
+  expect(selected()).toBe(2);
+  await act(async () => {
+    field().focus();
+    field().setSelectionRange(1, 1);
+    field().dispatchEvent(new KeyboardEvent("keyup", { key: "ArrowLeft", bubbles: true }));
+  });
+  expect(selected()).toBe(0);
+});
