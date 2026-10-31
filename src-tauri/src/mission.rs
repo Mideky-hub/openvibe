@@ -243,11 +243,21 @@ pub fn merge_agent(mission: &Path, agent: &Path, branch: &str) -> Result<MergeRe
 fn remove_worktree(root: &Path, name: String, path: &Path, done: &mut Cleanup) {
     match git(root, &["worktree", "remove", &path.to_string_lossy()]) {
         Ok(_) => done.removed.push(name),
-        Err(_) => done.kept.push(tr!(
+        Err(err) => done.kept.push(kept_worktree(&name, &err)),
+    }
+}
+
+/// Why `git worktree remove` left a worktree: its changes, or something else
+/// (a folder locked by a process) that git's own message then names.
+fn kept_worktree(name: &str, git_error: &str) -> String {
+    if git_error.contains("modified or untracked files") {
+        return tr!(
             "{name} (changements non commités)",
             "{name} (uncommitted changes)"
-        )),
+        );
     }
+    let cause = git_error.lines().next().unwrap_or_default().trim();
+    format!("{name} ({cause})")
 }
 
 /// Undoes a launch that failed (final review H2): its fresh worktrees and
@@ -258,13 +268,9 @@ pub fn discard(project: &Path, trees: &[Worktree]) -> Result<Cleanup, String> {
     let mut done = Cleanup::default();
     for tree in trees.iter().rev() {
         if Path::new(&tree.path).exists()
-            && git(&root, &["worktree", "remove", &tree.path]).is_err()
+            && let Err(err) = git(&root, &["worktree", "remove", &tree.path])
         {
-            let slug = &tree.slug;
-            done.kept.push(tr!(
-                "{slug} (changements non commités)",
-                "{slug} (uncommitted changes)"
-            ));
+            done.kept.push(kept_worktree(&tree.slug, &err));
             continue;
         }
         match git(&root, &["branch", "-d", &tree.branch]) {
@@ -321,6 +327,20 @@ pub fn cleanup(project: &Path, mission: &str, agents: &[String]) -> Result<Clean
 #[cfg(test)]
 mod tests {
     use std::process::Command;
+
+    #[test]
+    fn a_worktree_kept_for_another_reason_than_changes_says_so() {
+        let changes = "fatal: 'x' contains modified or untracked files, use --force to delete it";
+        assert_eq!(
+            crate::i18n::in_english(|| super::kept_worktree("isis", changes)),
+            "isis (uncommitted changes)"
+        );
+        let locked = "error: failed to delete 'C:/w/isis': Permission denied\nmore";
+        assert_eq!(
+            super::kept_worktree("isis", locked),
+            "isis (error: failed to delete 'C:/w/isis': Permission denied)"
+        );
+    }
 
     use super::*;
 
