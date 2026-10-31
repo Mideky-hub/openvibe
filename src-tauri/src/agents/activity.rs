@@ -2,6 +2,7 @@
 //! idle, from the agents' hooks first, else from their terminal's output.
 
 use std::collections::HashMap;
+use std::str::Chars;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -33,11 +34,14 @@ pub struct Change {
     pub node_id: String,
     pub activity: Activity,
     pub since: Instant,
+    /// What it waits for, while it waits.
+    pub message: Option<String>,
 }
 
 struct Node {
     activity: Activity,
     since: Instant,
+    message: Option<String>,
     last_output: Option<Instant>,
     hooked: bool,
     /// When the user typed while a hooked agent worked or waited. No hook
@@ -60,6 +64,7 @@ impl Tracker {
             Node {
                 activity: Activity::Idle,
                 since: now,
+                message: None,
                 last_output: None,
                 hooked: false,
                 answered: None,
@@ -114,12 +119,21 @@ impl Tracker {
         source: HookSource,
         activity: Activity,
         now: Instant,
+        message: Option<String>,
     ) -> Option<Change> {
         let node = self.nodes.get_mut(node_id)?;
         if source == HookSource::Claude {
             node.hooked = true;
         }
         node.answered = None;
+        let message = message.filter(|_| activity == Activity::Waiting);
+        let still_waiting = activity == Activity::Waiting && node.activity == Activity::Waiting;
+        if still_waiting && node.message != message {
+            // A new question, not a new wait: `since` keeps the agent's place.
+            node.message = message;
+            return Some(change_of(node_id, node));
+        }
+        node.message = message;
         set(node_id, node, activity, now)
     }
 
@@ -157,7 +171,7 @@ impl Tracker {
     pub fn snapshot(&self) -> Vec<Change> {
         self.nodes
             .iter()
-            .map(|(node_id, node)| change(node_id, node.activity, node.since))
+            .map(|(node_id, node)| change_of(node_id, node))
             .collect()
     }
 }
@@ -167,16 +181,93 @@ fn change(node_id: &str, activity: Activity, since: Instant) -> Change {
         node_id: node_id.to_string(),
         activity,
         since,
+        message: None,
+    }
+}
+
+fn change_of(node_id: &str, node: &Node) -> Change {
+    Change {
+        message: node.message.clone(),
+        ..change(node_id, node.activity, node.since)
     }
 }
 
 fn set(node_id: &str, node: &mut Node, activity: Activity, now: Instant) -> Option<Change> {
+    if activity != Activity::Waiting {
+        node.message = None;
+    }
     if node.activity == activity {
         return None;
     }
     node.activity = activity;
     node.since = now;
-    Some(change(node_id, activity, now))
+    Some(change_of(node_id, node))
+}
+
+/// The longest preview of a question, in characters (spec notification §7).
+pub const MAX_MESSAGE_CHARS: usize = 140;
+
+/// Skips what follows an ESC: a CSI, an OSC up to its end, or one character.
+fn skip_escape(chars: &mut Chars) {
+    match chars.next() {
+        Some('[') => skip_csi(chars),
+        Some(']') => {
+            for c in chars.by_ref() {
+                if c == '\u{7}' || c == '\\' {
+                    break;
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn skip_csi(chars: &mut Chars) {
+    for c in chars.by_ref() {
+        if ('@'..='~').contains(&c) {
+            break;
+        }
+    }
+}
+
+/// Invisible, yet able to reorder or disguise the text around them.
+fn is_hidden(c: char) -> bool {
+    matches!(
+        c,
+        '\u{ad}'
+            | '\u{61c}'
+            | '\u{200b}'..='\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{2069}'
+            | '\u{feff}'
+    )
+}
+
+/// An agent's message as one line of plain text, capped; `None` when nothing
+/// readable is left. Its origin is not documented and it may quote a tool's
+/// name, so it is untrusted (spec notification §7).
+pub fn clean_message(raw: &str) -> Option<String> {
+    let mut text = String::with_capacity(raw.len());
+    let mut chars = raw.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\u{1b}' => skip_escape(&mut chars),
+            '\u{9b}' => skip_csi(&mut chars),
+            '\n' | '\r' | '\t' => text.push(' '),
+            c if c.is_control() || is_hidden(c) => {}
+            c => text.push(c),
+        }
+    }
+    let line = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if line.is_empty() {
+        return None;
+    }
+    if line.chars().count() <= MAX_MESSAGE_CHARS {
+        return Some(line);
+    }
+    let cut: String = line.chars().take(MAX_MESSAGE_CHARS - 1).collect();
+    Some(format!("{}…", cut.trim_end()))
 }
 
 /// Claude's hook events (spec §10.2), from `hook_event_name` and `notification_type`.
@@ -242,6 +333,171 @@ mod tests {
         tracker
     }
 
+    fn waiting(tracker: &mut Tracker, message: Option<&str>, at: Instant) -> Option<Change> {
+        tracker.hook(
+            "a",
+            HookSource::Claude,
+            Activity::Waiting,
+            at,
+            message.map(str::to_string),
+        )
+    }
+
+    #[test]
+    fn a_wait_carries_its_message_in_the_change_and_the_snapshot() {
+        let t0 = Instant::now();
+        let mut tracker = started(t0);
+        let change = waiting(&mut tracker, Some("May I run tests?"), t0).unwrap();
+        assert_eq!(change.message.as_deref(), Some("May I run tests?"));
+        assert_eq!(
+            tracker.snapshot()[0].message.as_deref(),
+            Some("May I run tests?")
+        );
+    }
+
+    #[test]
+    fn the_message_goes_when_the_wait_ends() {
+        let t0 = Instant::now();
+        let mut tracker = started(t0);
+        waiting(&mut tracker, Some("May I?"), t0);
+        let change = tracker
+            .hook("a", HookSource::Claude, Activity::Working, t0, None)
+            .unwrap();
+        assert_eq!(change.message, None);
+        assert_eq!(tracker.snapshot()[0].message, None);
+
+        waiting(&mut tracker, Some("May I?"), t0);
+        let answered = tracker.input("a", b"y", t0 + ms(10)).unwrap();
+        assert_eq!(answered.message, None);
+
+        waiting(&mut tracker, Some("May I?"), t0);
+        let ended = tracker.session_end("a", t0 + ms(20)).unwrap();
+        assert_eq!(ended.message, None);
+    }
+
+    #[test]
+    fn a_new_message_during_a_wait_replaces_the_old_one_and_keeps_its_place() {
+        let t0 = Instant::now();
+        let mut tracker = started(t0);
+        let first = waiting(&mut tracker, Some("First?"), t0).unwrap();
+        let second = waiting(&mut tracker, Some("Second?"), t0 + ms(500)).unwrap();
+        assert_eq!(second.activity, Activity::Waiting);
+        assert_eq!(second.message.as_deref(), Some("Second?"));
+        assert_eq!(second.since, first.since);
+    }
+
+    #[test]
+    fn a_wait_without_a_message_never_keeps_a_stale_one() {
+        let t0 = Instant::now();
+        let mut tracker = started(t0);
+        waiting(&mut tracker, Some("Old?"), t0);
+        let cleared = waiting(&mut tracker, None, t0 + ms(500)).unwrap();
+        assert_eq!(cleared.message, None);
+    }
+
+    #[test]
+    fn the_same_message_again_changes_nothing() {
+        let t0 = Instant::now();
+        let mut tracker = started(t0);
+        waiting(&mut tracker, Some("Same?"), t0);
+        assert_eq!(waiting(&mut tracker, Some("Same?"), t0 + ms(500)), None);
+        assert_eq!(tracker.snapshot()[0].message.as_deref(), Some("Same?"));
+    }
+
+    #[test]
+    fn only_a_wait_has_a_message() {
+        let t0 = Instant::now();
+        let mut tracker = started(t0);
+        let change = tracker
+            .hook(
+                "a",
+                HookSource::Claude,
+                Activity::Working,
+                t0,
+                Some("Stray".to_string()),
+            )
+            .unwrap();
+        assert_eq!(change.message, None);
+    }
+
+    #[test]
+    fn cleans_a_message_down_to_one_line_of_plain_text() {
+        assert_eq!(
+            clean_message("  Claude needs\n\tyour  permission\r\n").as_deref(),
+            Some("Claude needs your permission")
+        );
+    }
+
+    #[test]
+    fn strips_terminal_escapes_and_controls_from_a_message() {
+        assert_eq!(
+            clean_message("\u{1b}[31mred\u{1b}[0m text").as_deref(),
+            Some("red text")
+        );
+        assert_eq!(
+            clean_message("\u{9b}1;31mred").as_deref(),
+            Some("red"),
+            "the one-character form of the same sequence"
+        );
+        assert_eq!(
+            clean_message("a\u{1b}]0;fake title\u{7}b").as_deref(),
+            Some("ab")
+        );
+        assert_eq!(
+            clean_message("a\u{1b}]8;;http://x\u{1b}\\b").as_deref(),
+            Some("ab")
+        );
+        assert_eq!(
+            clean_message("bell\u{7}\u{0}\u{8}").as_deref(),
+            Some("bell")
+        );
+    }
+
+    #[test]
+    fn strips_what_can_disguise_a_message() {
+        // Right-to-left override: « rm -rf » could read as something harmless.
+        assert_eq!(
+            clean_message("run \u{202e}fr- mr\u{202c} now").as_deref(),
+            Some("run fr- mr now")
+        );
+        assert_eq!(
+            clean_message("in\u{200b}vis\u{2060}ible\u{feff}\u{ad}").as_deref(),
+            Some("invisible")
+        );
+        assert_eq!(clean_message("a\u{2067}b\u{2069}c").as_deref(), Some("abc"));
+    }
+
+    #[test]
+    fn keeps_a_message_s_text_as_it_is_otherwise() {
+        assert_eq!(
+            clean_message("Autoriser <b>été</b> & \"Bash\" ? 日本語").as_deref(),
+            Some("Autoriser <b>été</b> & \"Bash\" ? 日本語")
+        );
+    }
+
+    #[test]
+    fn caps_a_message_on_a_character_boundary() {
+        let long = "é".repeat(MAX_MESSAGE_CHARS + 50);
+        let capped = clean_message(&long).unwrap();
+        assert_eq!(capped.chars().count(), MAX_MESSAGE_CHARS);
+        assert!(capped.ends_with('…'));
+        let exact = "x".repeat(MAX_MESSAGE_CHARS);
+        assert_eq!(clean_message(&exact).as_deref(), Some(exact.as_str()));
+    }
+
+    #[test]
+    fn nothing_readable_is_no_message() {
+        for raw in [
+            "",
+            "   \n\t",
+            "\u{1b}[31m\u{1b}[0m",
+            "\u{200b}\u{202e}",
+            "\u{1b}]0;unterminated",
+        ] {
+            assert_eq!(clean_message(raw), None, "{raw:?}");
+        }
+    }
+
     #[test]
     fn output_makes_an_agent_without_hooks_work_then_quiet_makes_it_idle() {
         let t0 = Instant::now();
@@ -263,19 +519,31 @@ mod tests {
         let t0 = Instant::now();
         let mut tracker = started(t0);
         let working = tracker
-            .hook("a", HookSource::Claude, Activity::Working, t0)
+            .hook("a", HookSource::Claude, Activity::Working, t0, None)
             .unwrap();
         assert_eq!(working.activity, Activity::Working);
         // Output no longer decides, and short silences keep it working.
         assert_eq!(tracker.output("a", t0 + ms(100)), None);
         assert!(tracker.tick(t0 + ms(5000)).is_empty());
         let waiting = tracker
-            .hook("a", HookSource::Claude, Activity::Waiting, t0 + ms(6000))
+            .hook(
+                "a",
+                HookSource::Claude,
+                Activity::Waiting,
+                t0 + ms(6000),
+                None,
+            )
             .unwrap();
         assert_eq!(waiting.activity, Activity::Waiting);
         assert!(tracker.tick(t0 + ms(60_000)).is_empty());
         let idle = tracker
-            .hook("a", HookSource::Claude, Activity::Idle, t0 + ms(61_000))
+            .hook(
+                "a",
+                HookSource::Claude,
+                Activity::Idle,
+                t0 + ms(61_000),
+                None,
+            )
             .unwrap();
         assert_eq!(idle.activity, Activity::Idle);
         assert_eq!(tracker.output("a", t0 + ms(61_100)), None);
@@ -285,7 +553,7 @@ mod tests {
     fn a_lost_stop_hook_ends_in_idle_after_thirty_seconds_without_output() {
         let t0 = Instant::now();
         let mut tracker = started(t0);
-        tracker.hook("a", HookSource::Claude, Activity::Working, t0);
+        tracker.hook("a", HookSource::Claude, Activity::Working, t0, None);
         tracker.output("a", t0 + ms(20_000));
         assert!(tracker.tick(t0 + ms(49_000)).is_empty());
         let idle = tracker.tick(t0 + ms(50_000));
@@ -296,7 +564,7 @@ mod tests {
     fn an_answer_to_a_waiting_agent_makes_it_work_until_its_output_stops() {
         let t0 = Instant::now();
         let mut tracker = started(t0);
-        tracker.hook("a", HookSource::Claude, Activity::Waiting, t0);
+        tracker.hook("a", HookSource::Claude, Activity::Waiting, t0, None);
         let working = tracker.input("a", b"\x1b", t0 + ms(10_000)).unwrap();
         assert_eq!(working.activity, Activity::Working);
         assert_eq!(tracker.output("a", t0 + ms(10_100)), None);
@@ -313,7 +581,7 @@ mod tests {
         // `permission_prompt` comes after about 6 s: a quick refusal finds the agent working.
         let t0 = Instant::now();
         let mut tracker = started(t0);
-        tracker.hook("a", HookSource::Claude, Activity::Working, t0);
+        tracker.hook("a", HookSource::Claude, Activity::Working, t0, None);
         assert_eq!(tracker.input("a", b"\x1b", t0 + ms(3000)), None);
         assert!(tracker.tick(t0 + ms(4400)).is_empty());
         assert_eq!(tracker.tick(t0 + ms(4500))[0].activity, Activity::Idle);
@@ -323,9 +591,15 @@ mod tests {
     fn the_next_hook_after_an_answer_restores_the_safety_net() {
         let t0 = Instant::now();
         let mut tracker = started(t0);
-        tracker.hook("a", HookSource::Claude, Activity::Waiting, t0);
+        tracker.hook("a", HookSource::Claude, Activity::Waiting, t0, None);
         tracker.input("a", b"1", t0 + ms(1000));
-        tracker.hook("a", HookSource::Claude, Activity::Working, t0 + ms(1200));
+        tracker.hook(
+            "a",
+            HookSource::Claude,
+            Activity::Working,
+            t0 + ms(1200),
+            None,
+        );
         assert!(tracker.tick(t0 + ms(20_000)).is_empty());
     }
 
@@ -334,7 +608,7 @@ mod tests {
         let t0 = Instant::now();
         let mut tracker = started(t0);
         assert_eq!(tracker.input("a", b"x", t0), None);
-        tracker.hook("a", HookSource::Claude, Activity::Idle, t0 + ms(100));
+        tracker.hook("a", HookSource::Claude, Activity::Idle, t0 + ms(100), None);
         assert_eq!(tracker.input("a", b"x", t0 + ms(200)), None);
         assert!(tracker.tick(t0 + ms(5000)).is_empty());
         assert_eq!(tracker.input("zzz", b"\r", t0), None);
@@ -344,7 +618,7 @@ mod tests {
     fn moving_through_a_dialog_keeps_the_agent_waiting() {
         let t0 = Instant::now();
         let mut tracker = started(t0);
-        tracker.hook("a", HookSource::Claude, Activity::Waiting, t0);
+        tracker.hook("a", HookSource::Claude, Activity::Waiting, t0, None);
         for key in [
             &b"\x1b[B"[..],
             b"\x1bOA",
@@ -364,7 +638,7 @@ mod tests {
         // A form filled in slowly: the agent went idle between two keys.
         let t0 = Instant::now();
         let mut tracker = started(t0);
-        tracker.hook("a", HookSource::Claude, Activity::Waiting, t0);
+        tracker.hook("a", HookSource::Claude, Activity::Waiting, t0, None);
         tracker.input("a", b"y", t0 + ms(1000));
         assert_eq!(tracker.tick(t0 + ms(2500))[0].activity, Activity::Idle);
         assert_eq!(tracker.input("a", b"e", t0 + ms(3000)), None);
@@ -379,7 +653,7 @@ mod tests {
         // `/compact` and other commands without hooks: the output decides.
         let t0 = Instant::now();
         let mut tracker = started(t0);
-        tracker.hook("a", HookSource::Claude, Activity::Idle, t0);
+        tracker.hook("a", HookSource::Claude, Activity::Idle, t0, None);
         let working = tracker.input("a", b"\r", t0 + ms(100)).unwrap();
         assert_eq!(working.activity, Activity::Working);
         tracker.output("a", t0 + ms(1000));
@@ -391,7 +665,7 @@ mod tests {
     fn the_end_of_a_claude_session_hands_its_shell_back_to_the_output() {
         let t0 = Instant::now();
         let mut tracker = started(t0);
-        tracker.hook("a", HookSource::Claude, Activity::Working, t0);
+        tracker.hook("a", HookSource::Claude, Activity::Working, t0, None);
         let idle = tracker.session_end("a", t0 + ms(100)).unwrap();
         assert_eq!(idle.activity, Activity::Idle);
         assert_eq!(
@@ -428,7 +702,7 @@ mod tests {
         let mut tracker = started(t0);
         tracker.output("a", t0);
         let idle = tracker
-            .hook("a", HookSource::Codex, Activity::Idle, t0 + ms(100))
+            .hook("a", HookSource::Codex, Activity::Idle, t0 + ms(100), None)
             .unwrap();
         assert_eq!(idle.activity, Activity::Idle);
         assert_eq!(
@@ -444,7 +718,7 @@ mod tests {
         tracker.remove("a");
         assert_eq!(tracker.output("a", t0), None);
         assert_eq!(
-            tracker.hook("zzz", HookSource::Claude, Activity::Working, t0),
+            tracker.hook("zzz", HookSource::Claude, Activity::Working, t0, None),
             None
         );
         assert!(tracker.snapshot().is_empty());

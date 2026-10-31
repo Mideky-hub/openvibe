@@ -3,6 +3,15 @@ import { agentActivityStore } from "./agentActivity";
 
 const state = () => agentActivityStore.getState();
 
+it("keeps the message of a wait, from a change and from Rust's state", () => {
+  state().apply({ nodeId: "m", activity: "waiting", since: 1, message: "May I?" });
+  expect(state().activities.m.message).toBe("May I?");
+  state().apply({ nodeId: "m", activity: "working", since: 2 });
+  expect(state().activities.m.message).toBeUndefined();
+  state().load([{ nodeId: "n", activity: "waiting", since: 1, message: "Still?" }]);
+  expect(state().activities.n.message).toBe("Still?");
+});
+
 beforeEach(() => state().load([]));
 
 describe("agent activity store", () => {

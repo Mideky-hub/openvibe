@@ -4,6 +4,7 @@ import type { Activity, ActivityEvent } from "@/ipc/activity";
 export interface AgentActivity {
   activity: Activity;
   since: number;
+  message?: string;
 }
 
 interface AgentActivityState {
@@ -17,9 +18,8 @@ interface AgentActivityState {
 
 export const agentActivityStore = createStore<AgentActivityState>()((set) => ({
   activities: {},
-  apply: ({ nodeId, activity, since }) => set((s) => ({ activities: { ...s.activities, [nodeId]: { activity, since } } })),
-  load: (events) =>
-    set({ activities: Object.fromEntries(events.map(({ nodeId, activity, since }) => [nodeId, { activity, since }])) }),
+  apply: ({ nodeId, ...activity }) => set((s) => ({ activities: { ...s.activities, [nodeId]: activity } })),
+  load: (events) => set({ activities: Object.fromEntries(events.map(({ nodeId, ...activity }) => [nodeId, activity])) }),
   remove: (nodeId) =>
     set((s) => ({ activities: Object.fromEntries(Object.entries(s.activities).filter(([id]) => id !== nodeId)) })),
 }));

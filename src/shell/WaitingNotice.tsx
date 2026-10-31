@@ -13,7 +13,7 @@ function Row({ agent, children }: { agent: WaitingAgent; children: ReactNode }) 
     <button
       type="button"
       onClick={() => goToAgent(agent)}
-      className="flex h-8 w-full items-center gap-2 rounded-[10px] px-2 text-left text-[12.5px] text-ov-text hover:bg-ov-hover"
+      className="flex min-h-8 w-full items-center gap-2 rounded-[10px] px-2 py-1 text-left text-[12.5px] text-ov-text hover:bg-ov-hover"
     >
       {children}
     </button>
@@ -43,7 +43,14 @@ export function WaitingNotice() {
           {agents.slice(0, MAX_ROWS).map((agent) => (
             <Row key={agent.id} agent={agent}>
               <span aria-hidden className="size-[7px] shrink-0 rounded-full bg-ov-wait" />
-              <span className="min-w-0 flex-1 truncate">{t.waitingNotice.question(agent.name)}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{t.waitingNotice.question(agent.name)}</span>
+                {agent.message && (
+                  <span title={agent.message} className="block truncate text-[11px] text-ov-text-2">
+                    {agent.message}
+                  </span>
+                )}
+              </span>
               {agent.workspaceId !== activeId && (
                 <span className="max-w-[90px] shrink-0 truncate font-mono text-[11px] text-ov-text-3">
                   {workspaces.find((w) => w.id === agent.workspaceId)?.name}

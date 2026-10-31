@@ -9,7 +9,7 @@ use serde_json::Value;
 use tiny_http::{Header, Method, Request, Response, Server};
 
 use super::activity::{
-    Activity, HookSource, claude_activity, claude_session_ended, codex_activity,
+    Activity, HookSource, claude_activity, claude_session_ended, clean_message, codex_activity,
 };
 use super::mcp;
 
@@ -24,6 +24,8 @@ pub struct HookHit {
     pub activity: Activity,
     /// Claude left (`SessionEnd`): its shell's output decides again.
     pub session_ended: bool,
+    /// What a waiting agent says it waits for, cleaned (spec notification §7).
+    pub message: Option<String>,
 }
 
 /// What the server reports, and the questions it forwards.
@@ -261,11 +263,15 @@ fn status_of(request: &mut Request, token: &str, sink: &dyn HookSink) -> u16 {
         ),
     };
     if let Some(activity) = activity {
+        let message = (activity == Activity::Waiting)
+            .then(|| json["message"].as_str().and_then(clean_message))
+            .flatten();
         sink.hit(HookHit {
             node_id,
             source,
             activity,
             session_ended,
+            message,
         });
     }
     204
@@ -517,14 +523,38 @@ mod tests {
                 source: HookSource::Claude,
                 activity: Activity::Working,
                 session_ended: false,
+                message: None,
             }
         );
         let waiting =
             br#"{"hook_event_name":"Notification","notification_type":"permission_prompt"}"#;
         assert_eq!(send(server.port, "POST", path, waiting), 204);
+        let hit = rx.recv_timeout(Duration::from_secs(5)).unwrap();
         assert_eq!(
-            rx.recv_timeout(Duration::from_secs(5)).unwrap().activity,
-            Activity::Waiting
+            (hit.activity, hit.message),
+            (Activity::Waiting, None),
+            "no `message`: no preview"
+        );
+        let waiting = br#"{"hook_event_name":"Notification","notification_type":"permission_prompt","message":"  May \u001b[31mI\u001b[0m\nrun Bash?"}"#;
+        assert_eq!(send(server.port, "POST", path, waiting), 204);
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .message
+                .as_deref(),
+            Some("May I run Bash?")
+        );
+        let odd = br#"{"hook_event_name":"Notification","notification_type":"permission_prompt","message":42}"#;
+        assert_eq!(send(server.port, "POST", path, odd), 204);
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(5)).unwrap().message,
+            None
+        );
+        let idle = br#"{"hook_event_name":"Notification","notification_type":"idle_prompt","message":"Waiting for your input"}"#;
+        assert_eq!(send(server.port, "POST", path, idle), 204);
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(5)).unwrap().message,
+            None
         );
         let ended = br#"{"hook_event_name":"SessionEnd","reason":"prompt_input_exit"}"#;
         assert_eq!(send(server.port, "POST", path, ended), 204);
@@ -555,6 +585,7 @@ mod tests {
                 source: HookSource::Codex,
                 activity: Activity::Idle,
                 session_ended: false,
+                message: None,
             }
         );
     }
