@@ -12,6 +12,9 @@ export interface View extends Point {
 }
 
 const ROUNDS = 240;
+/** Each round compares every pair: a large notebook settles for fewer. */
+const ROUNDS_LARGE = 80;
+const LARGE = 300;
 const REPULSION = 9000;
 const SPRING = 0.04;
 const REST_LENGTH = 90;
@@ -40,8 +43,9 @@ export function layoutGraph(names: readonly string[], links: readonly Edge[]): L
     const to = index.get(link.to);
     return from === undefined || to === undefined ? [] : [[from, to]];
   });
-  for (let round = 0; round < ROUNDS; round++) {
-    const cooling = 1 - round / ROUNDS;
+  const rounds = sorted.length > LARGE ? ROUNDS_LARGE : ROUNDS;
+  for (let round = 0; round < rounds; round++) {
+    const cooling = 1 - round / rounds;
     const forces = points.map(() => ({ x: 0, y: 0 }));
     for (let i = 0; i < points.length; i++) {
       for (let j = i + 1; j < points.length; j++) {

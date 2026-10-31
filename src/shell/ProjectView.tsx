@@ -6,6 +6,7 @@ import { useAgentsPanel } from "@/fleet/agentsPanelState";
 import { useMessages } from "@/i18n";
 import { agentsStore } from "@/fleet/agentsStore";
 import { LinkMode } from "@/fleet/LinkMode";
+import { Notes } from "@/notes/Notes";
 import { RadialMenu } from "@/radial/RadialMenu";
 import { ReviewPanel } from "@/review/ReviewPanel";
 import { PlacementGhost } from "@/fleet/PlacementGhost";
@@ -95,6 +96,9 @@ export function ProjectView() {
           </ErrorBoundary>
           <ErrorBoundary scope="studio" fallback={panelCrash}>
             <Studio />
+          </ErrorBoundary>
+          <ErrorBoundary scope="notes" fallback={panelCrash}>
+            <Notes />
           </ErrorBoundary>
         </>
       ) : (

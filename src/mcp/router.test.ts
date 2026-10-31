@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { canvasStore } from "@/canvas/canvasStore";
 import { nodesStore, terminalOf } from "@/store/nodes";
@@ -49,10 +49,26 @@ beforeAll(async () => {
   await nodesStore.getState().create("chef", { workspaceId: "w1", kind: "orchestrator", payload: { name: "chef" } });
 });
 
+describe("the notes tool (spec notes §3)", () => {
+  const notes = (node: string) => call(node, "notes", {});
+  afterEach(() => void mockIPC(() => undefined));
+
+  it("answers agents and orchestrators alike, with the same tool", async () => {
+    mockIPC((command) => (command === "notes_agent_list" ? [{ name: "Auth", attached: true }] : undefined));
+    expect(textOf(await notes("isis"))).toContain("Auth (attachée à ton groupe)");
+    expect(textOf(await notes("chef"))).toContain("Auth");
+  });
+
+  it("answers an agent whose project is not on screen", async () => {
+    mockIPC((command) => (command === "notes_agent_list" ? [] : undefined));
+    expect(await notes("elsewhere")).not.toHaveProperty("isError");
+  });
+});
+
 describe("the agent's tools (spec orchestrateur §4.4)", () => {
   it("lists them for any Claude session", async () => {
     const list = (await answer({ callId: 1, nodeId: "isis", method: "tools/list", params: {} })) as { tools: { name: string; inputSchema: object }[] };
-    expect(list.tools.map((t) => t.name)).toEqual(["declare_steps", "step", "report"]);
+    expect(list.tools.map((t) => t.name)).toEqual(["declare_steps", "step", "report", "notes"]);
     expect(list.tools.every((t) => typeof t.inputSchema === "object")).toBe(true);
   });
 
@@ -95,7 +111,7 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
 
   it("lists them for the orchestrator only, and each side refuses the other's", async () => {
     const list = (await answer({ callId: 1, nodeId: "chef", method: "tools/list", params: {} })) as { tools: { name: string }[] };
-    expect(list.tools.map((t) => t.name)).toEqual(["mission", "propose_plan", "team", "read_output", "write", "extend", "interrupt", "reassign", "merge", "finish", "remote_control"]);
+    expect(list.tools.map((t) => t.name)).toEqual(["mission", "propose_plan", "team", "read_output", "write", "extend", "interrupt", "reassign", "merge", "finish", "remote_control", "notes"]);
     expect(textOf(await call("isis", "propose_plan", plan))).toBe("Outil réservé à l'orchestrateur.");
     expect(textOf(await call("chef", "report", { summary: "x", status: "done" }))).toBe("Outil réservé aux agents.");
   });
