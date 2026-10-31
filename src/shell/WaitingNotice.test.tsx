@@ -55,21 +55,27 @@ afterEach(async () => {
 });
 
 describe("WaitingNotice (spec notification §4)", () => {
-  it("shows nothing while nobody waits", () => {
-    expect(host.innerHTML).toBe("");
+  it("shows nothing while nobody waits, its live region already mounted so the first question is announced", () => {
+    expect(host.querySelector("section")).toBeNull();
+    expect(host.querySelector("[aria-live]")).not.toBeNull();
   });
 
   it("appears when an agent starts waiting and disappears when it stops", async () => {
     await wait("isis");
     expect(rows()).toEqual(["Isis a une question"]);
     await act(async () => agentActivityStore.getState().apply({ nodeId: "isis", activity: "working", since: 1 }));
-    expect(host.innerHTML).toBe("");
+    expect(host.querySelector("section")).toBeNull();
   });
 
   it("disappears when the agent's process ends", async () => {
     await wait("isis");
     await act(async () => agentActivityStore.getState().remove("isis"));
-    expect(host.innerHTML).toBe("");
+    expect(host.querySelector("section")).toBeNull();
+  });
+
+  it("clears the tool rail, at any window height", async () => {
+    await wait("isis");
+    expect(host.querySelector("section")?.className).toContain("left-[70px]");
   });
 
   it("names the workspace of an agent that is not on screen", async () => {

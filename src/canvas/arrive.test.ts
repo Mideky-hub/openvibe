@@ -69,6 +69,32 @@ describe("arrive", () => {
     expect(arrivalStore.getState()).toEqual({ nodeId: "isis", seq: before + 1 });
   });
 
+  describe("under the waiting notice (spec notification §4)", () => {
+    const notice = (rect: Partial<DOMRect>) => {
+      const element = document.createElement("section");
+      element.setAttribute("data-waiting-notice", "");
+      element.getBoundingClientRect = () => rect as DOMRect;
+      document.body.append(element);
+      return element;
+    };
+
+    it("centers a terminal the notice would cover: the question is at its bottom", () => {
+      const element = notice({ left: 70, right: 330, top: 500, bottom: 640 });
+      withScene(at100);
+      arrive("isis");
+      expect(updateScene.mock.calls[0][0].appState.scrollX).toBe((1400 - 720) / 2 - 100);
+      element.remove();
+    });
+
+    it("keeps the view when the notice is clear of the terminal", () => {
+      const element = notice({ left: 70, right: 330, top: 700, bottom: 840 });
+      withScene(at100);
+      arrive("isis");
+      expect(updateScene.mock.calls[0][0].appState).not.toHaveProperty("scrollX");
+      element.remove();
+    });
+  });
+
   it("moves the view first when needed, then focuses xterm on the next frame, after the view moved", () => {
     withScene({ ...at100, zoom: 0.5 });
     arrive("isis");

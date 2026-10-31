@@ -32,7 +32,8 @@ Limites assumées :
 
 ## 4. Présentation
 
-- **Place** : en bas à gauche, au-dessus de la puce git (58 px du bas, 12 px de la gauche). Le haut du canvas reste aux barres (spec identité : pas de bandeau sous les onglets), et le bas à droite aux toasts.
+- **Place** : en bas à gauche, à 58 px du bas et 70 px de la gauche : au-dessus de la puce git, et à droite du rail d'outils, qu'elle ne recouvre donc jamais, même dans une fenêtre basse. Le haut du canvas reste aux barres (spec identité : pas de bandeau sous les onglets), et le bas à droite aux toasts.
+- **Ne pas cacher la question** : si la notification recouvrirait un nœud à l'arrivée, la vue le recentre. Une question s'affiche en bas du terminal, là où la notification risque de tomber. Dans une très petite fenêtre, un léger recouvrement reste possible.
 - **Style** (spec identité §4) : verre dense, rayon 14 px, pastille `--ov-wait`, texte `--ov-text`.
 - **Pile** : une ligne par agent, trois au plus. Au-delà, une dernière ligne « + N autres » amène au premier agent caché : elle reste utile sans ajouter d'état.
 - **Autre workspace** : la ligne affiche à droite le nom du workspace.
@@ -51,7 +52,7 @@ Le clic et la commande reprennent le chemin d'« Aller à » (spec fenêtre §7.
 - **Identifiant** : `agent.nextWaiting`, section Navigation, juste après « Terminal précédent ».
 - **Libellé** : « Aller à l'agent en attente suivant » / « Go to the next waiting agent ».
 - **Disponibilité** : seulement si un agent attend.
-- **Ordre** : l'agent qui suit le nœud courant dans la liste du §3, en bouclant ; le premier si le nœud courant n'attend pas.
+- **Ordre** : l'agent qui suit le nœud courant dans la liste du §3, en bouclant ; le premier si le nœud courant n'attend pas. Le clavier d'un orchestrateur n'étant pas dans le contexte des commandes, un orchestrateur qu'on vient d'atteindre compte comme nœud courant.
 - **Raccourci** : aucun. Le brief demande une commande ; un raccourci de plus empiéterait sur les touches envoyées aux terminaux.
 
 ## 7. Aperçu de la question : non
@@ -73,7 +74,7 @@ Ajoutée avec le plugin officiel `tauri-plugin-notification` : un agent bloqué 
 - **Clic** : la fenêtre revient au premier plan et, si l'agent attend encore et qu'un projet est ouvert, on arrive sur lui comme au §5. Sinon, seule la fenêtre revient.
 - **Permission** : rien à demander, le plugin l'accorde toujours sur ordinateur.
 - **Échec** : journalisé. La notification dans la fenêtre (§4) reste la référence.
-- **Limite** : Windows ne signale le clic que tant que la notification est à l'écran, pas une fois passée dans le centre de notifications. Ce clic-là n'a aucun effet : il faut revenir à la fenêtre, où la notification du §4 attend.
+- **Limite** : Windows ne signale le clic à OpenVibe que tant que la notification est à l'écran, pas une fois passée dans le centre de notifications. Ce clic-là n'amène pas à l'agent ; il pourrait même ouvrir une seconde instance d'OpenVibe, qui n'a pas de garde d'instance unique. À vérifier à la main.
 - **Pas de réglage** pour la couper : à ajouter si elle gêne à l'usage.
 
 ## 9. Tests
