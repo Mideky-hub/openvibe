@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { pendingUiRequest, requestUi, useUiRequest } from "./uiRequests";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -36,4 +36,21 @@ it("lets the right component answer a request, once, even one made before it mou
   await act(async () => requestUi({ kind: "composeGroup" }));
   expect(pendingUiRequest()).toEqual({ kind: "composeGroup" });
   await act(async () => root.unmount());
+});
+
+it("lets an unanswered request expire: it must not fire at a later mount (plan F2)", async () => {
+  vi.useFakeTimers();
+  requestUi({ kind: "composeGroup" });
+  expect(pendingUiRequest()).toEqual({ kind: "composeGroup" });
+  vi.advanceTimersByTime(2000);
+  expect(pendingUiRequest()).toBeNull();
+  // A newer request is not dropped by the older one's timer.
+  requestUi({ kind: "composeGroup" });
+  vi.advanceTimersByTime(1500);
+  requestUi({ kind: "groupMenu", id: "g" });
+  vi.advanceTimersByTime(1500);
+  expect(pendingUiRequest()).toEqual({ kind: "groupMenu", id: "g" });
+  vi.advanceTimersByTime(1000);
+  expect(pendingUiRequest()).toBeNull();
+  vi.useRealTimers();
 });

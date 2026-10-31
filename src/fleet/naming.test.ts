@@ -5,7 +5,7 @@ import { canvasStore } from "@/canvas/canvasStore";
 import { flushAll } from "@/lib/flush";
 import { nodesStore } from "@/store/nodes";
 import { workspacesStore } from "@/store/workspaces";
-import { assignMissingNames, nameForNewAgent, pantheonForNewGroup } from "./naming";
+import { assignMissingNames, nameForNewAgent, namesInWorkspace, pantheonForNewGroup, pantheonsForCopiedGroups } from "./naming";
 
 const terminal = (name?: string) =>
   JSON.stringify({ title: "t", cwd: "C:/code", agent: "claude", shell: "default", command: "", ...(name ? { name } : {}) });
@@ -81,4 +81,26 @@ it("gives a new group the first pantheon nobody in the workspace uses", async ()
   await nameForNewAgent("w1"); // the agents outside groups take "egyptian"
   canvasStore.getState().setFrames([groupFrame("g", "greek")]);
   expect(pantheonForNewGroup("w1")).toBe("norse");
+});
+
+it("gives a copied group a pantheon of its own, the original keeping its own (plan B1)", () => {
+  const group = (id: string, pantheon: string) =>
+    ({ id, type: "frame", isDeleted: false, frameId: null, customData: { openvibe: { kind: "group", role: "backend", pantheon } } }) as unknown as import("@excalidraw/excalidraw/element/types").ExcalidrawElement;
+  const member = (id: string, frameId: string) =>
+    ({ id, type: "embeddable", isDeleted: false, frameId, customData: { kind: "terminal" } }) as unknown as import("@excalidraw/excalidraw/element/types").ExcalidrawElement;
+  const scene = [group("g1", "egypt"), member("a", "g1"), group("copy", "egypt"), member("a2", "copy")];
+  const remapped = pantheonsForCopiedGroups(scene, new Set(["a2"]), "greek");
+  expect([...remapped.keys()]).toEqual(["copy"]);
+  expect(remapped.get("copy")).not.toBe("egypt");
+  expect(remapped.get("copy")).not.toBe("greek");
+  // A copy made inside its own group changes nothing.
+  expect(pantheonsForCopiedGroups([group("g1", "egypt"), member("a", "g1"), member("a2", "g1")], new Set(["a2"]), "greek").size).toBe(0);
+});
+
+it("reuses the name of a closed terminal, whose node stays in memory only for Ctrl+Z", async () => {
+  const live = [{ id: "a" }, { id: "c" }];
+  canvasStore.setState({ api: { getSceneElements: () => live } as never });
+  expect(namesInWorkspace("w1")).toEqual([]);
+  canvasStore.setState({ api: null });
+  expect(namesInWorkspace("w1")).toEqual(["Isis"]);
 });

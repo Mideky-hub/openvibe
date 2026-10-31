@@ -1,14 +1,21 @@
+import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { canvasStore } from "@/canvas/canvasStore";
-import { groupPantheons } from "@/canvas/groups";
+import { groupInfoOf, groupPantheons } from "@/canvas/groups";
+import { nodeKindOf } from "@/canvas/nodeElement";
 import { nodesStore } from "@/store/nodes";
 import { workspacesStore } from "@/store/workspaces";
 import { nextName, nextPantheon } from "./names";
 
-/** Names already carried by the terminals of a workspace. */
+/**
+ * Names already carried by the terminals of a workspace. A closed terminal's
+ * node stays in memory for Ctrl+Z but is off the canvas: its name is free again.
+ */
 export function namesInWorkspace(workspaceId: string): string[] {
-  return Object.values(nodesStore.getState().nodes)
-    .filter((node) => node.workspaceId === workspaceId && node.kind === "terminal" && node.payload.name)
-    .map((node) => node.payload.name);
+  const scene = canvasStore.getState().api?.getSceneElements();
+  const onCanvas = scene ? new Set(scene.map((e) => e.id)) : null;
+  return Object.entries(nodesStore.getState().nodes)
+    .filter(([id, node]) => node.workspaceId === workspaceId && node.kind === "terminal" && node.payload.name && (!onCanvas || onCanvas.has(id)))
+    .map(([, node]) => node.payload.name);
 }
 
 /** The pantheon of the agents outside groups; it avoids those of the groups on screen. */
@@ -47,4 +54,32 @@ export async function assignMissingNames(workspaceId: string, orderedIds: readon
     taken.push(name);
     nodesStore.getState().update(id, { name });
   }
+}
+
+/**
+ * Groups copied whole (Ctrl+D, copy-paste) arrive with the pantheon of the
+ * original: two groups would share their names. The copy, a group frame all of
+ * whose agents are copies while another frame has the same pantheon, gets a
+ * pantheon of its own; frame id → pantheon (plan B1).
+ */
+export function pantheonsForCopiedGroups(
+  elements: readonly ExcalidrawElement[],
+  copyIds: ReadonlySet<string>,
+  workspacePantheon: string | null | undefined,
+): Map<string, string> {
+  const live = elements.filter((e) => !e.isDeleted);
+  const groups = live.filter((e) => groupInfoOf(e) !== null);
+  const used = [workspacePantheon, ...groups.map((g) => groupInfoOf(g)?.pantheon)];
+  const remapped = new Map<string, string>();
+  for (const group of groups) {
+    const pantheon = groupInfoOf(group)?.pantheon;
+    const members = live.filter((e) => e.frameId === group.id && nodeKindOf(e) === "terminal");
+    const allCopies = members.length > 0 && members.every((m) => copyIds.has(m.id));
+    const sharedWithOther = groups.some((other) => other.id !== group.id && groupInfoOf(other)?.pantheon === pantheon);
+    if (!allCopies || !sharedWithOther) continue;
+    const next = nextPantheon(used);
+    used.push(next);
+    remapped.set(group.id, next);
+  }
+  return remapped;
 }

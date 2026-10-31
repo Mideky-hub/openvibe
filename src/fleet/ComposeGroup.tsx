@@ -7,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { returnKeyboardToCanvas } from "@/canvas/keyboardFocus";
 import { useUiRequest } from "@/commands/uiRequests";
 import { messages, useMessages } from "@/i18n";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -14,7 +15,7 @@ import type { AgentId } from "@/ipc/pty";
 import { cn } from "@/lib/utils";
 import { agentsStore, useAgents } from "./agentsStore";
 import { agentInk, AGENTS, AGENTS_WITHOUT_OPTIONS, defaultAgent } from "./catalog";
-import { agentsOf, DEFAULT_GROUP_SIZE, MAX_GROUP_SIZE, nameAfterRoleChange, resizeSlots, type Slot } from "./composer";
+import { agentsOf, DEFAULT_GROUP_SIZE, MAX_GROUP_SIZE, resizeSlots, type Slot } from "./composer";
 import { fleetMessages } from "./messages";
 import { launchGroup } from "./groups";
 import { ROLE_ORDER, ROLES, type RoleId } from "./roles";
@@ -72,7 +73,9 @@ export function ComposeGroup({
   const t = useMessages(fleetMessages).compose;
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<RoleId>("general");
-  const [name, setName] = useState(ROLES.general.label);
+  // What the user typed; until then the name is the role's, in the language of the moment.
+  const [typedName, setTypedName] = useState<string | null>(null);
+  const name = typedName ?? ROLES[role].label;
   const [slots, setSlots] = useState<Slot[]>(resizeSlots([], DEFAULT_GROUP_SIZE));
   useUiRequest(
     "composeGroup",
@@ -90,18 +93,20 @@ export function ComposeGroup({
   useEffect(() => {
     if (!open) return;
     setRole("general");
-    setName(ROLES.general.label);
+    setTypedName(null);
     setSlots(resizeSlots([], DEFAULT_GROUP_SIZE));
     void agentsStore.getState().load();
   }, [open]);
 
   const pickRole = (next: RoleId) => {
-    setName((current) => nameAfterRoleChange(current, role, next));
+    // An emptied field follows the role again (spec §11.2).
+    setTypedName((current) => (current === null || current.trim() === "" ? null : current));
     setRole(next);
   };
 
   const launch = () => {
     setOpen(false);
+    returnKeyboardToCanvas();
     void launchGroup({ name, role, agents: agentsOf(slots, fallback) }).catch((error: unknown) =>
       toast.error(messages(fleetMessages).launchFailed(String(error))),
     );
@@ -117,7 +122,11 @@ export function ComposeGroup({
           <input
             autoFocus
             value={name}
-            onChange={(e) => setName(e.currentTarget.value)}
+            onChange={(e) => setTypedName(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              // Enter launches the group, unless it ends an IME composition.
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) launch();
+            }}
             onFocus={(e) => e.currentTarget.select()}
             aria-label={t.groupName}
             className="min-w-0 flex-1 bg-transparent text-[13px] font-medium text-ov-text outline-none"
@@ -132,7 +141,7 @@ export function ComposeGroup({
                 type="button"
                 onClick={() => pickRole(id)}
                 className={cn(
-                  "flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs",
+                  "flex h-7 items-center gap-1.5 rounded-[9px] border px-2.5 text-xs",
                   active ? "font-semibold text-ov-on-role" : "border-ov-line text-ov-text-2 hover:text-ov-text",
                 )}
                 style={active ? { backgroundColor: ROLES[id].color, borderColor: ROLES[id].color } : undefined}
@@ -180,7 +189,7 @@ export function ComposeGroup({
               aria-label={t.fewer}
               disabled={slots.length <= 1}
               onClick={() => setSlots((current) => resizeSlots(current, current.length - 1))}
-              className="grid size-7 place-items-center rounded-full text-ov-text-2 hover:bg-ov-card hover:text-ov-text disabled:opacity-40"
+              className="grid size-7 place-items-center rounded-[9px] text-ov-text-2 hover:bg-ov-card hover:text-ov-text disabled:opacity-40"
             >
               <Minus className="size-3.5" />
             </button>
@@ -190,7 +199,7 @@ export function ComposeGroup({
               aria-label={t.more}
               disabled={slots.length >= MAX_GROUP_SIZE}
               onClick={() => setSlots((current) => resizeSlots(current, current.length + 1))}
-              className="grid size-7 place-items-center rounded-full text-ov-text-2 hover:bg-ov-card hover:text-ov-text disabled:opacity-40"
+              className="grid size-7 place-items-center rounded-[9px] text-ov-text-2 hover:bg-ov-card hover:text-ov-text disabled:opacity-40"
             >
               <Plus className="size-3.5" />
             </button>
@@ -198,7 +207,7 @@ export function ComposeGroup({
           <button
             type="button"
             onClick={launch}
-            className="h-8 rounded-full px-4 text-[13px] font-semibold text-ov-on-role hover:brightness-110"
+            className="h-8 rounded-[10px] px-4 text-[13px] font-semibold text-ov-on-role hover:brightness-110"
             style={{ backgroundColor: color }}
           >
             {t.launch(slots.length)}

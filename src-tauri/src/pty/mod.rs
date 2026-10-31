@@ -109,9 +109,9 @@ impl PtyManager {
     /// Blocks for that delay: call it off the async runtime.
     pub fn send_text(&self, node_id: &str, text: &str) -> AppResult<()> {
         let session = self.require(node_id)?;
-        session.write(&paste_payload(text, session.pastes_bracketed()))?;
-        std::thread::sleep(ENTER_DELAY);
-        session.write(b"\r")
+        send_text_with(text, session.pastes_bracketed(), |bytes| {
+            session.write(bytes)
+        })
     }
 
     /// Stops the agent's turn with its own key (spec §14); `None` for a plain
@@ -206,6 +206,57 @@ impl PtyManager {
                 "no active terminal for {node_id}"
             ))
         })
+    }
+}
+
+/// The two writes of `send_text`: the paste, then Enter after `ENTER_DELAY`.
+fn send_text_with(
+    text: &str,
+    bracketed: bool,
+    mut write: impl FnMut(&[u8]) -> AppResult<()>,
+) -> AppResult<()> {
+    write(&paste_payload(text, bracketed))?;
+    std::thread::sleep(ENTER_DELAY);
+    write(b"\r")
+}
+
+#[cfg(test)]
+mod send_tests {
+    use super::*;
+
+    #[test]
+    fn writes_the_paste_then_a_separate_enter() {
+        let mut writes: Vec<Vec<u8>> = vec![];
+        send_text_with("lance\nles tests", true, |bytes| {
+            writes.push(bytes.to_vec());
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(
+            writes,
+            vec![
+                b"\x1b[200~lance\rles tests\x1b[201~".to_vec(),
+                b"\r".to_vec()
+            ]
+        );
+        writes.clear();
+        send_text_with("continue", false, |bytes| {
+            writes.push(bytes.to_vec());
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(writes, vec![b"continue".to_vec(), b"\r".to_vec()]);
+    }
+
+    #[test]
+    fn stops_before_enter_when_the_paste_fails() {
+        let mut writes = 0;
+        let result = send_text_with("x", false, |_| {
+            writes += 1;
+            Err(AppError::Io(std::io::Error::other("closed")))
+        });
+        assert!(result.is_err());
+        assert_eq!(writes, 1);
     }
 }
 

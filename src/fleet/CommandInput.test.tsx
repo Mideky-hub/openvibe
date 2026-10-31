@@ -99,3 +99,35 @@ it("does not send a /command whose target is unknown to the selection instead (f
   expect(host.textContent).toContain("Cible inconnue : @thot/zues");
 });
 
+
+it("keeps an unknown name of @nobody/ze when Tab completes the last one (backlog 27 oct)", async () => {
+  await type("@nobody/ze");
+  await press("Tab");
+  expect(field().value).toBe("@nobody/zeus");
+  expect(chips()).toEqual([]);
+});
+
+it("keeps Escape for the kind of list it closed: @ does not close / (backlog 27 oct)", async () => {
+  await type("@");
+  await press("Escape");
+  expect(options()).toEqual([]);
+  await type("/");
+  expect(options().length).toBeGreaterThan(0);
+});
+
+it("leaves one space when a command is completed before the text (backlog 27 oct)", async () => {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field(), "/ef lance");
+    field().setSelectionRange(3, 3);
+    field().dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await press("Tab");
+  expect(field().value).toBe("/effort lance");
+});
+
+it("does not send a command after an unfinished mention (@thot/ /clear, backlog 27 oct)", async () => {
+  await act(async () => root.render(<CommandInput agents={agents} groups={[]} fallback={["d"]} placeholder="Consigne" emptyHint="Tape @" />));
+  await type("@thot/ /clear");
+  await press("Enter");
+  expect(sendCommand).not.toHaveBeenCalled();
+});

@@ -1,6 +1,7 @@
 import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { canvasStore } from "@/canvas/canvasStore";
+import { returnKeyboardToCanvas } from "@/canvas/keyboardFocus";
 import { createGroupFrame, isGroup } from "@/canvas/groups";
 import { allowRemoval } from "@/canvas/removalGuard";
 import { createNodeElement } from "@/canvas/nodeElement";
@@ -12,6 +13,7 @@ import { nodesStore } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { uiStore } from "@/store/ui";
 import { workspacesStore } from "@/store/workspaces";
+import { readableTargets } from "./groupView";
 import { clearSpot, groupGrid } from "./groupLayout";
 import { defaultLaunchOptions, type LaunchOptions } from "./launchAgent";
 import { nextName } from "./names";
@@ -86,7 +88,15 @@ export async function launchGroup(
     elements: [...api.getSceneElementsIncludingDeleted(), ...terminals, frame],
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
-  api.scrollToContent(frame, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true, duration: 300, maxZoom: 1 });
+  // 4 terminals fitted at once end up at 40 %, unreadable: the first ones are enough.
+  const { width, height } = api.getAppState();
+  api.scrollToContent(readableTargets(frame, terminals, { width, height }), {
+    fitToViewport: true,
+    viewportZoomFactor: 0.9,
+    animate: true,
+    duration: 300,
+    maxZoom: 1,
+  });
   return { frameId: frame.id, nodeIds };
 }
 
@@ -128,6 +138,7 @@ export function ungroup(groupId: string) {
     }),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
+  returnKeyboardToCanvas();
 }
 
 /**
@@ -149,6 +160,7 @@ export function closeGroup(groupId: string) {
     elements: elements.map((e) => (going.has(e.id) ? newElementWith(e, { isDeleted: true }) : e)),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
+  returnKeyboardToCanvas();
 }
 
 /** Asks first when agents of the group are still running (spec §11.4). */

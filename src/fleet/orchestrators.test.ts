@@ -9,7 +9,7 @@ import { nodesStore, sessionOf } from "@/store/nodes";
 import { terminalStatusStore } from "@/store/terminalStatus";
 import { uiStore } from "@/store/ui";
 import { agentsStore } from "./agentsStore";
-import { addOrchestrator, requestCloseOrchestrator } from "./orchestrators";
+import { addOrchestrator, orchestrateGroup, requestCloseOrchestrator } from "./orchestrators";
 import { adoptCopies } from "./terminals";
 
 vi.mock("@excalidraw/excalidraw", () => ({ CaptureUpdateAction: { IMMEDIATELY: "i", NEVER: "n" }, newElementWith: (e: object, patch: object) => ({ ...e, ...patch }) }));
@@ -65,6 +65,16 @@ it("gives a copied orchestrator a session of its own, created when shown", async
   expect(nodesStore.getState().nodes.copie.payload).toEqual({ name: "Chef" });
 });
 
+it("takes back a copied orchestrator when Claude Code is not installed", async () => {
+  agentsStore.setState({ agents: [{ id: "claude", available: false }], shells: [], loaded: true });
+  await nodesStore.getState().create("chef", { workspaceId: "w1", kind: "orchestrator", payload: { name: "Chef" } });
+  scene = [{ id: "copie-refusee", type: "embeddable", customData: { kind: "orchestrator" }, frameId: null }];
+  await adoptCopies("w1", [{ id: "copie-refusee", sourceId: "chef" }]);
+  expect(nodesStore.getState().nodes["copie-refusee"]).toBeUndefined();
+  expect(scene[0].isDeleted).toBe(true);
+  expect(toast.error).toHaveBeenCalled();
+});
+
 it("asks before closing a working orchestrator, with its wires; a stopped one goes at once (spec première version §5.4)", () => {
   const wire = { id: "fil", type: "arrow", startBinding: { elementId: "chef" }, endBinding: { elementId: "isis" } };
   scene = [{ id: "chef", type: "embeddable" }, wire as (typeof scene)[number], { id: "isis", type: "embeddable" }];
@@ -77,4 +87,21 @@ it("asks before closing a working orchestrator, with its wires; a stopped one go
   requestCloseOrchestrator("chef");
   expect(uiStore.getState().closing).toBeNull();
   expect(scene.filter((e) => e.isDeleted).map((e) => e.id)).toEqual(["chef", "fil"]);
+});
+
+it("puts a second orchestrator of the same group clear of the first (plan B3)", async () => {
+  const frame = { id: "g1", type: "frame", x: 1000, y: 0, width: 600, height: 400, isDeleted: false, frameId: null, customData: { openvibe: { kind: "group", role: "backend", pantheon: "egypt" } } };
+  scene = [frame];
+  canvasStore.setState({
+    frames: [{ id: "g1", name: "G", x: 1000, y: 0, width: 600, height: 400, group: { role: "backend", pantheon: "egypt" }, memberIds: [] }],
+  });
+  const { workspacesStore } = await import("@/store/workspaces");
+  workspacesStore.setState({ activeId: "w1" } as never);
+  await orchestrateGroup("g1");
+  await orchestrateGroup("g1");
+  const chefs = scene.filter((e) => e.type === "embeddable") as unknown as { x: number; y: number; width: number; height: number }[];
+  expect(chefs).toHaveLength(2);
+  const [a, b] = chefs;
+  const overlaps = a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  expect(overlaps).toBe(false);
 });

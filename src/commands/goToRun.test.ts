@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import { arrive } from "@/canvas/arrive";
 import { focusGroup } from "@/canvas/canvasFocus";
+import { langStore } from "@/i18n";
 import { projectsStore } from "@/store/projects";
 import { workspacesStore } from "@/store/workspaces";
 import { readSource } from "@/theme/cssBlocks";
@@ -48,12 +49,17 @@ describe("goTo (spec fenêtre §7.2)", () => {
     goTo(item({ workspaceId: "w2", targetId: "thot", label: "Thot" }));
     expect(select).toHaveBeenCalledWith("w2");
     expect(arrive).not.toHaveBeenCalled();
-    completeArrival("w1");
-    expect(arrive).not.toHaveBeenCalled();
     completeArrival("w2");
     expect(arrive).toHaveBeenCalledWith("thot");
     completeArrival("w2");
     expect(arrive).toHaveBeenCalledTimes(1);
+  });
+
+  it("abandons an arrival when another workspace's scene comes up first", () => {
+    goTo(item({ workspaceId: "w2", targetId: "thot", label: "Thot" }));
+    completeArrival("w3");
+    completeArrival("w2");
+    expect(arrive).not.toHaveBeenCalled();
   });
 
   it("says so when the target is gone (spec fenêtre §9)", async () => {
@@ -66,6 +72,16 @@ describe("goTo (spec fenêtre §7.2)", () => {
     vi.mocked(focusGroup).mockReturnValue(false);
     goTo(item({ kind: "group", workspaceId: "w1", targetId: "g", label: "Serveurs" }));
     expect(error).toHaveBeenLastCalledWith("Serveurs n'existe plus");
+  });
+
+  it("says so in English too", () => {
+    const error = vi.spyOn(toast, "error").mockImplementation(() => "");
+    langStore.setState({ lang: "en" });
+    vi.mocked(arrive).mockReturnValue(false);
+    goTo(item({ workspaceId: "w2", targetId: "isis", label: "Isis" }));
+    completeArrival("w2");
+    langStore.setState({ lang: "fr" });
+    expect(error).toHaveBeenCalledWith("Isis no longer exists");
   });
 
   it("is completed by the canvas of a workspace, and orchestrators are found by their field", () => {

@@ -48,6 +48,11 @@ pub fn list_agents(locate: Locate) -> Vec<AgentInfo> {
         .collect()
 }
 
+/// Whether the npm of an agent's install can run (spec installation §3).
+pub fn npm_available(locate: Locate) -> bool {
+    locate("npm").is_some()
+}
+
 /// Shells that can actually be started on this machine, default first.
 pub fn list_shells(locate: Locate) -> Vec<ShellKind> {
     let mut shells = if cfg!(windows) {
@@ -110,6 +115,14 @@ mod tests {
             available,
             vec![Agent::Claude, Agent::Cursor, Agent::Shell, Agent::Custom]
         );
+    }
+
+    #[test]
+    fn finds_npm_on_the_path() {
+        assert!(npm_available(&|name: &str| {
+            (name == "npm").then(|| PathBuf::from("C:/node/npm.cmd"))
+        }));
+        assert!(!npm_available(&|_| None));
     }
 
     #[test]

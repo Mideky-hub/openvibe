@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { FileDiff, RotateCw, X } from "lucide-react";
 import { toast } from "sonner";
-import { sendToAgents } from "@/fleet/broadcast";
+import { sendToAgents, startingText } from "@/fleet/broadcast";
 import { AGENTS } from "@/fleet/catalog";
 import { reviewChanges, reviewDefaultBase, reviewFileDiff, reviewFiles, reviewReadFile, type ChangedFile, type FileText } from "@/ipc/review";
 import { cn } from "@/lib/utils";
@@ -9,7 +9,7 @@ import { BOTTOM_BAR_HEIGHT, TOP_ROW_HEIGHT } from "@/shell/layout";
 import { messages, useMessages } from "@/i18n";
 import { AccentButton, IconButton } from "@/shell/buttons";
 import { sessionOf, useNodes } from "@/store/nodes";
-import { missionBranchFor, parseDiff, reviewMessage, type DiffLine, type Remark } from "./review";
+import { missionBranchFor, parseDiff, remarkRow, reviewMessage, type DiffLine, type Remark } from "./review";
 import { reviewMessages } from "./messages";
 import { reviewStore, useReview } from "./reviewStore";
 
@@ -72,7 +72,7 @@ function ReviewDrawer({ nodeId }: { nodeId: string }) {
   return (
     <aside
       data-review={nodeId}
-      className="ov-glass-strong absolute right-3 z-40 flex w-[min(920px,calc(100vw-120px))] flex-col overflow-hidden rounded-[14px] text-ov-text"
+      className="ov-glass-strong absolute right-[72px] z-20 flex w-[min(920px,calc(100vw-180px))] flex-col overflow-hidden rounded-[14px] text-ov-text"
       style={{ top: TOP_ROW_HEIGHT + 14, bottom: BOTTOM_BAR_HEIGHT + 14 }}
     >
       <header className="flex h-10 shrink-0 items-center gap-2 border-b border-ov-line px-3">
@@ -111,9 +111,9 @@ function ReviewDrawer({ nodeId }: { nodeId: string }) {
       {base === undefined ? (
         <Message>{t.readingRepo}</Message>
       ) : tab === "changes" ? (
-        <ChangesTab key={`${compared}:${refresh}`} cwd={cwd} base={compared} />
+        <ChangesTab key={`${cwd}:${compared}`} cwd={cwd} base={compared} refresh={refresh} />
       ) : (
-        <FilesTab key={refresh} cwd={cwd} />
+        <FilesTab key={cwd} cwd={cwd} refresh={refresh} />
       )}
       <Remarks nodeId={nodeId} name={name} />
     </aside>
@@ -138,7 +138,7 @@ function Message({ children }: { children: ReactNode }) {
   return <p className="grid flex-1 place-items-center p-6 text-center text-xs text-ov-text-2">{children}</p>;
 }
 
-function ChangesTab({ cwd, base }: { cwd: string; base: string | null }) {
+function ChangesTab({ cwd, base, refresh }: { cwd: string; base: string | null; refresh: number }) {
   const t = useMessages(reviewMessages);
   const [files, setFiles] = useState<ChangedFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -151,15 +151,17 @@ function ChangesTab({ cwd, base }: { cwd: string; base: string | null }) {
       (changes) => {
         if (!alive) return;
         setCut(changes.truncated === true);
+        setError(null);
         setFiles(changes.files);
-        setSelected(changes.files[0] ?? null);
+        // A refresh stays on the file being read when it is still changed.
+        setSelected((current) => changes.files.find((f) => f.path === current?.path) ?? changes.files[0] ?? null);
       },
       (failure: unknown) => alive && setError(errorText(failure)),
     );
     return () => {
       alive = false;
     };
-  }, [cwd, base]);
+  }, [cwd, base, refresh]);
 
   if (error) return <Message>{error}</Message>;
   if (!files) return <Message>{t.readingChanges}</Message>;
@@ -201,53 +203,65 @@ function ChangesTab({ cwd, base }: { cwd: string; base: string | null }) {
           );
         })}
       </ul>
-      {selected ? <FileDiffView key={selected.path} cwd={cwd} file={selected} base={base} /> : <Message>{t.pickFile}</Message>}
+      {selected ? <FileDiffView key={selected.path} cwd={cwd} file={selected} base={base} refresh={refresh} /> : <Message>{t.pickFile}</Message>}
     </div>
   );
 }
 
-function FileDiffView({ cwd, file, base }: { cwd: string; file: ChangedFile; base: string | null }) {
+function FileDiffView({ cwd, file, base, refresh }: { cwd: string; file: ChangedFile; base: string | null; refresh: number }) {
   const t = useMessages(reviewMessages);
   const [diff, setDiff] = useState<{ lines: DiffLine[]; binary: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [commenting, setCommenting] = useState<number | null>(null);
+  // The remark being typed follows the click to another line instead of being lost.
+  const [draft, setDraft] = useState("");
   const remarks = useReview((s) => s.remarks);
 
   useEffect(() => {
     let alive = true;
     reviewFileDiff(cwd, file, base).then(
-      (text) => alive && setDiff(parseDiff(text)),
+      (text) => {
+        if (!alive) return;
+        setError(null);
+        setDiff(parseDiff(text));
+      },
       (failure: unknown) => alive && setError(errorText(failure)),
     );
     return () => {
       alive = false;
     };
-  }, [cwd, file, base]);
+  }, [cwd, file, base, refresh]);
 
   if (error) return <Message>{error}</Message>;
   if (!diff) return <Message>{t.readingDiff}</Message>;
   if (diff.binary) return <Message>{t.binaryNoDiff}</Message>;
   if (diff.lines.length === 0) return <Message>{t.noContentDiff}</Message>;
   const shown = diff.lines.slice(0, MAX_LINES);
-  const remarkFor = (line: DiffLine) =>
-    remarks.filter((r) => r.file === file.path && (line.kind === "del" ? r.side === "old" && r.line === line.old : r.side !== "old" && r.line === line.new));
+  const here = remarks.filter((r) => r.file === file.path && r.line !== undefined);
+  const placed = here.map((r) => remarkRow(shown, r));
+  const remarkFor = (row: number) => here.filter((_, k) => placed[k] === row);
   return (
     <div className="min-w-0 flex-1 overflow-auto font-mono text-[12px] leading-[18px]">
       {shown.map((line, i) => (
         <div key={i}>
           <DiffRow line={line} onClick={line.kind === "add" || line.kind === "ctx" || line.kind === "del" ? () => setCommenting(i) : undefined} />
-          {remarkFor(line).map((remark, j) => (
+          {remarkFor(i).map((remark, j) => (
             <p key={j} className="ml-[88px] border-l-2 border-ov-accent bg-ov-card px-2 py-0.5 font-sans text-[12px] text-ov-text">
               {remark.text}
             </p>
           ))}
           {commenting === i && (
             <RemarkField
+              value={draft}
+              onChange={setDraft}
               onDone={(text) => {
                 setCommenting(null);
+                setDraft("");
                 if (!text) return;
                 const remark: Remark =
-                  line.kind === "del" ? { file: file.path, line: line.old, side: "old", text } : { file: file.path, line: line.new, text };
+                  line.kind === "del"
+                    ? { file: file.path, line: line.old, side: "old", lineText: line.text, text }
+                    : { file: file.path, line: line.new, lineText: line.text, text };
                 reviewStore.getState().add(remark);
               }}
             />
@@ -289,9 +303,8 @@ function DiffRow({ line, onClick }: { line: DiffLine; onClick?: () => void }) {
   );
 }
 
-function RemarkField({ onDone }: { onDone: (text: string) => void }) {
+function RemarkField({ value: text, onChange: setText, onDone }: { value: string; onChange: (text: string) => void; onDone: (text: string) => void }) {
   const t = useMessages(reviewMessages);
-  const [text, setText] = useState("");
   return (
     <div className="ml-[88px] flex items-center gap-2 py-1 pr-3 font-sans">
       <input
@@ -310,7 +323,7 @@ function RemarkField({ onDone }: { onDone: (text: string) => void }) {
   );
 }
 
-function FilesTab({ cwd }: { cwd: string }) {
+function FilesTab({ cwd, refresh }: { cwd: string; refresh: number }) {
   const t = useMessages(reviewMessages);
   const [files, setFiles] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -326,7 +339,7 @@ function FilesTab({ cwd }: { cwd: string }) {
     return () => {
       alive = false;
     };
-  }, [cwd]);
+  }, [cwd, refresh]);
 
   if (error) return <Message>{error}</Message>;
   if (!files) return <Message>{t.readingFiles}</Message>;
@@ -406,11 +419,12 @@ function Remarks({ nodeId, name }: { nodeId: string; name: string }) {
   const remarks = useReview((s) => s.remarks);
   if (remarks.length === 0) return null;
   const send = async () => {
-    const { sent, skipped, waiting } = await sendToAgents([nodeId], reviewMessage(remarks));
+    const { sent, skipped, waiting, starting } = await sendToAgents([nodeId], reviewMessage(remarks));
     if (sent > 0) {
       reviewStore.getState().clear();
       toast(messages(reviewMessages).sent(name));
     } else if (waiting.length > 0) toast.warning(messages(reviewMessages).waiting(name));
+    else if (starting.length > 0) toast.warning(startingText(starting) ?? "");
     else if (skipped.length > 0) toast.warning(messages(reviewMessages).stopped(name));
   };
   return (

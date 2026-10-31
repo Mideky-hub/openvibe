@@ -1,5 +1,8 @@
 import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import { toast } from "sonner";
+import { messages } from "@/i18n";
+import { revealNode } from "@/canvas/arrive";
 import { canvasStore } from "@/canvas/canvasStore";
 import { groupInfoOf, groupOf, insertIntoFrame } from "@/canvas/groups";
 import { allowRemoval } from "@/canvas/removalGuard";
@@ -9,9 +12,12 @@ import type { TerminalPayload } from "@/nodes/types";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { uiStore } from "@/store/ui";
+import { workspacesStore } from "@/store/workspaces";
+import { claudeInstalled } from "./agentsStore";
 import { cloneTerminalPayload } from "./clone";
 import { arrangeInFrame, freeCell } from "./groupLayout";
-import { nameForNewAgent } from "./naming";
+import { fleetMessages } from "./messages";
+import { nameForNewAgent, pantheonsForCopiedGroups } from "./naming";
 
 export interface Point {
   x: number;
@@ -42,6 +48,8 @@ export async function addTerminal(
     elements: frame ? joinGroup(elements, element, frame) : [...elements, element],
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
+  // Out of sight, Excalidraw would neither show it nor start its agent.
+  revealNode(element.id);
   return element.id;
 }
 
@@ -74,10 +82,20 @@ export async function duplicateTerminal(workspaceId: string, nodeId: string) {
 export async function adoptCopies(workspaceId: string, copies: readonly { id: string; sourceId: string }[]) {
   const api = canvasStore.getState().api;
   if (!api) return;
+  const refused = new Set<string>();
+  // A group copied whole takes a pantheon of its own: its agents are named from it.
+  const workspacePantheon = workspacesStore.getState().workspaces.find((w) => w.id === workspaceId)?.pantheon;
+  const pantheons = pantheonsForCopiedGroups(api.getSceneElementsIncludingDeleted(), new Set(copies.map((copy) => copy.id)), workspacePantheon);
   for (const { id, sourceId } of copies) {
     const source = nodesStore.getState().nodes[sourceId];
     if (!source) continue;
     if (source.kind === "orchestrator") {
+      // An orchestrator runs Claude Code: without it, the copy is taken back (spec première version §7.2).
+      if (!(await claudeInstalled())) {
+        toast.error(messages(fleetMessages).noClaude);
+        refused.add(id);
+        continue;
+      }
       // A copied orchestrator keeps its name; its session, created when shown, and its wires are its own.
       await nodesStore.getState().create(id, { workspaceId, kind: "orchestrator", payload: { name: source.payload.name } });
       continue;
@@ -85,13 +103,18 @@ export async function adoptCopies(workspaceId: string, copies: readonly { id: st
     markForAutostart(id);
     const frameId = api.getSceneElementsIncludingDeleted().find((e) => e.id === id)?.frameId;
     const group = canvasStore.getState().frames.find((f) => f.id === frameId);
-    const name = await nameForNewAgent(workspaceId, group?.group?.pantheon);
+    const name = await nameForNewAgent(workspaceId, (frameId ? pantheons.get(frameId) : undefined) ?? group?.group?.pantheon);
     await nodesStore.getState().create(id, { workspaceId, kind: "terminal", payload: cloneTerminalPayload(source.payload, name) });
   }
-  const ids = new Set(copies.map((copy) => copy.id));
+  if (refused.size) removeNodes([...refused]);
+  const ids = new Set(copies.map((copy) => copy.id).filter((id) => !refused.has(id)));
   const linked = api
     .getSceneElementsIncludingDeleted()
-    .map((e) => (ids.has(e.id) ? newElementWith(e, { link: `openvibe://${nodeKindOf(e) ?? "terminal"}/${e.id}` }) : e));
+    .map((e) => {
+      const pantheon = pantheons.get(e.id);
+      if (pantheon) return newElementWith(e, { customData: { ...e.customData, openvibe: { ...(e.customData?.openvibe as object), pantheon } } });
+      return ids.has(e.id) ? newElementWith(e, { link: `openvibe://${nodeKindOf(e) ?? "terminal"}/${e.id}` }) : e;
+    });
   api.updateScene({ elements: alignCopies(linked, ids), captureUpdate: CaptureUpdateAction.NEVER });
 }
 

@@ -36,6 +36,7 @@ const projects = [
 beforeEach(async () => {
   mockIPC(() => undefined);
   vi.mocked(goTo).mockClear();
+  agentsStore.setState({ agents: [], loaded: true, load: () => Promise.resolve() });
   projectsStore.setState({ view: "home", projects, activeId: null } as never);
   paletteStore.setState({ open: false, query: "", context: null, returnFocus: null });
   host = document.createElement("div");
@@ -155,14 +156,22 @@ describe("the palette (spec fenêtre §7.1, §7.2)", () => {
     expect(document.body.textContent).not.toContain("Chargement…");
   });
 
-  it("greys an agent not found on this computer, with why, and never chooses it", async () => {
-    agentsStore.setState({ agents: [{ id: "claude", available: false }] } as never);
+  it("greys what cannot be installed, with why, and never chooses it", async () => {
+    agentsStore.setState({ agents: [{ id: "shell", available: false }], loaded: true } as never);
     await act(async () => openPalette("functions", busy));
-    await act(async () => setPaletteQuery("> lancer claude"));
-    const line = items().find((i) => i.textContent?.startsWith("Lancer Claude"))!;
+    await act(async () => setPaletteQuery("> lancer shell"));
+    const line = items().find((i) => i.textContent?.startsWith("Lancer Shell"))!;
     expect(line.getAttribute("data-disabled")).toBe("true");
-    expect(line.textContent).toContain("claude introuvable dans le PATH");
+    expect(line.textContent).toContain("introuvable dans le PATH");
     expect(selected()).not.toBe(line);
+  });
+
+  it("offers to install a missing agent (spec installation §4.1)", async () => {
+    agentsStore.setState({ agents: [{ id: "claude", available: false }], loaded: true } as never);
+    await act(async () => openPalette("functions", busy));
+    await act(async () => setPaletteQuery("> installer claude"));
+    const line = items().find((i) => i.textContent?.startsWith("Installer Claude…"))!;
+    expect(line.getAttribute("data-disabled")).not.toBe("true");
   });
 
   it("offers the last function again first: Ctrl+Maj+P then Entrée repeats it (retours J8b)", async () => {
@@ -178,5 +187,47 @@ describe("the palette (spec fenêtre §7.1, §7.2)", () => {
     expect(first.textContent).toContain("Masquer le panneau Agents");
     expect(first.textContent).toContain("Navigation");
     expect(selected()).toBe(first);
+  });
+});
+
+describe("Escape and held keys (plan F1 findings)", () => {
+  it("Échap closes the palette without reaching the window listeners of placement and link modes", async () => {
+    const heard = vi.fn();
+    window.addEventListener("keydown", heard);
+    await act(async () => openPalette("goTo", home));
+    await act(async () => void press("Escape"));
+    window.removeEventListener("keydown", heard);
+    expect(paletteStore.getState().open).toBe(false);
+    expect(heard).not.toHaveBeenCalled();
+  });
+});
+
+describe("agents in the functions list (plan F2)", () => {
+  it("looks for the agents when the functions open, and lists the agents already found", async () => {
+    const load = vi.spyOn(agentsStore.getState(), "load").mockResolvedValue();
+    await act(async () => openPalette("functions", busy));
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not grey an agent before the first look has run", async () => {
+    agentsStore.setState({ agents: [], loaded: false });
+    await act(async () => openPalette("functions", busy));
+    await act(async () => setPaletteQuery("> lancer shell"));
+    const line = items().find((i) => i.textContent?.includes("Lancer Shell"));
+    expect(line?.getAttribute("data-disabled")).not.toBe("true");
+    expect(line?.textContent).not.toContain("introuvable");
+  });
+});
+
+describe("while scenes are read (plan F1 finding)", () => {
+  it("does not say « Aucun résultat » next to « Chargement… »", async () => {
+    mockIPC(() => new Promise(() => undefined));
+    workspacesStore.setState({ workspaces: [{ id: "w9", name: "Slow", projectId: "p1", position: 0 }], activeId: "w1" } as never);
+    projectsStore.setState({ view: "project", activeId: "p1" } as never);
+    await act(async () => openPalette("goTo", busy));
+    await act(async () => setPaletteQuery("zzzz"));
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("Chargement…");
+    expect(text).not.toContain("Aucun résultat");
   });
 });

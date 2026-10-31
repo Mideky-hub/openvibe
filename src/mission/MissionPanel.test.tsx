@@ -97,6 +97,17 @@ it("shows the team's reports and the summary, and cleans the mission (spec §7.7
   expect(toast.success).toHaveBeenCalledWith("Worktrees retirés : auth-isis, auth");
 });
 
+it("shows the sub-tasks an agent finished before taking another (backlog H3)", async () => {
+  await show({
+    state: "en_cours",
+    name: "Auth",
+    members: [{ nodeId: "isis", name: "Isis", task: "Login", budgetMin: 20, linked: true, branch: "b", worktree: "C:/w", sentAt: 0, done: ["API", "Docs"] }],
+  });
+  const finished = host.querySelector('[data-member="Isis"] [data-finished]');
+  expect(finished?.textContent).toContain("2");
+  expect(finished?.getAttribute("title")).toBe("Déjà finies : API, Docs");
+});
+
 it("shows the mission panel in English", async () => {
   langStore.setState({ lang: "en" });
   await show({ state: "plan", name: "Auth", router: true, budgetMin: 60, plan: [{ title: "Login", brief: "Do the login", agent: "Isis", budgetMin: 20, level: "faible" }] });

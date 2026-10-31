@@ -9,7 +9,7 @@ import { onPtyExit, ptyList } from "@/ipc/pty";
 import { installMcp } from "@/mcp/router";
 import { installMissionClock } from "@/mission/clock";
 import { installMissionEvents } from "@/mission/events";
-import { setLivePtys } from "@/nodes/terminal/registry";
+import { forgetLivePty, setLivePtys } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
 import { subagentsStore } from "@/store/subagents";
 import { terminalStatusStore } from "@/store/terminalStatus";
@@ -36,6 +36,7 @@ export function boot(): Promise<void> {
     await loadUpdateSettings();
     await loadAgentsPanel();
     await onPtyExit(({ nodeId, exitCode }) => {
+      forgetLivePty(nodeId);
       terminalStatusStore.getState().set(nodeId, { state: "exited", code: exitCode });
       agentActivityStore.getState().remove(nodeId);
     });

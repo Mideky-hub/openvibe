@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { disableRemote, enableRemote, remoteScreen, type RemoteIo } from "./remoteControl";
+import { langStore, messages } from "@/i18n";
+import { fleetMessages } from "./messages";
+import { disableRemote, enableRemote, remoteErrorText, remoteScreen, type RemoteIo } from "./remoteControl";
 
 const URL = "https://claude.ai/code/session_014egvikPZf3oUfnmUBm3aoD";
 const PROMPT = ["────────────────────────────── Claude · demo ─", "❯ ", "──────────────────────────────", "  demo ⌥ main | Opus 5.5"];
@@ -181,5 +183,16 @@ describe("disableRemote", () => {
     const { io, typed } = fakeTerminal(ACTIVE, (keys) => (keys === "\x1b" ? ACTIVE : MENU));
     expect(await disableRemote(io)).toEqual({ error: "Le menu Remote Control n'a pas pu être lu." });
     expect(typed[typed.length - 1]).toBe("\x1b");
+  });
+});
+
+describe("remoteErrorText", () => {
+  it("says a stored consent error in the current language", () => {
+    langStore.setState({ lang: "fr" });
+    const stored = messages(fleetMessages).remote.consent;
+    langStore.setState({ lang: "en" });
+    expect(remoteErrorText(stored)).toBe(fleetMessages.en.remote.consent);
+    expect(remoteErrorText("raw output")).toBe("raw output");
+    langStore.setState({ lang: "fr" });
   });
 });

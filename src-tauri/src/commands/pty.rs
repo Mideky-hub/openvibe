@@ -231,6 +231,11 @@ pub async fn list_agents() -> AppResult<Vec<AgentInfo>> {
 }
 
 #[tauri::command]
+pub async fn npm_available() -> AppResult<bool> {
+    Ok(catalog::npm_available(&which_locate))
+}
+
+#[tauri::command]
 pub async fn list_ollama_models() -> AppResult<Vec<String>> {
     tauri::async_runtime::spawn_blocking(catalog::ollama_models)
         .await
