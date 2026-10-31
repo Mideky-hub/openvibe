@@ -83,7 +83,7 @@ export function NoAgent() {
                 data-install={id}
                 aria-label={t.installAgent(agent.label)}
                 onClick={() => setAsked(id)}
-                className="rounded-full bg-ov-accent-soft px-2 py-0.5 text-[11px] font-semibold text-ov-accent hover:underline"
+                className="rounded-[9px] bg-ov-accent-soft px-2 py-0.5 text-[11px] font-semibold text-ov-accent hover:underline"
               >
                 {t.install}
               </button>

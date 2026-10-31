@@ -52,6 +52,7 @@ describe("installAgent", () => {
       command: 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"',
       shell: "powershell",
       title: "Installation · Codex",
+      oneShot: true,
     });
     expect(center).toEqual({ x: 10, y: 20 });
   });
@@ -137,8 +138,18 @@ describe("watchTerminal", () => {
     expect(found).toHaveBeenCalledTimes(2);
   });
 
+  it("gives up when the terminal was closed before its first check", async () => {
+    terminalStatusStore.setState({ statuses: { "node-1": { state: "starting" } } });
+    const found = vi.fn(() => Promise.resolve(false));
+    watchTerminal("node-1", found, vi.fn());
+    terminalStatusStore.getState().remove("node-1");
+    await tick();
+    await tick();
+    expect(found).toHaveBeenCalledTimes(1);
+  });
+
   it("waits for a terminal that has not started yet", async () => {
-    terminalStatusStore.setState({ statuses: {} });
+    terminalStatusStore.setState({ statuses: { "node-1": { state: "starting" } } });
     const found = vi.fn(() => Promise.resolve(false));
     watchTerminal("node-1", found, vi.fn());
     await tick();
@@ -171,7 +182,7 @@ describe("pullOllamaModel", () => {
     await pullOllamaModel("llama3.2:3b", { x: 1, y: 2 });
     const [agent, options, center] = launch.mock.calls[0];
     expect(agent).toBe("custom");
-    expect(options).toMatchObject({ command: "ollama pull llama3.2:3b", shell: "powershell", title: "Ollama · llama3.2:3b" });
+    expect(options).toMatchObject({ command: "ollama pull llama3.2:3b", shell: "powershell", title: "Ollama · llama3.2:3b", oneShot: true });
     expect(center).toEqual({ x: 1, y: 2 });
   });
 

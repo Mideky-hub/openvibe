@@ -98,7 +98,8 @@ function create(nodeId: string): Entry {
   // Spec habillage §7.3: typing in a terminal where nothing runs starts it again.
   // onKey, not onData: xterm also answers the queries of a restored screen.
   term.onKey(({ domEvent }) => {
-    if (!entry.session.replaying && isTypingKey(domEvent) && startsOnKeystroke(statusOf(nodeId))) {
+    const oneShot = sessionOf(nodesStore.getState().nodes[nodeId])?.oneShot;
+    if (!entry.session.replaying && isTypingKey(domEvent) && startsOnKeystroke(statusOf(nodeId), oneShot)) {
       void startFresh(nodeId, entry);
     }
   });

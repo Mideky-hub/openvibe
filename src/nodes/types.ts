@@ -24,6 +24,8 @@ export interface TerminalPayload {
   remoteControl?: boolean;
   /** Claude's model, chosen by a mission's router (spec maj §3). */
   model?: string;
+  /** A command to run once, an install: only an explicit gesture runs it again (spec installation §7). */
+  oneShot?: boolean;
 }
 
 /** Content of an orchestrator node (spec habillage §13, spec orchestrateur §6). */
@@ -82,5 +84,6 @@ export function readTerminalPayload(raw: unknown): TerminalPayload | null {
   if (r.role === "orchestrator") payload.role = "orchestrator";
   if (r.remoteControl === true) payload.remoteControl = true;
   if (typeof r.model === "string" && r.model) payload.model = r.model;
+  if (r.oneShot === true) payload.oneShot = true;
   return payload;
 }

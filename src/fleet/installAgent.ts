@@ -22,11 +22,10 @@ const WATCH_FOR_MS = 30 * 60_000;
  */
 export function watchTerminal(nodeId: string, found: () => Promise<boolean>, onFound: () => void) {
   const deadline = Date.now() + WATCH_FOR_MS;
-  let started = false;
   const tick = async () => {
+    // A new terminal reads "starting" from its creation; a closed one has no status left.
     const { state } = statusOf(nodeId);
-    const ended = state === "exited" || state === "error" || (started && state !== "running");
-    started ||= state === "running";
+    const ended = state !== "running" && state !== "starting";
     if (await found().catch(() => false)) onFound();
     else if (!ended && Date.now() < deadline) setTimeout(() => void tick(), WATCH_EVERY_MS);
   };
@@ -38,7 +37,7 @@ async function openCommandTerminal(title: string, command: string, shell: ShellK
   const t = messages(fleetMessages);
   try {
     const center = at ?? viewportCenter(canvasStore.getState().view);
-    const nodeId = await launchAgent("custom", { ...defaultLaunchOptions(), title, command, shell }, center);
+    const nodeId = await launchAgent("custom", { ...defaultLaunchOptions(), title, command, shell, oneShot: true }, center);
     if (!nodeId) toast.error(t.install.noCanvas);
     // The installer may ask something: the terminal comes into view with the keyboard.
     else arrive(nodeId);

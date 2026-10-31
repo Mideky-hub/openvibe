@@ -30,7 +30,7 @@ import { GroupLabels } from "./overlay/GroupLabels";
 import { StepTimelines } from "./overlay/StepTimelines";
 import { loadScene, rememberScene, type LoadedScene } from "./sceneCache";
 import { EXCALIDRAW_UI_OPTIONS, withSceneDefaults } from "./sceneDefaults";
-import { sceneReady } from "./sceneReady";
+import { sceneGone, sceneReady } from "./sceneReady";
 import { createSceneSync, liveNodeIds, liveNodeRects } from "./sceneSync";
 import { messages, useLang, useMessages } from "@/i18n";
 import { canvasMessages, EXCALIDRAW_LANG } from "./messages";
@@ -87,7 +87,10 @@ function LoadedCanvas({ workspaceId, scene }: { workspaceId: string; scene: Load
       completeArrival(workspaceId);
       sceneReady(workspaceId);
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      sceneGone(workspaceId);
+    };
   }, [api, workspaceId]);
 
   // The next workspace must not show this one's groups before its first change.

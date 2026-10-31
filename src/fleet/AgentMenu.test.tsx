@@ -73,7 +73,7 @@ it("shows the whole command before running it, then installs from the menu", asy
   await act(async () => installButtons()[0].click());
   const prompt = document.body.querySelector("[data-install-prompt='codex']")!;
   expect(prompt.querySelector("code")!.textContent).toBe('powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"');
-  expect(prompt.textContent).toContain("terminal PowerShell");
+  expect(prompt.textContent).toContain("(PowerShell)");
   expect(installAgent).not.toHaveBeenCalled();
   await act(async () => button("Lancer dans un terminal")!.click());
   expect(installAgent).toHaveBeenCalledWith("codex", undefined);
@@ -85,7 +85,7 @@ it("says that Gemini CLI needs Node.js, in cmd, and links to its page", async ()
   await act(async () => document.body.querySelector<HTMLButtonElement>("[data-install='gemini']")!.click());
   const prompt = document.body.querySelector("[data-install-prompt='gemini']")!;
   expect(prompt.textContent).toContain("Nécessite Node.js");
-  expect(prompt.textContent).toContain("terminal Invite de commandes");
+  expect(prompt.textContent).toContain("(Invite de commandes)");
   await act(async () => button("Page officielle")!.click());
   expect(openUrl).toHaveBeenCalledWith("https://github.com/google-gemini/gemini-cli");
 });
@@ -113,7 +113,7 @@ it("speaks English", async () => {
   expect(installButtons()[0].textContent).toBe("Install");
   await act(async () => installButtons()[0].click());
   const prompt = document.body.querySelector("[data-install-prompt]")!;
-  expect(prompt.textContent).toContain("This official command will run in a PowerShell terminal on the canvas:");
+  expect(prompt.textContent).toContain("This official command will run in a terminal on the canvas (PowerShell):");
   expect(button("Run in a terminal")).toBeTruthy();
 });
 

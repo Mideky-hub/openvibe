@@ -79,4 +79,7 @@ Le nom finit dans un shell : seuls lettres, chiffres et `._:/-` passent, comme p
 - Mettre à jour ou désinstaller un agent.
 - Installer Node.js ou Git.
 - Se connecter à un agent après l'installation : chaque CLI le demande à son premier lancement.
-- Le terminal d'installation est un terminal « Personnalisé » ordinaire : **Relancer** relance l'installeur, et rouvrir le projet ne le relance pas.
+
+## 7. Une commande d'installation ne repart pas toute seule
+
+Un terminal d'installation est un terminal « Personnalisé » marqué `oneShot`, comme celui d'un téléchargement de modèle. Seul un geste explicite relance sa commande : **Relancer**, sa carte, ou **Dupliquer**. « Reprendre toutes les conversations » ne le compte pas, et taper dans le terminal arrêté ne fait rien, contrairement aux autres terminaux. Changer d'agent dans ses options retire la marque.

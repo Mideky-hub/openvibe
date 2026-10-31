@@ -196,8 +196,7 @@ export const fleetMessages = defineMessages(
     install: {
       button: "Installer",
       installAgent: (label: string) => `Installer ${label}`,
-      back: "Retour",
-      runsIn: (shell: string) => `Cette commande officielle va s'exécuter dans un terminal ${shell} du canvas :`,
+      runsIn: (shell: string) => `Cette commande officielle va s'exécuter dans un terminal du canvas (${shell}) :`,
       needsNode: "Nécessite Node.js et npm.",
       officialPage: "Page officielle",
       run: "Lancer dans un terminal",
@@ -410,8 +409,7 @@ export const fleetMessages = defineMessages(
     install: {
       button: "Install",
       installAgent: (label: string) => `Install ${label}`,
-      back: "Back",
-      runsIn: (shell: string) => `This official command will run in a ${shell} terminal on the canvas:`,
+      runsIn: (shell: string) => `This official command will run in a terminal on the canvas (${shell}):`,
       needsNode: "Requires Node.js and npm.",
       officialPage: "Official page",
       run: "Run in a terminal",

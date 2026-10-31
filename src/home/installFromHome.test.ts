@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { toast } from "sonner";
-import { sceneReady } from "@/canvas/sceneReady";
+import { sceneGone, sceneReady } from "@/canvas/sceneReady";
 import { installAgent } from "@/fleet/installAgent";
 import type { Project } from "@/ipc/db";
 import { projectsStore } from "@/store/projects";
@@ -33,7 +33,9 @@ beforeEach(() => {
   vi.mocked(addProject).mockClear();
   vi.mocked(toast.error).mockClear();
   open.mockClear();
-  sceneReady("w1"); // Nothing left waiting from the previous test.
+  // Nothing left waiting or on screen from the previous test.
+  sceneReady("w1");
+  sceneGone("w1");
   vi.mocked(installAgent).mockClear();
   workspacesStore.setState({ activeId: null });
   projectsStore.setState({ view: "home", projects: [], open });
@@ -46,6 +48,17 @@ it("opens the last project and installs once its scene is on screen (spec instal
   expect(addProject).not.toHaveBeenCalled();
   expect(installAgent).not.toHaveBeenCalled();
   sceneReady("w1");
+  expect(installAgent).toHaveBeenCalledWith("codex");
+});
+
+it("installs at once when a cached scene was on screen before the opening ended", async () => {
+  projectsStore.setState({ projects: [project("a", 1)] });
+  open.mockImplementationOnce(async () => {
+    projectsStore.setState({ view: "project" });
+    workspacesStore.setState({ activeId: "w1" });
+    sceneReady("w1");
+  });
+  await installFromHome("codex");
   expect(installAgent).toHaveBeenCalledWith("codex");
 });
 

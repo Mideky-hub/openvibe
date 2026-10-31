@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { useMessages } from "@/i18n";
 import { listOllamaModels, type OllamaLaunch, type OllamaMode } from "@/ipc/pty";
 import { cn } from "@/lib/utils";
+import { AccentButton } from "@/shell/buttons";
 import { OLLAMA_SUGGESTIONS, sameOllamaModel, validOllamaModel } from "./installCommands";
 import { fleetMessages } from "./messages";
 
@@ -89,9 +90,9 @@ export function OllamaPicker(props: { aiderAvailable: boolean; onBack: () => voi
             }}
             className="h-8 min-w-0 font-mono text-xs"
           />
-          <button type="submit" className="h-8 shrink-0 rounded-full bg-ov-accent px-3 text-xs font-semibold text-white">
+          <AccentButton type="submit" className="px-3 text-xs">
             {t.pull}
-          </button>
+          </AccentButton>
         </div>
         {invalid && <p className="text-xs text-ov-danger">{t.pullInvalid}</p>}
         <p className="text-[11px] text-ov-text-2">{t.pullHint}</p>

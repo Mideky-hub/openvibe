@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMessages } from "@/i18n";
 import type { AgentId } from "@/ipc/pty";
 import { SHELL_LABELS } from "@/nodes/terminal/launch";
+import { AccentButton } from "@/shell/buttons";
 import { AGENTS } from "./catalog";
 import { AGENT_INSTALLS } from "./installCommands";
 import { fleetMessages } from "./messages";
@@ -23,9 +24,9 @@ export function InstallPrompt({ agent, onBack, onRun }: { agent: AgentId; onBack
       <button type="button" data-link onClick={() => void openUrl(install.docs)} className="flex items-center gap-1 text-xs text-ov-accent hover:underline">
         {t.officialPage} <ExternalLink className="size-3" />
       </button>
-      <button type="button" onClick={onRun} className="h-8 rounded-full bg-ov-accent text-xs font-semibold text-white">
+      <AccentButton onClick={onRun} className="justify-center text-xs">
         {t.run}
-      </button>
+      </AccentButton>
     </div>
   );
 }
