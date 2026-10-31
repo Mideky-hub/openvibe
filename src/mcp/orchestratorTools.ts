@@ -184,6 +184,8 @@ function prolong(orchestratorId: string, mission: Mission, args: Record<string, 
   if (mission.state !== "en_cours") return refused(t().orchestrator.noMission);
   const member = memberNamed(mission, args.agent);
   if (typeof member === "string") return refused(member);
+  if (member.handedTo) return refused(t().orchestrator.handedAway(member.name));
+  if (member.report) return refused(t().orchestrator.alreadyReported(member.name));
   const minutes = args.minutes;
   if (typeof minutes !== "number" || !Number.isInteger(minutes) || minutes < 1) return refused(t().orchestrator.wholeMinutes);
   const left = remainingGlobal(mission);
