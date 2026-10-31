@@ -44,3 +44,21 @@ it("keeps working when the log file cannot be written", async () => {
   expect(() => fakeConsole.error("still shown")).not.toThrow();
   await Promise.resolve();
 });
+
+it("survives a value whose text cannot be made", () => {
+  const { sent, target } = recorder();
+  const fakeConsole = { warn: vi.fn(), error: vi.fn() } as unknown as Console;
+  installLogging(target, fakeConsole, new EventTarget() as unknown as Window);
+  const hostile = Object.create(null) as object;
+  expect(() => fakeConsole.error("failed:", hostile)).not.toThrow();
+  expect(sent[0][1]).toContain("failed:");
+});
+
+it("drops the literal %o React leaves at the start of its errors", () => {
+  const { sent, target } = recorder();
+  const fakeConsole = { warn: vi.fn(), error: vi.fn() } as unknown as Console;
+  installLogging(target, fakeConsole, new EventTarget() as unknown as Window);
+  fakeConsole.error("%o\n\n%s\n\n%s\n", new Error("render"), "tree", "advice");
+  expect(sent[0][1].startsWith("%o")).toBe(false);
+  expect(sent[0][1]).toContain("Error: render");
+});
