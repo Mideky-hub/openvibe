@@ -10,7 +10,10 @@ import { newTerminalPayload } from "@/nodes/terminal/launch";
 import { markForAutostart } from "@/nodes/terminal/registry";
 import type { TerminalPayload } from "@/nodes/types";
 import { nodesStore } from "@/store/nodes";
-import { isRunning } from "@/store/terminalStatus";
+import { messages } from "@/i18n";
+import { fleetMessages } from "./messages";
+import { isRunning, statusOf } from "@/store/terminalStatus";
+import { toast } from "sonner";
 import { uiStore } from "@/store/ui";
 import { workspacesStore } from "@/store/workspaces";
 import { readableTargets } from "./groupView";
@@ -144,6 +147,12 @@ export function setGroupSpeciality(groupId: string, speciality: string) {
 export function setGroupFolded(groupId: string, folded: boolean) {
   const api = canvasStore.getState().api;
   if (!api) return;
+  // A hidden agent is not mounted, so it never starts: wait for the ones still waiting for their turn.
+  const waiting = canvasStore.getState().frames.find((f) => f.id === groupId)?.memberIds.some((id) => statusOf(id).state === "starting");
+  if (folded && waiting) {
+    toast.error(messages(fleetMessages).foldWaiting);
+    return;
+  }
   api.updateScene({
     elements: api
       .getSceneElementsIncludingDeleted()

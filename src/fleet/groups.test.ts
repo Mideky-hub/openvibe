@@ -4,10 +4,13 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { canvasStore } from "@/canvas/canvasStore";
 import { nodesStore, terminalOf } from "@/store/nodes";
+import { terminalStatusStore } from "@/store/terminalStatus";
 import { workspacesStore } from "@/store/workspaces";
+import { toast } from "sonner";
 import { addAgentToGroup, closeGroup, launchGroup, setGroupFolded, setGroupSpeciality, showGroups } from "./groups";
 
 vi.mock("@excalidraw/excalidraw", () => ({ CaptureUpdateAction: { IMMEDIATELY: "i" }, newElementWith: (e: object, patch: object) => ({ ...e, ...patch }) }));
+vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
 vi.mock("@/nodes/terminal/registry", () => ({ markForAutostart: vi.fn() }));
 vi.mock("./naming", async (importOriginal) => ({ ...(await importOriginal<typeof import("./naming")>()), nameForNewAgent: vi.fn(() => Promise.resolve("Isis")) }));
 vi.mock("./terminals", async (importOriginal) => ({ ...(await importOriginal<typeof import("./terminals")>()), addTerminal: vi.fn(() => Promise.resolve()) }));
@@ -123,4 +126,17 @@ it("unfolds a folded group before adding an agent to it, so the agent shows and 
   workspacesStore.setState({ activeId: "w1" });
   await addAgentToGroup("f1", "shell");
   expect(scene[0].customData?.openvibe).not.toHaveProperty("folded");
+});
+
+it("does not fold a group whose agents have not started yet: a hidden agent never starts", () => {
+  const data = { kind: "group", role: "general", pantheon: "egyptian" };
+  scene = [{ id: "f1", type: "frame", customData: { openvibe: data } }, { id: "t1", type: "embeddable", customData: { kind: "terminal" }, frameId: "f1" } as never];
+  canvasStore.setState({ frames: [{ id: "f1", name: "G", x: 0, y: 0, width: 1, height: 1, group: { role: "general", pantheon: "egyptian" }, memberIds: ["t1"] }] as never });
+  terminalStatusStore.getState().set("t1", { state: "starting" });
+  setGroupFolded("f1", true);
+  expect(scene[0].customData?.openvibe).toEqual(data);
+  expect(toast.error).toHaveBeenCalled();
+  terminalStatusStore.getState().set("t1", { state: "running" });
+  setGroupFolded("f1", true);
+  expect(scene[0].customData?.openvibe).toEqual({ ...data, folded: true });
 });
