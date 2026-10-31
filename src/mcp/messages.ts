@@ -98,6 +98,7 @@ export const agentMessages = defineMessages(
       remoteOnMissing: "Dis si Remote Control doit être actif (on : true ou false).",
       remoteAgentsMissing: "Nomme les agents (agents), « all » ou « me ».",
       remoteUnknown: (names: string) => `Ni reliés ni dans la mission : ${names}.`,
+      remoteAmbiguous: (names: string) => `Plusieurs agents portent ce prénom : ${names}. Renomme l'un d'eux.`,
       remoteNone: "Aucun agent Claude dans l'équipe.",
       you: "Toi",
       remote: {
@@ -260,6 +261,7 @@ export const agentMessages = defineMessages(
       remoteOnMissing: "Say whether Remote Control should be on (on: true or false).",
       remoteAgentsMissing: "Name the agents (agents), \"all\" or \"me\".",
       remoteUnknown: (names: string) => `Neither linked nor in the mission: ${names}.`,
+      remoteAmbiguous: (names: string) => `Several agents share this name: ${names}. Rename one of them.`,
       remoteNone: "No Claude agent in the team.",
       you: "You",
       remote: {

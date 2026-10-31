@@ -56,3 +56,10 @@ it("mission() gives the model of the agent that holds a sub-task, not the planne
   const result = await orchestratorTool("chef2", "mission", {});
   expect(JSON.parse(result.content[0].text).plan[0].model).toBe("Opus 5.5");
 });
+
+it("remote_control refuses a first name two agents share instead of taking the first (backlog 27 oct)", async () => {
+  await setup([member("a", "Isis"), member("b", "Isis")]);
+  const result = await orchestratorTool("chef", "remote_control", { actif: true, agents: ["Isis"] });
+  expect(result.isError).toBe(true);
+  expect(result.content[0].text).toContain("Plusieurs agents");
+});
