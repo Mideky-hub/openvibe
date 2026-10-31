@@ -94,6 +94,11 @@ describe("Dessin (spec fenêtre §7.3)", () => {
 
 describe("Dessin, sur la sélection (spec menu radial §4.5)", () => {
   const view = { scrollX: 0, scrollY: 0, zoom: 2, width: 800, height: 600, offsetLeft: 5, offsetTop: 7, tool: "selection", selectedIds: [], editingFrame: null };
+  const mixed = (selected: Record<string, boolean>) =>
+    canvasStore.setState({
+      view,
+      api: { getAppState: () => ({ selectedElementIds: selected }), getSceneElements: () => [{ id: "r1", locked: true }, { id: "r2", locked: false }] } as unknown as ExcalidrawImperativeAPI,
+    });
   const scene = (selected: Record<string, boolean>, locked = false) =>
     canvasStore.setState({
       view,
@@ -126,6 +131,11 @@ describe("Dessin, sur la sélection (spec menu radial §4.5)", () => {
     scene({ r1: true });
     expect(labelOf(DRAWING.find((c) => c.id === "drawing.lock")!, busy)).toBe("Verrouiller");
     scene({ r1: true }, true);
+    expect(labelOf(DRAWING.find((c) => c.id === "drawing.lock")!, busy)).toBe("Déverrouiller");
+  });
+
+  it("offers « Déverrouiller » on a mixed selection: Excalidraw's lock unlocks it whole (plan G1)", () => {
+    mixed({ r1: true, r2: true });
     expect(labelOf(DRAWING.find((c) => c.id === "drawing.lock")!, busy)).toBe("Déverrouiller");
   });
 
