@@ -151,6 +151,7 @@ export const fleetMessages = defineMessages(
       remove: (label: string) => `Retirer ${label}`,
       send: "Envoyer",
       writeInstruction: "Écris une consigne",
+      noAgents: "Aucun agent dans cette cible",
     },
     compose: {
       title: "Composer un groupe",
@@ -376,6 +377,7 @@ export const fleetMessages = defineMessages(
       remove: (label: string) => `Remove ${label}`,
       send: "Send",
       writeInstruction: "Write an instruction",
+      noAgents: "No agent in this target",
     },
     compose: {
       title: "Compose a group",
