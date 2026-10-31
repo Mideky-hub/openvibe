@@ -4,6 +4,7 @@ import { useMessages } from "@/i18n";
 import { TOP_ROW_HEIGHT } from "@/shell/layout";
 import { uiStore, useUi } from "@/store/ui";
 import { fleetMessages } from "./messages";
+import { finishButtonAt, forwardWheel } from "./linkOverlay";
 import { linkOrchestrator } from "./orchestrators";
 import { clientRectOf, sceneOf } from "./placement";
 import type { Point } from "./terminals";
@@ -34,13 +35,19 @@ export function LinkMode() {
 
   return (
     <div
-      className="fixed inset-0 z-40 cursor-crosshair"
+      // Starts under the bars: the title bar's buttons and drag area keep working while placing or linking.
+      className="fixed inset-x-0 bottom-0 z-40 cursor-crosshair"
+      style={{ top: TOP_ROW_HEIGHT }}
       onPointerMove={(e) => setPointer({ x: e.clientX, y: e.clientY })}
+      onWheel={forwardWheel}
       onContextMenu={(e) => {
         e.preventDefault();
         uiStore.getState().setLinking(null);
       }}
       onClick={(e) => {
+        // The layer covers the orchestrator's « Terminer »: the click goes on to it.
+        const finish = finishButtonAt(e.clientX, e.clientY);
+        if (finish) return finish.click();
         const target = targetAt({ x: e.clientX, y: e.clientY });
         if (target) linkOrchestrator(linking, target);
         else uiStore.getState().setLinking(null);

@@ -3,15 +3,19 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { clearMocks, mockIPC, mockWindows } from "@tauri-apps/api/mocks";
+import { toast } from "sonner";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { agentsStore } from "@/fleet/agentsStore";
 import { langStore } from "@/i18n";
 import { AGENT_IDS, type AgentInfo } from "@/ipc/pty";
 import type { Project } from "@/ipc/db";
 import { HomeScreen } from "./HomeScreen";
+import { installFromHome } from "./installFromHome";
 
 // Excalidraw does not load under Vitest (roughjs); the search field reaches it through the command registry.
 vi.mock("@excalidraw/excalidraw", () => ({}));
+vi.mock("./installFromHome", () => ({ installFromHome: vi.fn(() => Promise.resolve()) }));
+vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(() => Promise.resolve()) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -29,6 +33,7 @@ beforeEach(() => {
   agents = only();
   projects = [];
   calls = [];
+  vi.mocked(installFromHome).mockClear();
   agentsStore.setState({ agents: [], shells: [], loaded: false });
   mockWindows("main");
   mockIPC(
@@ -85,6 +90,51 @@ it("copies Claude Code's install command and opens the official pages", async ()
   expect(openUrl).toHaveBeenCalledWith("https://github.com/openai/codex");
 });
 
+it("installs Claude Code in one click: its command is already on screen (spec installation §4.2)", async () => {
+  await render();
+  await act(async () => button("Installer Claude Code").click());
+  expect(installFromHome).toHaveBeenCalledWith("claude");
+  expect(host.querySelector("[data-install-prompt]")).toBeNull();
+});
+
+it("shows the other agents' command before installing them", async () => {
+  await render();
+  const install = () => host.querySelector<HTMLButtonElement>("[data-no-agent] [data-install='gemini']")!;
+  await act(async () => install().click());
+  expect(installFromHome).not.toHaveBeenCalled();
+  expect(host.querySelector("[data-install-prompt='gemini'] code")!.textContent).toBe("npm install -g @google/gemini-cli");
+  await act(async () => button("Lancer dans un terminal").click());
+  expect(installFromHome).toHaveBeenCalledWith("gemini");
+  expect(host.querySelector("[data-install-prompt]")).toBeNull();
+});
+
+it("closes the prompt without installing", async () => {
+  await render();
+  await act(async () => host.querySelector<HTMLButtonElement>("[data-install='qwen']")!.click());
+  await act(async () => button("Installer Qwen Code").click());
+  expect(host.querySelector("[data-install-prompt]")).toBeNull();
+  expect(installFromHome).not.toHaveBeenCalled();
+});
+
+it("says where the install terminal will open", async () => {
+  await render();
+  expect(host.querySelector("[data-no-agent]")!.textContent).toContain("choisis d'abord son dossier");
+  await act(async () => root.unmount());
+  projects = [project];
+  root = createRoot(host);
+  await render();
+  expect(host.querySelector("[data-no-agent]")!.textContent).toContain("sur le canvas de « api »");
+});
+
+it("words the install in English", async () => {
+  langStore.setState({ lang: "en" });
+  await render();
+  const card = host.querySelector("[data-no-agent]")!;
+  expect(card.textContent).toContain("Install Claude Code");
+  expect(card.textContent).toContain("The install terminal opens on a project's canvas: pick its folder first.");
+  expect(card.textContent).toContain("The other agents:");
+});
+
 it("reads Windows' PATH again before looking for the agents, then shows the steps done (spec §7.2)", async () => {
   await render();
   agents = only("claude");
@@ -120,4 +170,30 @@ it("speaks English when the interface does", async () => {
   expect(panel()?.textContent).toContain("Getting started");
   expect(host.querySelector("[data-no-agent]")!.textContent).toContain("No coding agent found");
   expect(button("Check again")).toBeTruthy();
+});
+
+it("says so when listing the agents fails, instead of silently hiding the panel", async () => {
+  mockIPC((cmd) => {
+    if (cmd === "list_projects") return [];
+    if (cmd === "list_agents") throw new Error("boom");
+    if (cmd === "list_shells") return [];
+    if (cmd === "plugin:window|is_maximized") return false;
+  });
+  await render();
+  expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("boom"));
+});
+
+it("tells screen readers a step is done, with text instead of an aria-label on a span", async () => {
+  agents = only("claude");
+  await render();
+  const done = panel()!.querySelector<HTMLElement>("li[data-step='agent']")!;
+  expect(done.querySelector(".sr-only")?.textContent).toBe("fait");
+  expect(done.querySelector("[aria-label]")).toBeNull();
+});
+
+it("tells the user when the clipboard refuses the install command", async () => {
+  Object.defineProperty(navigator, "clipboard", { value: { writeText: vi.fn(() => Promise.reject(new Error("denied"))) }, configurable: true });
+  await render();
+  await act(async () => button("Copier").click());
+  expect(toast.error).toHaveBeenCalled();
 });

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { canvasStore } from "@/canvas/canvasStore";
 import { nodesStore, type NodeRecord } from "@/store/nodes";
 import { NEW_MISSION } from "./mission";
-import { agentGroup, linkedGroups, memberBudgets, memberOf, setOrchestratorClosed } from "./store";
+import { agentGroup, linkedClaudeAgents, linkedGroups, memberBudgets, memberOf, setOrchestratorClosed } from "./store";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
 
@@ -68,4 +68,19 @@ it("draws no budget bar for a closed orchestrator's mission (final review R3)", 
   expect(memberBudgets(nodes, 60 * 60_000)).toEqual({});
   setOrchestratorClosed("chef", false);
   expect(memberBudgets(nodes, 60 * 60_000)).toEqual({ isis: { spent: 60, budget: 10 } });
+});
+
+it("does not offer an agent already in another running mission (backlog H2)", () => {
+  const member = { name: "Isis", task: "Login", budgetMin: 10, linked: true, branch: "b", worktree: "w", sentAt: 0 };
+  const terminal = { title: "", name: "Isis", agent: "claude" as const, cwd: "C:/", shell: "default" as const, command: "" };
+  nodesStore.setState({
+    nodes: {
+      isis: { workspaceId: "w1", kind: "terminal", payload: terminal },
+      busy: { workspaceId: "w1", kind: "orchestrator", payload: { name: "Busy", mission: { ...NEW_MISSION, state: "en_cours", members: [{ ...member, nodeId: "isis" }] } } },
+      free: { workspaceId: "w1", kind: "orchestrator", payload: { name: "Free" } },
+    },
+  });
+  canvasStore.setState({ links: { busy: { nodeIds: ["isis"], groupIds: [] }, free: { nodeIds: ["isis"], groupIds: [] } }, frames: [] });
+  expect(linkedClaudeAgents("free")).toEqual([]);
+  expect(linkedClaudeAgents("busy").map((a) => a.nodeId)).toEqual(["isis"]);
 });

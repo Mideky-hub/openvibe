@@ -29,7 +29,7 @@ vi.mock("@/ipc/pty", async (importOriginal) => ({
   ptySendText: vi.fn(() => Promise.resolve()),
   ptyWrite: vi.fn(() => Promise.resolve()),
 }));
-vi.mock("@/nodes/terminal/registry", () => ({ relaunchTerminal: vi.fn(), stopTerminal: vi.fn(), quietFor: vi.fn(() => 0), freshText: vi.fn(() => ""), markForAutostart: vi.fn() }));
+vi.mock("@/nodes/terminal/registry", () => ({ relaunchTerminal: vi.fn(), stopTerminal: vi.fn(), quietFor: vi.fn(() => 0), typedAgo: vi.fn(() => Infinity), freshText: vi.fn(() => ""), markForAutostart: vi.fn() }));
 vi.mock("@/fleet/groups", () => ({ launchGroup: vi.fn(), closeGroup: vi.fn(), showGroups: vi.fn() }));
 vi.mock("@/fleet/orchestrators", () => ({ linkOrchestrator: vi.fn() }));
 vi.mock("@/fleet/terminals", () => ({ addTerminal: vi.fn(() => Promise.resolve("n9")), removeNodes: vi.fn() }));
@@ -416,6 +416,13 @@ it("cleans a finished mission and frees the orchestrator for the next, its setti
   expect(missionNow()).toEqual({ state: "redaction", budgetMin: 90, maxAgents: 3, members: [] });
 });
 
+it("keeps the router setting when the mission is cleaned (backlog 27 oct)", async () => {
+  await setup({ state: "terminee", budgetMin: 90, maxAgents: 3, router: true, project: "C:/code/proj", slug: "auth", summary: "ok", members: [member("isis", "Isis", true)] });
+  vi.mocked(missionCleanup).mockResolvedValue({ removed: [], kept: [] });
+  await cleanMission("chef");
+  expect(missionNow()).toMatchObject({ state: "redaction", router: true });
+});
+
 describe("what the final review of H2 found", () => {
   it("undoes the worktrees of a launch that fails, and moves no linked agent before the group exists", async () => {
     await setup();
@@ -502,6 +509,21 @@ describe("reassignTask (spec §7.2 reattribuer)", () => {
     expect(pauseAgents).not.toHaveBeenCalled();
   });
 
+  it("refuses at once an agent that is stopped, instead of failing a minute later", async () => {
+    await team();
+    terminalStatusStore.getState().set("n1", { state: "stopped" });
+    expect(await reassignTask("chef", "isis", "Horus")).toContain("est arrêté");
+    expect(missionNow().members[0].handedTo).toBeUndefined();
+    expect(pauseAgents).not.toHaveBeenCalled();
+  });
+
+  it("does not open a new agent past Max agents", async () => {
+    await setup({ state: "en_cours", maxAgents: 2, project: "C:/code/proj", slug: "auth", frameId: "f1", members: [member("isis", "Isis", true, { task: "Login" }), member("n1", "Horus", false, { task: "API" })] });
+    expect(await reassignTask("chef", "isis", "nouveau")).toContain("Agents max");
+    expect(missionAddAgent).not.toHaveBeenCalled();
+    expect(pauseAgents).not.toHaveBeenCalled();
+  });
+
   it("gives a sub-task to a new agent in the mission's group, started at once", async () => {
     await team();
     canvasStore.setState({ frames: [{ id: "f1", x: 0, y: 0, width: 800, height: 500, name: "Mission Auth", group: { role: "general", pantheon: "egyptian" }, memberIds: ["n1"] }] });
@@ -529,3 +551,20 @@ it("leaves a handed-over agent's branch to its successor when merging (final rev
   expect(vi.mocked(missionMerge).mock.calls.map(([, , branch]) => branch)).toEqual(["openvibe/auth-n1"]);
 });
 
+
+it("gives a reassigned new agent the model of the sub-task's level when the router is on (backlog Routeur)", async () => {
+  await setup({
+    state: "en_cours",
+    router: true,
+    plan: [{ title: "Login", brief: "b", agent: "Isis", budgetMin: 20, level: "eleve" }],
+    project: "C:/code/proj",
+    slug: "auth",
+    frameId: "f1",
+    members: [member("isis", "Isis", true, { task: "Login" })],
+  });
+  canvasStore.setState({ frames: [{ id: "f1", x: 0, y: 0, width: 800, height: 500, name: "Mission Auth", group: { role: "general", pantheon: "egyptian" }, memberIds: ["isis"] }] });
+  const result = await reassignTask("chef", "isis", "nouveau");
+  expect(typeof result).toBe("object");
+  expect(addTerminal).toHaveBeenCalledWith("w1", expect.objectContaining({ model: "claude-opus-5-5" }), expect.anything(), "f1");
+  expect(missionNow().members[missionNow().members.length - 1]?.model).toBe("claude-opus-5-5");
+});

@@ -63,6 +63,15 @@ function nameOf(name: unknown, elements: readonly RawElement[], fallback: string
   return words ? words.slice(0, MAX_NAME) : fallback;
 }
 
+/** What a library may not bring onto the canvas: live pages, other frames, images. */
+const FOREIGN = new Set(["embeddable", "iframe", "frame", "magicframe", "image"]);
+
+/** An element without the links, custom data and lock a downloaded library might carry. */
+function clean(element: RawElement): RawElement {
+  const { customData: _customData, link: _link, ...rest } = element;
+  return rest.locked ? { ...rest, locked: false } : rest;
+}
+
 /** The items of a library file: version 2 `libraryItems`, or version 1 `library` (bare element lists). */
 export function readLibrary(raw: unknown, library: IconLibrary): IconItem[] {
   const r = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
@@ -73,7 +82,9 @@ export function readLibrary(raw: unknown, library: IconLibrary): IconItem[] {
       : [];
   return entries.flatMap((entry, i) => {
     if (!Array.isArray(entry.elements)) return [];
-    const elements = (entry.elements as RawElement[]).filter((e) => typeof e === "object" && e !== null && !e.isDeleted);
+    const elements = (entry.elements as RawElement[])
+      .filter((e) => typeof e === "object" && e !== null && !e.isDeleted && !FOREIGN.has(e.type))
+      .map(clean);
     if (elements.length === 0) return [];
     return [{ id: `${library.source}#${i}`, name: nameOf(entry.name, elements, `${library.name} ${i + 1}`), library: library.name, elements }];
   });
@@ -88,18 +99,27 @@ export function matchIcons(items: readonly IconItem[], query: string): IconItem[
   });
 }
 
+/** The corners (or points) of an element, turned by its angle around its center as Excalidraw's `getCommonBounds` does. */
+function corners(e: RawElement): [number, number][] {
+  const own: [number, number][] =
+    Array.isArray(e.points) && e.points.length > 0
+      ? e.points.map(([px, py]) => [e.x + px, e.y + py])
+      : [[e.x, e.y], [e.x + e.width, e.y], [e.x, e.y + e.height], [e.x + e.width, e.y + e.height]];
+  const angle = typeof e.angle === "number" ? e.angle : 0;
+  if (!angle) return own;
+  const cx = e.x + e.width / 2;
+  const cy = e.y + e.height / 2;
+  const [cos, sin] = [Math.cos(angle), Math.sin(angle)];
+  return own.map(([x, y]) => [cx + (x - cx) * cos - (y - cy) * sin, cy + (x - cx) * sin + (y - cy) * cos]);
+}
+
 function bounds(elements: readonly RawElement[]) {
   const xs: number[] = [];
   const ys: number[] = [];
   for (const e of elements) {
-    if (Array.isArray(e.points) && e.points.length > 0) {
-      for (const [px, py] of e.points) {
-        xs.push(e.x + px);
-        ys.push(e.y + py);
-      }
-    } else {
-      xs.push(e.x, e.x + e.width);
-      ys.push(e.y, e.y + e.height);
+    for (const [x, y] of corners(e)) {
+      xs.push(x);
+      ys.push(y);
     }
   }
   return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
@@ -130,6 +150,8 @@ export function instantiate(elements: readonly RawElement[], at: { x: number; y:
       groupIds: [...(e.groupIds ?? []).map((group) => groups.get(group)!), ...(wrap ? [wrap] : [])],
       frameId: null,
       version: 1,
+      // Each copy is drawn on its own: the same seed would give every copy the same hand-drawn lines.
+      seed: Math.floor(Math.random() * 2 ** 31),
       versionNonce: Math.floor(Math.random() * 2 ** 31),
       updated: Date.now(),
     };

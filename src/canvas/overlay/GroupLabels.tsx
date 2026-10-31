@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
 import { renameGroup } from "@/fleet/groups";
-import type { Activity } from "@/ipc/activity";
 import { GroupMenu } from "@/fleet/GroupMenu";
-import { countsText, waitingText } from "@/fleet/groupSummary";
+import { countsText, membersIn, waitingText } from "@/fleet/groupSummary";
 import { screenRectOf } from "@/fleet/placement";
 import { ROLES } from "@/fleet/roles";
 import { useActivities } from "@/store/agentActivity";
+import { terminalStatusStore } from "@/store/terminalStatus";
+import { useStore } from "zustand";
 import { uiStore, useUi } from "@/store/ui";
 import { canvasStore, useCanvas, type CanvasView } from "../canvasStore";
 import { groupBeingRenamed, isGroup, type SceneGroup } from "../groups";
@@ -29,9 +30,10 @@ export function GroupLabels() {
   const frames = useCanvas((s) => s.frames);
   const view = useCanvas((s) => s.view);
   const activities = useActivities();
-  // An activity ends with its process (`pty-exit`): stopped members never count.
-  const members = (group: SceneGroup, activity: Activity) =>
-    group.memberIds.filter((id) => activities[id]?.activity === activity).length;
+  const statuses = useStore(terminalStatusStore, (s) => s.statuses);
+  // An activity ends with its process (`pty-exit`), but may outlive a stopped one for a moment: only running members count.
+  const members = (group: SceneGroup, activity: "working" | "waiting") =>
+    membersIn(group.memberIds, activity, (id) => activities[id]?.activity, (id) => statuses[id]?.state === "running");
   const groups = frames.filter(isGroup);
   const renaming = useUi((s) => s.renamingGroup);
   const takeover = groupBeingRenamed(view.editingFrame, frames);
@@ -46,7 +48,7 @@ export function GroupLabels() {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[3] overflow-hidden">
-      <style>{groups.map((g) => `.excalidraw [id$="-frame-name-${g.id}"]{color:transparent!important}`).join("\n")}</style>
+      <style>{groups.map((g) => `.excalidraw [id$="-frame-name-${CSS.escape(g.id)}"]{color:transparent!important}`).join("\n")}</style>
       {groups.map((group) =>
         group.id === view.editingFrame ? null : (
           <GroupLabel
@@ -105,6 +107,11 @@ function NameField({ name, onDone }: { name: string; onDone: (name: string | nul
   const t = useMessages(canvasMessages);
   // Removing the focused field may fire one last blur: only the first ending counts.
   const done = useRef(false);
+  const field = useRef<HTMLInputElement>(null);
+  // `autoFocus` would scroll the label layer (overflow-hidden) when the label is still out of view.
+  useEffect(() => {
+    field.current?.focus({ preventScroll: true });
+  }, []);
   const finish = (value: string | null) => {
     if (done.current) return;
     done.current = true;
@@ -113,7 +120,7 @@ function NameField({ name, onDone }: { name: string; onDone: (name: string | nul
   };
   return (
     <input
-      autoFocus
+      ref={field}
       defaultValue={name}
       aria-label={t.groupNameLabel}
       size={Math.max(4, name.length + 1)}

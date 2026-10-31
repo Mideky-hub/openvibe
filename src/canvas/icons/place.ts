@@ -4,10 +4,10 @@ import { focusCanvas } from "@/radial/bridges";
 import { canvasStore } from "../canvasStore";
 import { instantiate, type IconItem, type RawElement } from "./library";
 
-/** Puts a copy of the icon at the center of the view, selected, in one undo step (spec maj §4). */
-export function insertIcon(item: IconItem) {
+/** Puts a copy of the icon at the center of the view, selected, in one undo step (spec maj §4); false without a canvas. */
+export function insertIcon(item: IconItem): boolean {
   const api = canvasStore.getState().api;
-  if (!api) return;
+  if (!api) return false;
   const { width, height, scrollX, scrollY, zoom } = api.getAppState();
   const center = { x: width / 2 / zoom.value - scrollX, y: height / 2 / zoom.value - scrollY };
   const restored = restoreElements(item.elements as unknown as ExcalidrawElement[], null, { refreshDimensions: false, repairBindings: true });
@@ -27,4 +27,5 @@ export function insertIcon(item: IconItem) {
   });
   api.setActiveTool({ type: "selection" });
   focusCanvas();
+  return true;
 }

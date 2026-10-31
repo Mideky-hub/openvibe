@@ -7,7 +7,7 @@ import { formatClock, formatDecimal } from "@/i18n/format";
 import { formatDuration } from "@/lib/format";
 import { useNow } from "@/lib/useNow";
 import { sessionOf, useNodes } from "@/store/nodes";
-import { currentLimit, formatUsd, limitTone, totals, type Limit, type Limits } from "@/usage/usage";
+import { currentLimit, formatUsd, limitTone, liveCacheSessions, totals, type Limit, type Limits } from "@/usage/usage";
 import { useUsage } from "@/usage/usageStore";
 import { shellMessages } from "./messages";
 
@@ -57,7 +57,7 @@ export function UsageMeter() {
           title={limits ? u.titleWithLimits : u.titleWithoutLimits}
           className="flex h-6 items-center gap-2 rounded-[6px] px-1.5 font-mono text-[11.5px] text-ov-text-2 hover:bg-ov-hover hover:text-ov-text"
         >
-          {!limits?.fiveHour && !limits?.sevenDay ? (
+          {!limits?.fiveHour && !limits?.sevenDay && !limits?.models.length ? (
             u.title
           ) : (
             <>
@@ -126,6 +126,7 @@ function UsageDetail() {
   const nodes = useNodes((s) => s.nodes);
   const now = useNow(30_000);
   const list = Object.values(sessions);
+  const warm = liveCacheSessions(list, new Set(Object.keys(nodes)));
   const sum = totals(list);
   const fable = limits?.models.find((m) => m.label === "Fable");
   const nameOf = (nodeId: string) => {
@@ -172,10 +173,9 @@ function UsageDetail() {
           ))}
         </Section>
       )}
-      {list.some((s) => s.cache) && (
+      {warm.length > 0 && (
         <Section title={u.cache}>
-          {list
-            .filter((s) => s.cache)
+          {warm
             .map((s) => (
               <Row key={s.sessionId} label={`${nameOf(s.nodeId)} · ${s.model?.name ?? ""}`}>
                 {s.cache!.warm && (s.cache!.expiresAt === null || s.cache!.expiresAt > now)

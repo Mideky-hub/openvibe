@@ -1,7 +1,8 @@
 import { commandFor, runCommand, type Command, type CommandContext } from "./command";
+import { closeOpenMenus } from "./openMenus";
 import { closePalette, paletteStore } from "./paletteState";
 import { COMMANDS, commandContext } from "./registry";
-import { isModalOpen, shortcutOf } from "./shortcuts";
+import { heldShortcutOf, isModalOpen, shortcutOf } from "./shortcuts";
 
 /**
  * The application's single keydown listener (spec fenêtre §6.2): on the
@@ -16,7 +17,16 @@ export function installShortcuts(
 ): () => void {
   const listener = (event: KeyboardEvent) => {
     const shortcut = shortcutOf(event);
-    if (!shortcut || isModalOpen(target.document)) return;
+    if (isModalOpen(target.document)) return;
+    if (!shortcut) {
+      // A held Ctrl+P must not reach the palette's list (cmdk reads the repeats).
+      const held = heldShortcutOf(event);
+      if (held && commandFor(commands, held, context())) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+      return;
+    }
     const ctx = context();
     const command = commandFor(commands, shortcut, ctx);
     if (!command) return;
@@ -25,6 +35,7 @@ export function installShortcuts(
     // A command that moves the keyboard closes the palette first: an open
     // palette never shows while the keys go to a terminal (Échap included).
     if (paletteStore.getState().open && !command.id.startsWith("palette.")) closePalette();
+    closeOpenMenus(target.document);
     runCommand(command, ctx);
   };
   target.addEventListener("keydown", listener, { capture: true });

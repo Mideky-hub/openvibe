@@ -12,10 +12,20 @@ export interface LoadedScene {
 // Scenes are read from SQLite once per session, then kept current here so that
 // switching back to a workspace never waits on (or races with) a pending save.
 const cache = new Map<string, LoadedScene>();
+// A read in progress is shared: the canvas and the palette ask for the same scene at once.
+const reading = new Map<string, Promise<LoadedScene>>();
 
-export async function loadScene(workspaceId: string): Promise<LoadedScene> {
+export function loadScene(workspaceId: string): Promise<LoadedScene> {
   const cached = cache.get(workspaceId);
-  if (cached) return cached;
+  if (cached) return Promise.resolve(cached);
+  const pending = reading.get(workspaceId);
+  if (pending) return pending;
+  const read = readScene(workspaceId).finally(() => reading.delete(workspaceId));
+  reading.set(workspaceId, read);
+  return read;
+}
+
+async function readScene(workspaceId: string): Promise<LoadedScene> {
   const data = await loadWorkspace(workspaceId);
   nodesStore.getState().hydrate(workspaceId, data.nodes);
   const files: BinaryFiles = Object.fromEntries(
@@ -32,6 +42,9 @@ export async function loadScene(workspaceId: string): Promise<LoadedScene> {
     },
     savedFileIds: data.files.map((f) => f.id),
   };
+  // A scene remembered (or forgotten) while the read ran is newer than this read.
+  const current = cache.get(workspaceId);
+  if (current) return current;
   cache.set(workspaceId, scene);
   return scene;
 }

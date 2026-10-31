@@ -21,7 +21,7 @@ Tout est additif (spec orchestrateur §4.3 et §7.2 inchangées).
 
 | Outil | Ajout |
 |---|---|
-| `mission` | Chaque élément de `linked_agents` : `group` et `speciality` (`null` hors groupe, ou sans spécialité). Nouveau `linked_groups` : `{ name, speciality }` de chaque groupe relié, même sans agent libre. Espace non affiché : `linked_groups` porte le même texte que `linked_agents`. Le plan : `group` de chaque sous-tâche. |
+| `mission` | Chaque élément de `linked_agents` : `group` et `speciality` (`null` hors groupe, ou sans spécialité). Nouveau `linked_groups` : `{ name, speciality }` de chaque groupe relié, même sans agent libre. Espace non affiché : `linked_groups` est `null`, comme `linked_agents`, avec la note `linked_agents_note`. Le plan : `group` de chaque sous-tâche. |
 | `team` | Chaque agent : `group` et `speciality`, pour choisir à qui réattribuer ; absents quand l'espace n'est pas affiché (`null` dirait « pas de groupe »). |
 | `propose_plan` | Sous-tâche : `group` facultatif, le nom d'un groupe relié, **seulement avec `agent: "new"`**. Un groupe inconnu, ou `group` avec un agent nommé, est refusé (`isError`), le plan en attente intact. Sans `group`, l'agent nouveau va dans le groupe « Mission <nom> », comme aujourd'hui. |
 

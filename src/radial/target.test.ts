@@ -84,3 +84,22 @@ describe("what is under a right press (spec menu radial §6.4)", () => {
     expect(sceneTarget(pick({ x: 900, y: 900 }, scene, groups))).toEqual({ kind: "canvas" });
   });
 });
+
+describe("lines drawn to the left or up (plan G1)", () => {
+  // A line starting at (200, 200) and going up-left: its box is x 100..200, y 100..200.
+  const line = element("line", { type: "line", x: 200, y: 200, width: 100, height: 100, points: [[0, 0], [-100, -100]] });
+
+  it("counts a selection by the line's real box, not x + width", () => {
+    expect(sceneTarget(pick({ x: 150, y: 150 }, [line], { selectedIds: ["line", "other"] }))).toEqual({ kind: "selection", ids: ["line"] });
+    // Where a box read from (x, y) would be: empty.
+    expect(sceneTarget(pick({ x: 290, y: 290 }, [line], { selectedIds: ["line"] }))).toEqual({ kind: "canvas" });
+  });
+
+  it("turns a line about the center of its points, not of (x, y, width, height)", () => {
+    const turned = element("turned", { ...line, id: "turned", angle: Math.PI / 2 });
+    // Center (150, 150): the segment (100,100)-(200,200) turns onto (200,100)-(100,200).
+    expect(sceneTarget(pick({ x: 150, y: 150 }, [turned]))).toEqual({ kind: "selection", ids: ["turned"] });
+    expect(sceneTarget(pick({ x: 120, y: 180 }, [turned]))).toEqual({ kind: "selection", ids: ["turned"] });
+    expect(sceneTarget(pick({ x: 180, y: 180 }, [turned]))).toEqual({ kind: "canvas" });
+  });
+});

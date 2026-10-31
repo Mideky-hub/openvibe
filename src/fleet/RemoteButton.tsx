@@ -11,7 +11,7 @@ import {
 import { messages, useMessages } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { fleetMessages } from "./messages";
-import { setRemoteControl, useRemoteLink, type RemoteLink } from "./remoteControl";
+import { remoteErrorText, setRemoteControl, useRemoteLink, type RemoteLink } from "./remoteControl";
 
 /** What the phone icon says. */
 export function remoteLabel(link: RemoteLink | undefined, wanted: boolean, running: boolean): string {
@@ -19,9 +19,15 @@ export function remoteLabel(link: RemoteLink | undefined, wanted: boolean, runni
   if (link?.state === "on") return t.on;
   if (link?.state === "connecting") return t.connecting;
   if (link?.state === "pending") return t.pending;
-  if (link?.state === "error") return t.error(link.error ?? t.failed);
+  if (link?.state === "error") return t.error(link.error ? remoteErrorText(link.error) : t.failed);
   if (wanted) return running ? t.requested : t.nextStart;
   return t.label;
+}
+
+/** The actions of the menu: while the state is an error, Remote Control may still be on, so cutting stays offered next to retrying. */
+export function remoteActions(link: RemoteLink | undefined, wanted: boolean): ("turnOn" | "turnOff" | "retry")[] {
+  if (link?.state === "error") return ["turnOff", "retry"];
+  return [wanted ? "turnOff" : "turnOn"];
 }
 
 function run(nodeId: string, on: boolean) {
@@ -54,14 +60,12 @@ export function RemoteButton({ nodeId, wanted, running }: { nodeId: string; want
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {wanted ? (
-          <>
-            <DropdownMenuItem onSelect={() => run(nodeId, false)}>{t.turnOff}</DropdownMenuItem>
-            {link?.state === "error" && <DropdownMenuItem onSelect={() => run(nodeId, true)}>{t.retry}</DropdownMenuItem>}
-          </>
-        ) : (
-          <DropdownMenuItem onSelect={() => run(nodeId, true)}>{t.turnOn}</DropdownMenuItem>
-        )}
+        {remoteActions(link, wanted).map((action) => (
+          // Retrying repeats what failed: a cut that failed is cut again.
+          <DropdownMenuItem key={action} onSelect={() => run(nodeId, action === "turnOn" || (action === "retry" && wanted))}>
+            {t[action]}
+          </DropdownMenuItem>
+        ))}
         {url && (
           <>
             <DropdownMenuSeparator />

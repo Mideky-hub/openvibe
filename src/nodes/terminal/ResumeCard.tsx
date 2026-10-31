@@ -33,7 +33,7 @@ export function ResumeCard(props: { nodeId: string; payload: TerminalPayload; st
             {resume ? t.resumeTitle : t.relaunchTitle}
           </span>
           <span className="block truncate text-ov-text-2">
-            {resume ? t.resumeHint : t.relaunchHint}
+            {resume ? t.resumeHint : payload.oneShot ? t.oneShotHint : t.relaunchHint}
           </span>
         </span>
       </button>

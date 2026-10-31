@@ -4,7 +4,7 @@ import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import type { TerminalPayload } from "@/nodes/types";
 import { nodesStore } from "@/store/nodes";
 import { statusOf, terminalStatusStore } from "@/store/terminalStatus";
-import { acceptsInput, attachSession, relaunchSession, restoreSession, startSession, type TermSink } from "./session";
+import { acceptsInput, attachSession, reattachSession, relaunchSession, restoreSession, startSession, type TermSink } from "./session";
 
 const payload: TerminalPayload = { title: "A", name: "", cwd: "C:/code", agent: "shell", command: "", shell: "default" };
 
@@ -141,4 +141,16 @@ it("marks the screen after the old process exited, before the new one starts (fi
     order.push(`marked while ${statusOf("t").state}`);
   });
   expect(order).toEqual(["pty_kill", "marked while exited", "pty_spawn"]);
+});
+
+it("shows the saved screen when a re-attach finds nothing, and holds input until it is written", async () => {
+  mockIPC((cmd) => (cmd === "pty_attach" ? false : new TextEncoder().encode("saved screen").buffer));
+  const term = fakeTerm();
+  const state = { replaying: false };
+  await reattachSession("t", term, state);
+  expect(term.written).toEqual(["saved screen"]);
+  expect(statusOf("t").state).toBe("stopped");
+  expect(state.replaying).toBe(true);
+  term.drain();
+  expect(state.replaying).toBe(false);
 });

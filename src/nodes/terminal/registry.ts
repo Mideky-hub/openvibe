@@ -17,7 +17,7 @@ import { freshScreen, textSince } from "./freshScreen";
 import { keyAction, NEWLINE_SEQUENCE } from "./keys";
 import { newConversation, type LaunchMode } from "./launch";
 import { isTypingKey, startsNewConversation, startsOnKeystroke } from "./pill";
-import { acceptsInput, attachSession, relaunchSession, restoreSession, startSession, type SessionState } from "./session";
+import { acceptsInput, reattachSession, relaunchSession, restoreSession, startSession, type SessionState } from "./session";
 
 // Terminals live outside React (spec §6.4): Excalidraw unmounts embeddables on a
 // workspace switch, and the xterm instance must survive it. Remounting moves the
@@ -33,6 +33,8 @@ interface Entry {
   session: SessionState;
   /** When output was last written: a quiet agent is ready (spec orchestrateur §7.3). */
   lastOutput?: number;
+  /** When the user last typed in it: an event typed meanwhile would join their half-written text. */
+  lastInput?: number;
   /** Where the current session's output starts; above it is the previous session's (final review H2). */
   since?: IMarker;
 }
@@ -43,6 +45,11 @@ const autostart = createAutostart();
 let livePtys = new Set<string>();
 let measure: FontMeasure | null = null;
 let watchingScale = false;
+
+/** A process ended: it no longer awaits re-attachment. */
+export function forgetLivePty(nodeId: string) {
+  livePtys.delete(nodeId);
+}
 
 /** Sessions still running in Rust after a webview reload; they are re-attached. */
 export function setLivePtys(nodeIds: string[]) {
@@ -93,12 +100,14 @@ function create(nodeId: string): Entry {
     return false;
   });
   term.onData((data) => {
+    entry.lastInput = Date.now();
     if (acceptsInput(nodeId, entry.session)) void ptyWrite(nodeId, data).catch(() => undefined);
   });
   // Spec habillage §7.3: typing in a terminal where nothing runs starts it again.
   // onKey, not onData: xterm also answers the queries of a restored screen.
   term.onKey(({ domEvent }) => {
-    if (!entry.session.replaying && isTypingKey(domEvent) && startsOnKeystroke(statusOf(nodeId))) {
+    const oneShot = sessionOf(nodesStore.getState().nodes[nodeId])?.oneShot;
+    if (!entry.session.replaying && isTypingKey(domEvent) && startsOnKeystroke(statusOf(nodeId), oneShot)) {
       void startFresh(nodeId, entry);
     }
   });
@@ -177,8 +186,8 @@ export function mountTerminal(nodeId: string, host: HTMLElement, payload: Termin
     void startSession(nodeId, entry.term, latest, "new");
   });
   if (started) return;
-  if (livePtys.delete(nodeId)) void attachSession(nodeId, entry.term, entry.session);
-  else void restoreSession(nodeId, entry.term);
+  if (livePtys.delete(nodeId)) void reattachSession(nodeId, entry.term, entry.session);
+  else void restoreSession(nodeId, entry.term, entry.session);
 }
 
 /** A new session starts: its screen and its silence are measured from here, not from the previous one's. */
@@ -212,6 +221,12 @@ async function startFresh(nodeId: string, entry: Entry) {
 export function quietFor(nodeId: string): number {
   const last = entries.get(nodeId)?.lastOutput;
   return last === undefined ? 0 : Date.now() - last;
+}
+
+/** How long since the user last typed in the terminal; Infinity if never. */
+export function typedAgo(nodeId: string): number {
+  const last = entries.get(nodeId)?.lastInput;
+  return last === undefined ? Infinity : Date.now() - last;
 }
 
 /** The last `lines` lines its current session wrote: a relaunched agent is judged on its new screen (final review H2). */

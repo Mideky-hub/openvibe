@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { RESUME_OFFER_ROOM, resumeOfferStore } from "./ResumeAllToast";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -62,10 +63,10 @@ it("starts « Nouvelle console » at the center of the view, the click not taken
 
 it("filters on the store's filter, labelled Prêts for idle agents", async () => {
   const filters = [...host.querySelectorAll<HTMLButtonElement>("[data-filter]")];
-  expect(filters.map((f) => f.textContent?.replace(/\d+$/, ""))).toEqual(["Tous", "En cours", "Attend", "Prêts", "Arrêtés"]);
-  await act(async () => filters[4].click());
+  expect(filters.map((f) => f.textContent?.replace(/\d+$/, ""))).toEqual(["Tous", "En cours", "Attend", "Actifs", "Prêts", "Arrêtés"]);
+  await act(async () => filters[5].click());
   expect(agentsPanelStore.getState().filter).toBe("stopped");
-  expect(filters[4].dataset.on).toBe("true");
+  expect(filters[5].dataset.on).toBe("true");
 });
 
 it("wraps its filters rather than clipping one, and says when a filter hides every agent", async () => {
@@ -112,4 +113,14 @@ it("opens « Composer un groupe » and a group's menu on request", async () => {
   );
   await act(async () => requestUi({ kind: "groupMenu", id: "g1" }));
   expect([...document.querySelectorAll('[role="menuitem"]')].map((i) => i.textContent)).toContain("Renommer");
+});
+
+it("stops above the « Reprendre » offer instead of sitting under it", async () => {
+  const panel = host.firstElementChild as HTMLElement;
+  const before = panel.style.maxHeight;
+  await act(async () => resumeOfferStore.setState({ open: true }));
+  expect(panel.style.maxHeight).toBe(`calc(100% - ${TOP_ROW_HEIGHT + 14 + RESUME_OFFER_ROOM + 14}px)`);
+  expect(panel.style.maxHeight).not.toBe(before);
+  await act(async () => resumeOfferStore.setState({ open: false }));
+  expect(panel.style.maxHeight).toBe(before);
 });

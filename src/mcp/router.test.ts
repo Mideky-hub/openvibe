@@ -188,8 +188,10 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
 
   it("says so when its workspace is not on screen, instead of finding no linked agent (final review H2)", async () => {
     await nodesStore.getState().create("loin", { workspaceId: "w9", kind: "orchestrator", payload: { name: "Loin" } });
-    expect(JSON.parse(textOf(await call("loin", "mission", {}))).linked_agents).toBe("inconnus : l'espace de l'orchestrateur n'est pas affiché");
-    expect(JSON.parse(textOf(await call("loin", "mission", {}))).linked_groups).toBe("inconnus : l'espace de l'orchestrateur n'est pas affiché");
+    const hidden = JSON.parse(textOf(await call("loin", "mission", {})));
+    expect(hidden.linked_agents).toBeNull();
+    expect(hidden.linked_groups).toBeNull();
+    expect(hidden.linked_agents_note).toBe("inconnus : l'espace de l'orchestrateur n'est pas affiché");
     expect(textOf(await call("loin", "propose_plan", plan))).toContain("n'est pas affiché");
     expect(textOf(await call("loin", "propose_plan", { ...plan, subtasks: [plan.subtasks[1]] }))).toContain("Plan proposé : 1 sous-tâche.");
     // Its groups are as unknown as its agents: refused, not told that the group does not exist.
@@ -307,6 +309,10 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
       expect(endMission).toHaveBeenCalledWith("chef", "Fini");
     });
   });
+});
+
+it("answers a failed step with its accent in French (backlog R5c)", async () => {
+  expect(textOf(await call("isis", "step", { title: "Plan", state: "failed" }))).toBe("Plan : échec.");
 });
 
 describe("the English protocol (spec première version §7.1)", () => {

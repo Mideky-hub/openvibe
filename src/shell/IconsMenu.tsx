@@ -28,14 +28,13 @@ export function IconsMenu() {
       </PopoverTrigger>
       {/* The keyboard goes to the icon just put on the canvas, not back to this button (final review maj §4). */}
       <PopoverContent side="right" className="w-[400px]" onCloseAutoFocus={(e) => e.preventDefault()}>
-        {open && (
-          <IconsPanel
-            onPick={(item) => {
-              insertIcon(item);
-              setOpen(false);
-            }}
-          />
-        )}
+        {/* Kept while it closes: the content must not empty during the animation. */}
+        <IconsPanel
+          onPick={(item) => {
+            // Without a canvas nothing was put: the panel stays.
+            if (insertIcon(item)) setOpen(false);
+          }}
+        />
       </PopoverContent>
     </Popover>
   );
@@ -47,7 +46,7 @@ export function IconsPanel({ onPick }: { onPick: (item: IconItem) => void }) {
   const [category, setCategory] = useState(ICON_CATEGORIES[0].id);
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<Record<string, IconItem[]>>({});
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
   const searching = query.trim() !== "";
 
   useEffect(() => {
@@ -56,7 +55,7 @@ export function IconsPanel({ onPick }: { onPick: (item: IconItem) => void }) {
     for (const c of wanted) {
       loadCategory(c).then(
         (list) => alive && setItems((loaded) => (loaded[c.id] ? loaded : { ...loaded, [c.id]: list })),
-        () => alive && setFailed(true),
+        () => alive && setFailed((known) => new Set(known).add(c.id)),
       );
     }
     return () => {
@@ -64,7 +63,12 @@ export function IconsPanel({ onPick }: { onPick: (item: IconItem) => void }) {
     };
   }, [category, searching]);
 
-  const shown = searching ? matchIcons(ICON_CATEGORIES.flatMap((c) => items[c.id] ?? []), query).slice(0, MAX_FOUND) : items[category];
+  const wantedNow = searching ? ICON_CATEGORIES : ICON_CATEGORIES.filter((c) => c.id === category);
+  const stillLoading = wantedNow.some((c) => !items[c.id] && !failed.has(c.id));
+  const someFailed = wantedNow.some((c) => failed.has(c.id));
+  const found = searching ? matchIcons(ICON_CATEGORIES.flatMap((c) => items[c.id] ?? []), query).slice(0, MAX_FOUND) : items[category];
+  // A search waits for the big files still loading before it says « none »; a failure is told per category.
+  const shown = found !== undefined && found.length === 0 && stillLoading ? undefined : found;
   return (
     <div className="flex flex-col gap-2">
       <p className="ov-label">{t.title}</p>
@@ -97,7 +101,7 @@ export function IconsPanel({ onPick }: { onPick: (item: IconItem) => void }) {
         ))}
       </div>
       <div className="grid max-h-[420px] grid-cols-4 gap-1.5 overflow-y-auto pr-1">
-        {failed && !shown?.length ? (
+        {someFailed && !stillLoading && !shown?.length ? (
           <p className="col-span-4 py-6 text-center text-xs text-ov-text-2">{t.notFound}</p>
         ) : shown === undefined ? (
           <p className="col-span-4 py-6 text-center text-xs text-ov-text-2">{t.loading}</p>
