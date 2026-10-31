@@ -347,7 +347,18 @@ pub fn file_diff(dir: &Path, file: &ChangedFile, base: Option<&str>) -> Result<S
 }
 
 /// The files of the repository, tracked or not, but not ignored ones; paths from its root.
-pub fn files(dir: &Path) -> Result<Vec<String>, String> {
+pub fn files(dir: &Path) -> Result<FileList, String> {
+    files_limited(dir, MAX_FILES)
+}
+
+/// The repository's files, at most `MAX_FILES`; `truncated` says the rest was left out.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FileList {
+    pub files: Vec<String>,
+    pub truncated: bool,
+}
+
+fn files_limited(dir: &Path, max: usize) -> Result<FileList, String> {
     // From the root: run in a subfolder, ls-files lists that folder only.
     let listed = git(
         &root(dir)?,
@@ -360,11 +371,11 @@ pub fn files(dir: &Path) -> Result<Vec<String>, String> {
         ],
     )?;
     let unique: BTreeSet<&str> = listed.split('\0').filter(|p| !p.is_empty()).collect();
-    Ok(unique
-        .into_iter()
-        .take(MAX_FILES)
-        .map(str::to_string)
-        .collect())
+    let truncated = unique.len() > max;
+    Ok(FileList {
+        files: unique.into_iter().take(max).map(str::to_string).collect(),
+        truncated,
+    })
 }
 
 /// The repository's root folder.
@@ -554,7 +565,10 @@ mod tests {
         std::fs::create_dir(dir.join("target")).unwrap();
         std::fs::write(dir.join("target").join("out.bin"), [0u8, 1, 2]).unwrap();
         std::fs::write(dir.join("img.bin"), [0u8, 1, 2]).unwrap();
-        assert_eq!(files(dir).unwrap(), [".gitignore", "a.txt", "img.bin"]);
+        assert_eq!(
+            files(dir).unwrap().files,
+            [".gitignore", "a.txt", "img.bin"]
+        );
         let read = read_file(dir, "a.txt").unwrap();
         assert_eq!(
             read,
@@ -578,6 +592,20 @@ mod tests {
             added: None,
             removed: None,
         }
+    }
+
+    #[test]
+    fn the_file_list_says_when_it_was_cut() {
+        let Some(repo) = repo() else { return };
+        let dir = repo.path();
+        std::fs::write(dir.join("b.txt"), "x\n").unwrap();
+        std::fs::write(dir.join("c.txt"), "x\n").unwrap();
+        let cut = files_limited(dir, 2).unwrap();
+        assert_eq!(
+            (cut.files, cut.truncated),
+            (vec!["a.txt".into(), "b.txt".into()], true)
+        );
+        assert!(!files_limited(dir, 3).unwrap().truncated);
     }
 
     #[test]
@@ -648,7 +676,7 @@ mod tests {
             .collect();
         assert_eq!(listed, ["other/new.txt", "sub/s.txt"]);
         assert_eq!(
-            files(&from_sub).unwrap(),
+            files(&from_sub).unwrap().files,
             ["a.txt", "other/new.txt", "sub/s.txt"]
         );
     }
