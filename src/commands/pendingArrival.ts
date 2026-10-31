@@ -1,4 +1,6 @@
 import { toast } from "sonner";
+import { messages } from "@/i18n";
+import { commandsMessages } from "./messages";
 import { reach, type ReachKind } from "./reach";
 
 export interface PendingArrival {
@@ -26,5 +28,5 @@ export function completeArrival(workspaceId: string) {
   }
   const target = pending;
   pending = null;
-  if (!reach(target.kind, target.id)) toast.error(`${target.label} n'existe plus`);
+  if (!reach(target.kind, target.id)) toast.error(messages(commandsMessages).goTo.gone(target.label));
 }

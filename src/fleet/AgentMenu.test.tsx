@@ -22,12 +22,14 @@ const only = (...ids: string[]): AgentInfo[] => AGENT_IDS.map((id) => ({ id, ava
 
 let agents: AgentInfo[];
 let models: string[];
+let npm: boolean;
 let host: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
   agents = only("claude");
   models = [];
+  npm = true;
   vi.mocked(installAgent).mockClear();
   vi.mocked(pullOllamaModel).mockClear();
   agentsStore.setState({ agents: [], shells: [], loaded: false });
@@ -35,6 +37,8 @@ beforeEach(() => {
     if (cmd === "list_agents") return agents;
     if (cmd === "list_shells") return ["powershell"];
     if (cmd === "list_ollama_models") return models;
+    if (cmd === "refresh_path") return null;
+    if (cmd === "npm_available") return npm;
   });
   host = document.createElement("div");
   document.body.append(host);
@@ -88,6 +92,38 @@ it("says that Gemini CLI needs Node.js, in cmd, and links to its page", async ()
   expect(prompt.textContent).toContain("(Invite de commandes)");
   await act(async () => button("Page officielle")!.click());
   expect(openUrl).toHaveBeenCalledWith("https://github.com/google-gemini/gemini-cli");
+});
+
+it("says npm is missing before anything runs, and checks again once Node.js is there (spec installation §3)", async () => {
+  npm = false;
+  await openMenu();
+  await act(async () => document.body.querySelector<HTMLButtonElement>("[data-install='gemini']")!.click());
+  const prompt = document.body.querySelector("[data-install-prompt='gemini']")!;
+  expect(prompt.textContent).toContain("npm est introuvable");
+  expect(button("Lancer dans un terminal")!.disabled).toBe(true);
+  await act(async () => button("Télécharger Node.js")!.click());
+  expect(openUrl).toHaveBeenCalledWith("https://nodejs.org/en/download");
+  npm = true;
+  await act(async () => button("Vérifier à nouveau")!.click());
+  expect(prompt.textContent).not.toContain("npm est introuvable");
+  expect(button("Lancer dans un terminal")!.disabled).toBe(false);
+  await act(async () => button("Lancer dans un terminal")!.click());
+  expect(installAgent).toHaveBeenCalledWith("gemini", undefined);
+});
+
+it("never looks for npm when the install does not need it", async () => {
+  npm = false;
+  await openMenu();
+  await act(async () => document.body.querySelector<HTMLButtonElement>("[data-install='codex']")!.click());
+  expect(button("Lancer dans un terminal")!.disabled).toBe(false);
+});
+
+it("opens on the install asked by the palette", async () => {
+  await openMenu();
+  await act(async () => requestUi({ kind: "agentMenu", view: { install: "aider" }, at: { x: 7, y: 8 } }));
+  expect(document.body.querySelector("[data-install-prompt='aider']")).not.toBeNull();
+  await act(async () => button("Lancer dans un terminal")!.click());
+  expect(installAgent).toHaveBeenCalledWith("aider", { x: 7, y: 8 });
 });
 
 it("goes back to the agents without installing", async () => {

@@ -5,6 +5,7 @@ import { useUiRequest } from "@/commands/uiRequests";
 import { messages, useMessages } from "@/i18n";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { AgentId } from "@/ipc/pty";
+import { AccentButton } from "@/shell/buttons";
 import { uiStore } from "@/store/ui";
 import { agentsStore, useAgents } from "./agentsStore";
 import { AGENT_ORDER, agentInk, AGENTS, defaultAgent } from "./catalog";
@@ -59,7 +60,9 @@ export function AgentMenu({
   useUiRequest(
     "agentMenu",
     (request) => {
-      requestedView.current = request.view;
+      // Already open, the effect above will not run again.
+      if (open) setView(request.view);
+      else requestedView.current = request.view;
       setPlaceAt(request.at ?? null);
       setOpen(true);
       return true;
@@ -192,14 +195,9 @@ export function AgentMenu({
             onChange={setOptions}
             onBack={() => setView("agents")}
             footer={
-              <button
-                type="button"
-                disabled={!current.command.trim()}
-                onClick={() => place("custom", current)}
-                className="h-8 rounded-full bg-ov-accent text-xs font-semibold text-white disabled:opacity-40"
-              >
+              <AccentButton disabled={!current.command.trim()} onClick={() => place("custom", current)} className="justify-center text-xs">
                 {t.agentMenu.launchCustom}
-              </button>
+              </AccentButton>
             }
           />
         )}

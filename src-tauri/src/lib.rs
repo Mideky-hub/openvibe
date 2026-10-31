@@ -88,6 +88,7 @@ pub fn run() {
             commands::pty::refresh_path,
             commands::pty::list_agents,
             commands::pty::list_ollama_models,
+            commands::pty::npm_available,
             commands::pty::list_shells,
             commands::workspace::list_workspaces,
             commands::workspace::create_workspace,

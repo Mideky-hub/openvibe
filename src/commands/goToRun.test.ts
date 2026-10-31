@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import { arrive } from "@/canvas/arrive";
 import { focusGroup } from "@/canvas/canvasFocus";
+import { langStore } from "@/i18n";
 import { projectsStore } from "@/store/projects";
 import { workspacesStore } from "@/store/workspaces";
 import { readSource } from "@/theme/cssBlocks";
@@ -71,6 +72,16 @@ describe("goTo (spec fenêtre §7.2)", () => {
     vi.mocked(focusGroup).mockReturnValue(false);
     goTo(item({ kind: "group", workspaceId: "w1", targetId: "g", label: "Serveurs" }));
     expect(error).toHaveBeenLastCalledWith("Serveurs n'existe plus");
+  });
+
+  it("says so in English too", () => {
+    const error = vi.spyOn(toast, "error").mockImplementation(() => "");
+    langStore.setState({ lang: "en" });
+    vi.mocked(arrive).mockReturnValue(false);
+    goTo(item({ workspaceId: "w2", targetId: "isis", label: "Isis" }));
+    completeArrival("w2");
+    langStore.setState({ lang: "fr" });
+    expect(error).toHaveBeenCalledWith("Isis no longer exists");
   });
 
   it("is completed by the canvas of a workspace, and orchestrators are found by their field", () => {

@@ -43,6 +43,7 @@ beforeEach(() => {
       if (cmd === "list_agents") return agents;
       if (cmd === "list_shells") return ["powershell"];
       if (cmd === "refresh_path") return null;
+      if (cmd === "npm_available") return true;
       if (cmd === "plugin:window|is_maximized") return false;
     },
     { shouldMockEvents: true },
