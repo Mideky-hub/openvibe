@@ -123,3 +123,74 @@ describe("commandContext", () => {
     expect(commandContext()).toEqual({ project: false, workspaceId: null, terminalCount: 0, terminalId: null });
   });
 });
+
+describe("what each context lists (spec fenêtre §11)", () => {
+  const sectionsOf = (ctx: CommandContext) =>
+    [...new Set(COMMANDS.filter((c) => c.available(ctx)).map((c) => (typeof c.section === "function" ? c.section(ctx) : c.section)))];
+  const idsOf = (ctx: CommandContext) => COMMANDS.filter((c) => c.available(ctx)).map((c) => c.id);
+
+  it("at home: navigation, window and help only (no workspaces, drawing or scene)", () => {
+    expect(sectionsOf(home).sort()).toEqual(["Aide", "Fenêtre", "Navigation"]);
+    expect(idsOf(home)).toMatchInlineSnapshot(`
+      [
+        "palette.goTo",
+        "palette.functions",
+        "window.minimize",
+        "window.maximize",
+        "window.close",
+        "app.about",
+        "app.updates",
+        "app.logs",
+        "app.troubleshoot",
+        "language.fr",
+        "language.en",
+        "language.system",
+      ]
+    `);
+  });
+
+  it("in a project without a terminal: the workspaces, drawing and scene are there, no terminal or group line", () => {
+    expect(sectionsOf(empty)).toMatchInlineSnapshot(`
+      [
+        "Navigation",
+        "Workspaces",
+        "Agents",
+        "Dessin",
+        "Scène",
+        "Fenêtre",
+        "Aide",
+      ]
+    `);
+    expect(idsOf(empty).filter((id) => id.startsWith("terminal.") || id.startsWith("group.") || id.startsWith("orchestrator."))).toEqual(["group.compose"]);
+  });
+
+  it("on a terminal: the lines of the terminal section", () => {
+    expect(idsOf(busy).filter((id) => id.startsWith("terminal."))).toMatchInlineSnapshot(`
+      [
+        "terminal.next",
+        "terminal.previous",
+        "terminal.rename",
+        "terminal.duplicate",
+        "terminal.review",
+        "terminal.relaunch",
+        "terminal.close",
+        "terminal.copy",
+        "terminal.paste",
+      ]
+    `);
+  });
+});
+
+it("a failed command says what its button says (plan F2)", async () => {
+  const error = vi.spyOn(toast, "error").mockImplementation(() => "");
+  for (const id of ["terminal.duplicate", "workspace.new", "workspace.delete", "group.orchestrate"]) {
+    runCommand({ ...command(id), run: () => Promise.reject(new Error("boom")) }, busy);
+  }
+  await vi.waitFor(() => expect(error).toHaveBeenCalledTimes(4));
+  expect(error.mock.calls.map(([text]) => text)).toEqual([
+    "Duplication impossible : Error: boom",
+    "Création impossible : Error: boom",
+    "Suppression impossible : Error: boom",
+    "Orchestrateur impossible : Error: boom",
+  ]);
+});
