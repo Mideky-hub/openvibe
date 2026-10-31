@@ -144,14 +144,16 @@ function proposePlan(orchestratorId: string, mission: Mission, args: Record<stri
 
 const timeText = (spent: number | undefined, budget: number) => (spent === undefined ? `? / ${budget} min` : `${Math.floor(spent)} / ${budget} min`);
 
-function describeTeam(mission: Mission): ToolResult {
+function describeTeam(orchestratorId: string, mission: Mission): ToolResult {
   if (!formed(mission)) return refused(t().orchestrator.notFormed);
   const nodes = nodesStore.getState().nodes;
   const now = Date.now();
+  // Groups live on the canvas: out of sight they are unknown, which null would not say.
+  const shown = orchestratorShown(orchestratorId);
   return json(
     mission.members.map((m) => ({
       name: m.name,
-      ...agentGroup(m.nodeId),
+      ...(shown ? agentGroup(m.nodeId) : {}),
       subtask: m.task,
       state: outAgentState(agentState(m.nodeId)),
       steps: terminalOf(nodes[m.nodeId])?.steps?.map((s) => `${s.title}: ${outStep(s.state)}`) ?? [],
@@ -284,7 +286,7 @@ export async function orchestratorTool(orchestratorId: string, name: string, arg
     case "proposer_plan":
       return proposePlan(orchestratorId, mission, args);
     case "equipe":
-      return describeTeam(mission);
+      return describeTeam(orchestratorId, mission);
     case "lire_sortie":
       return readOutput(mission, args);
     case "ecrire":

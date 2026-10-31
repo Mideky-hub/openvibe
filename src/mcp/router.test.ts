@@ -213,6 +213,15 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
       expect(JSON.parse(textOf(await call("chef", "team", {})))[0]).toMatchObject({ group: null, speciality: null });
     });
 
+    it("does not say an agent has no group when its canvas is out of sight (final review)", async () => {
+      workspacesStore.setState({ activeId: "w2" });
+      const [isis] = JSON.parse(textOf(await call("chef", "team", {})));
+      workspacesStore.setState({ activeId: "w1" });
+      expect(isis.name).toBe("Isis");
+      expect(isis).not.toHaveProperty("group");
+      expect(isis).not.toHaveProperty("speciality");
+    });
+
     it("reports the team and reads an agent's terminal", async () => {
       expect(JSON.parse(textOf(await call("chef", "team", {})))).toEqual([
         expect.objectContaining({ name: "Isis", subtask: "Login", time: "0 / 20 min", report: null, merged: false, handed_to: null, overdue: 0, model: null }),
