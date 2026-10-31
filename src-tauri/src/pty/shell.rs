@@ -393,6 +393,9 @@ fn ollama_command(launch: Option<&OllamaLaunch>, syntax: ShellSyntax) -> AppResu
     })
 }
 
+/// The longest model name or alias accepted for `--model`.
+const MAX_MODEL_LEN: usize = 64;
+
 fn claude_command(
     launch: Option<&ClaudeLaunch>,
     syntax: ShellSyntax,
@@ -422,7 +425,9 @@ fn claude_command(
     }
     if let Some(model) = launch.model.as_deref() {
         // Typed into a shell: a model's name, or an alias like `sonnet[1m]`, nothing else.
-        let valid = !model.is_empty()
+        // The first character is alphanumeric so the name can never read as a flag.
+        let valid = model.len() <= MAX_MODEL_LEN
+            && model.starts_with(|c: char| c.is_ascii_alphanumeric())
             && model
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '_' | '[' | ']'));
@@ -1140,6 +1145,14 @@ mod tests {
                 .kind(),
             "invalidInput"
         );
+        // Nor a name that would read as a flag, nor an endless one.
+        for bad in ["--dangerous", "-x", ".hidden", &"a".repeat(65)] {
+            assert_eq!(
+                with_model(ClaudeMode::New, bad).unwrap_err().kind(),
+                "invalidInput",
+                "{bad}"
+            );
+        }
     }
 
     #[test]

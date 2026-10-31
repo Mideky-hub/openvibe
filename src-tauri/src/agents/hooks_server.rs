@@ -3,7 +3,8 @@
 //! token drawn at startup.
 
 use std::io::Read;
-use std::sync::Arc;
+use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
 use tiny_http::{Header, Method, Request, Response, Server};
@@ -101,18 +102,56 @@ pub fn start(sink: impl HookSink) -> std::io::Result<HookServer> {
         for mut request in server.incoming_requests() {
             if request.url().split('?').next() == Some("/mcp") {
                 let sink = Arc::clone(&sink);
-                std::thread::spawn(move || answer_mcp(request, &*sink));
+                dispatch_mcp(request, move |request| answer_mcp(request, &*sink));
                 continue;
             }
-            let status = if request.url().starts_with("/status/") {
-                status_line_of(&mut request, &expected, &*sink)
-            } else {
-                status_of(&mut request, &expected, &*sink)
-            };
+            // A panic in the sink must not stop the loop: hooks and MCP would
+            // stay silent until restart (backlog R1). Answer 500 instead.
+            let status = catch_unwind(AssertUnwindSafe(|| {
+                if request.url().starts_with("/status/") {
+                    status_line_of(&mut request, &expected, &*sink)
+                } else {
+                    status_of(&mut request, &expected, &*sink)
+                }
+            }))
+            .unwrap_or(500);
             let _ = request.respond(Response::empty(status));
         }
     });
     Ok(HookServer { port, token })
+}
+
+/// One thread per MCP request: a tools call waits for the interface. When the
+/// system refuses the thread, the caller is told so (503) instead of the
+/// process panicking.
+fn dispatch_mcp(request: Request, answer: impl FnOnce(Request) + Send + 'static) {
+    dispatch_with(request, answer, |job| {
+        std::thread::Builder::new()
+            .name("mcp-request".into())
+            .spawn(job)
+            .map(drop)
+    });
+}
+
+/// `spawn` starts the job; on failure the request is answered 503.
+fn dispatch_with(
+    request: Request,
+    answer: impl FnOnce(Request) + Send + 'static,
+    spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> std::io::Result<()>,
+) {
+    let slot = Arc::new(Mutex::new(Some(request)));
+    let job_slot = Arc::clone(&slot);
+    let job = Box::new(move || {
+        if let Some(request) = crate::sync::lock(&job_slot).take() {
+            answer(request);
+        }
+    });
+    if let Err(err) = spawn(job) {
+        log::error!("MCP request not served, no thread: {err}");
+        if let Some(request) = crate::sync::lock(&slot).take() {
+            let _ = request.respond(Response::empty(503));
+        }
+    }
 }
 
 /// Node ids name files too: only the characters of our UUIDs pass.
@@ -278,7 +317,8 @@ fn status_of(request: &mut Request, token: &str, sink: &dyn HookSink) -> u16 {
 }
 
 fn answer_mcp(mut request: Request, sink: &dyn HookSink) {
-    let (status, body) = mcp_response(&mut request, sink);
+    let (status, body) =
+        catch_unwind(AssertUnwindSafe(|| mcp_response(&mut request, sink))).unwrap_or((500, None));
     let mut response = Response::from_data(
         body.map(|json| json.to_string().into_bytes())
             .unwrap_or_default(),
@@ -318,19 +358,9 @@ fn mcp_response(request: &mut Request, sink: &dyn HookSink) -> (u16, Option<Valu
     if body.len() > mcp::MAX_BODY {
         return (413, None);
     }
-    let Ok(message) = serde_json::from_slice::<Value>(&body) else {
-        return (400, None);
-    };
-    match mcp::action(&message) {
-        mcp::Action::Accept => (202, None),
-        mcp::Action::Reply(json) => (200, Some(json)),
-        mcp::Action::Forward { id, method, params } => {
-            match sink.mcp_call(&node_id, &method, params) {
-                Ok(result) => (200, Some(mcp::reply(&id, result))),
-                Err(message) => (200, Some(mcp::failure(&id, -32603, &message))),
-            }
-        }
-    }
+    mcp::handle(&body, |method, params| {
+        sink.mcp_call(&node_id, method, params)
+    })
 }
 
 #[cfg(test)]
@@ -455,6 +485,7 @@ mod tests {
             token.strip_prefix("tok-").map(str::to_string)
         }
         fn status(&self, node_id: &str, status: serde_json::Value) {
+            assert_ne!(node_id, "boom", "a sink that panics");
             self.statuses
                 .lock()
                 .unwrap()
@@ -466,6 +497,7 @@ mod tests {
             method: &str,
             params: serde_json::Value,
         ) -> Result<serde_json::Value, String> {
+            assert_ne!(node_id, "boom", "a sink that panics");
             if node_id == "slow" {
                 return Err("OpenVibe ne répond pas".into());
             }
@@ -797,7 +829,7 @@ mod tests {
                 b"not json"
             )
             .0,
-            400
+            200
         );
         let path = format!("/hook/claude/n1?t={}", server.token);
         assert_eq!(
@@ -822,5 +854,111 @@ mod tests {
             *sink.subagents.lock().unwrap(),
             vec![("n1".to_string(), true), ("n1".to_string(), false)]
         );
+    }
+
+    #[test]
+    fn a_panic_while_answering_gives_a_500_and_the_server_goes_on() {
+        let (tx, _rx) = mpsc::channel();
+        let sink = Arc::new(TestSink::new(tx));
+        let server = start(Arc::clone(&sink)).unwrap();
+        let header = format!("{TOKEN_HEADER}: {}\r\n", server.token);
+        assert_eq!(
+            send_headed(server.port, "POST", "/status/boom", &header, b"{}"),
+            500
+        );
+        let mcp = [("Authorization", "Bearer tok-boom")];
+        let call = br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#;
+        assert_eq!(exchange(server.port, "POST", "/mcp", &mcp, call).0, 500);
+        // Still serving.
+        assert_eq!(
+            send_headed(server.port, "POST", "/status/n1", &header, b"{}"),
+            204
+        );
+        let ok = [("Authorization", "Bearer tok-n1")];
+        assert_eq!(exchange(server.port, "POST", "/mcp", &ok, call).0, 200);
+    }
+
+    #[test]
+    fn an_mcp_request_without_a_thread_is_answered_503() {
+        // A listener of our own, its spawner always failing.
+        let probe = Server::http("127.0.0.1:0").unwrap();
+        let port = probe.server_addr().to_ip().unwrap().port();
+        let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        client
+            .write_all(
+                b"POST /mcp HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            )
+            .unwrap();
+        let request = probe.recv().unwrap();
+        dispatch_with(
+            request,
+            |_| panic!("must not run"),
+            |_| Err(std::io::Error::other("no thread")),
+        );
+        let mut response = String::new();
+        let _ = client.read_to_string(&mut response);
+        assert!(response.starts_with("HTTP/1.1 503"), "{response}");
+    }
+
+    #[test]
+    fn a_client_stalling_on_its_body_does_not_hold_the_others_up() {
+        let (tx, _rx) = mpsc::channel();
+        let server = start(Arc::new(TestSink::new(tx))).unwrap();
+        // Announces a body, sends none, and keeps the connection open.
+        let mut stalled = TcpStream::connect(("127.0.0.1", server.port)).unwrap();
+        let head = format!(
+            "POST /status/n1?t={} HTTP/1.1\r\nHost: x\r\nContent-Length: 100\r\n\r\n",
+            server.token
+        );
+        stalled.write_all(head.as_bytes()).unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+
+        let (done, finished) = mpsc::channel();
+        let port = server.port;
+        std::thread::spawn(move || {
+            let mcp = [("Authorization", "Bearer tok-n1")];
+            let call = br#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
+            let _ = done.send(exchange(port, "POST", "/mcp", &mcp, call).0);
+        });
+        assert_eq!(
+            finished.recv_timeout(Duration::from_secs(3)),
+            Ok(200),
+            "a stalled hook client blocks the server loop"
+        );
+        let header = format!("{TOKEN_HEADER}: {}\r\n", server.token);
+        assert_eq!(
+            send_headed(server.port, "POST", "/status/n1", &header, b"{}"),
+            204
+        );
+        drop(stalled);
+    }
+
+    #[test]
+    fn many_agents_calling_at_once_are_all_answered() {
+        let (tx, _rx) = mpsc::channel();
+        let server = start(Arc::new(TestSink::new(tx))).unwrap();
+        let port = server.port;
+        let token = server.token.clone();
+        let workers: Vec<_> = (0..48)
+            .map(|i| {
+                let token = token.clone();
+                std::thread::spawn(move || {
+                    let node = format!("tok-n{}", i % 8);
+                    let auth = [("Authorization", node.as_str())];
+                    let auth = [(auth[0].0, format!("Bearer {}", auth[0].1))];
+                    let call = br#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"etape"}}"#;
+                    let mcp = exchange(port, "POST", "/mcp", &[(auth[0].0, auth[0].1.as_str())], call).0;
+                    let header = format!("{TOKEN_HEADER}: {token}\r\n");
+                    let hook = send_headed(port, "POST", "/status/n1", &header, b"{}");
+                    (mcp, hook)
+                })
+            })
+            .collect();
+        for worker in workers {
+            assert_eq!(worker.join().unwrap(), (200, 204));
+        }
     }
 }

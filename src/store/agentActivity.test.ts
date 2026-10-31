@@ -27,6 +27,22 @@ describe("agent activity store", () => {
     expect(state().activities).toEqual({ a: { activity: "working", since: 5 } });
   });
 
+  it("drops an event older than the one it holds, and keeps a live event over an older snapshot", () => {
+    state().apply({ nodeId: "a", activity: "waiting", since: 20 });
+    state().apply({ nodeId: "a", activity: "working", since: 10 });
+    expect(state().activities.a).toEqual({ activity: "waiting", since: 20 });
+    state().load([{ nodeId: "a", activity: "working", since: 15 }]);
+    expect(state().activities.a).toEqual({ activity: "waiting", since: 20 });
+  });
+
+  it("takes a new question during a wait even dated 1 ms earlier, and the agent keeps its place", () => {
+    state().apply({ nodeId: "q", activity: "waiting", since: 20, message: "First?" });
+    state().apply({ nodeId: "q", activity: "waiting", since: 19, message: "Second?" });
+    expect(state().activities.q).toEqual({ activity: "waiting", since: 20, message: "Second?" });
+    state().apply({ nodeId: "q", activity: "waiting", since: 21 });
+    expect(state().activities.q).toEqual({ activity: "waiting", since: 20 });
+  });
+
   it("forgets a terminal whose process exited", () => {
     state().apply({ nodeId: "a", activity: "idle", since: 1 });
     state().remove("a");

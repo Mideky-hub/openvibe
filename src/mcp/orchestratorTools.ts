@@ -132,7 +132,8 @@ function describeMission(orchestratorId: string, mission: Mission): ToolResult {
       : null,
     linked_groups: orchestratorShown(orchestratorId) ? linkedGroups(orchestratorId).map(({ name, speciality }) => ({ name, speciality })) : null,
     linked_agents_note: orchestratorShown(orchestratorId) ? null : t().orchestrator.hiddenAgents,
-    left_min: remainingGlobal(mission) ?? null,
+    left_min: remainingGlobal(mission, Date.now()) ?? null,
+    overnight: mission.overnight === true,
     elapsed_min: mission.state === "en_cours" && mission.startedAt !== undefined ? Math.floor((Date.now() - mission.startedAt) / 60_000) : null,
     error: mission.error ?? null,
   });
@@ -203,11 +204,12 @@ function prolong(orchestratorId: string, mission: Mission, args: Record<string, 
   if (member.report) return refused(t().orchestrator.alreadyReported(member.name));
   const minutes = args.minutes;
   if (typeof minutes !== "number" || !Number.isInteger(minutes) || minutes < 1) return refused(t().orchestrator.wholeMinutes);
-  const left = remainingGlobal(mission);
-  if (left !== undefined && minutes > left) return refused(t().orchestrator.globalLeft(Math.max(0, left)));
   const extraMin = (member.extraMin ?? 0) + minutes;
   const budget = member.budgetMin + extraMin;
   const spent = spentMin(member, Date.now());
+  // Real time: its new target must end before the global budget does (spec mission de nuit §3).
+  const left = remainingGlobal(mission, Date.now());
+  if (left !== undefined && budget - spent > left) return refused(t().orchestrator.globalLeft(left));
   // Below its new budget it may be told again later; still past it, it is not told twice (spec §8.2).
   const overdue = spent >= 2 * budget ? 2 : spent >= budget ? 1 : undefined;
   updateMember(orchestratorId, member.nodeId, { extraMin, overdue });

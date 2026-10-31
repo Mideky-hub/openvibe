@@ -65,7 +65,8 @@ pub fn merge(machine: &str, user: &str, process: &str) -> String {
         .into_iter()
         .flat_map(|list| list.split(';'))
     {
-        let entry = entry.trim();
+        // `"C:\Program Files\x"` is the same folder as without the quotes.
+        let entry = entry.trim().trim_matches('"').trim();
         if !entry.is_empty() && seen.insert(same_folder(entry)) {
             entries.push(entry);
         }
@@ -190,5 +191,14 @@ mod tests {
             r"C:\other\;C:\Bin"
         );
         assert_eq!(merge("", "", ""), "");
+    }
+
+    #[test]
+    fn merge_strips_the_quotes_around_an_entry() {
+        assert_eq!(
+            merge(r#""C:\Program Files\x""#, "", r"C:\Program Files\x\;C:\y"),
+            r"C:\Program Files\x\;C:\y"
+        );
+        assert_eq!(merge("", "", r#""""#), "");
     }
 }

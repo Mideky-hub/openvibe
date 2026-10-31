@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { FileDiff, RotateCw, X } from "lucide-react";
 import { toast } from "sonner";
-import { sendToAgents, startingText } from "@/fleet/broadcast";
+import { sendToAgents } from "@/fleet/broadcast";
 import { AGENTS } from "@/fleet/catalog";
 import { reviewChanges, reviewDefaultBase, reviewFileDiff, reviewFiles, reviewReadFile, type ChangedFile, type FileText } from "@/ipc/review";
 import { cn } from "@/lib/utils";
@@ -146,12 +146,14 @@ function ChangesTab({ cwd, base, refresh }: { cwd: string; base: string | null; 
   const [files, setFiles] = useState<ChangedFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<ChangedFile | null>(null);
+  const [cut, setCut] = useState(false);
 
   useEffect(() => {
     let alive = true;
     reviewChanges(cwd, base).then(
       (changes) => {
         if (!alive) return;
+        setCut(changes.truncated === true);
         setError(null);
         setFiles(changes.files);
         // A refresh stays on the file being read when it is still changed.
@@ -170,6 +172,7 @@ function ChangesTab({ cwd, base, refresh }: { cwd: string; base: string | null; 
   return (
     <div className="flex min-h-0 flex-1">
       <ul className="w-[260px] shrink-0 overflow-y-auto border-r border-ov-line py-1">
+        {cut && <li className="px-3 py-1 text-[11px] text-ov-text-3">{t.listCut(files.length)}</li>}
         {files.map((file) => {
           const status = STATUS[file.status];
           return (
@@ -424,7 +427,7 @@ function Remarks({ nodeId, name }: { nodeId: string; name: string }) {
       reviewStore.getState().clear();
       toast(messages(reviewMessages).sent(name), TOAST_AWAY);
     } else if (waiting.length > 0) toast.warning(messages(reviewMessages).waiting(name), TOAST_AWAY);
-    else if (starting.length > 0) toast.warning(startingText(starting) ?? "");
+    else if (starting.length > 0) toast.warning(messages(reviewMessages).starting(name));
     else if (skipped.length > 0) toast.warning(messages(reviewMessages).stopped(name), TOAST_AWAY);
   };
   return (

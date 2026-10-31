@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeAll, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { toast } from "sonner";
 import { langStore } from "@/i18n";
@@ -7,7 +7,7 @@ import { nodesStore } from "@/store/nodes";
 import { checkBudgets } from "./clock";
 import { notify } from "./events";
 import { terminalStatusStore } from "@/store/terminalStatus";
-import { missionOf, setMission, setOrchestratorClosed } from "./store";
+import { missionOf, setMission, setOrchestratorClosed, updateMember } from "./store";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
 vi.mock("sonner", () => ({ toast: { warning: vi.fn() } }));
@@ -53,6 +53,53 @@ it("tells the orchestrator once when a budget runs out, warns the user at 200 % 
   expect(notify).toHaveBeenCalledTimes(2);
   expect(toast.warning).toHaveBeenLastCalledWith("Budget global de la mission Auth écoulé (30 min).");
   expect(missionOf(nodesStore.getState().nodes.chef)?.globalOverdue).toBe(true);
+});
+
+describe("an overnight mission (spec mission de nuit §3)", () => {
+  const fresh = { nodeId: "isis", name: "Isis", task: "Login", budgetMin: 10, linked: false, branch: "b", worktree: "w", sentAt: 0 };
+  const night = () => setMission("chef", { overnight: true, budgetMin: 100, startedAt: 0, members: [fresh], globalOverdue: undefined, windDownTold: undefined });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    terminalStatusStore.getState().set("isis", { state: "running" });
+  });
+  afterEach(() => setMission("chef", { overnight: undefined, windDownTold: undefined, globalOverdue: undefined, budgetMin: 30 }));
+
+  it("treats an agent's budget as a target: a line that says so, and no toast for an empty room", () => {
+    night();
+    checkBudgets(11 * min);
+    expect(vi.mocked(notify).mock.calls[0][1]).toBe("Cible dépassée : Isis (Login) a passé ses 10 min, ce n'est qu'une cible. Regarde où il en est avec read_output ; laisse-le finir s'il avance.");
+    checkBudgets(21 * min);
+    expect(toast.warning).not.toHaveBeenCalled();
+  });
+
+  it("tells the orchestrator once to wind down, and leaves the end of the budget without a toast", () => {
+    night();
+    updateMember("chef", "isis", { overdue: 2 });
+    checkBudgets(89 * min);
+    expect(notify).not.toHaveBeenCalled();
+    checkBudgets(90 * min);
+    checkBudgets(91 * min);
+    expect(vi.mocked(notify).mock.calls.map(([, line]) => line)).toEqual(["Plus que 10 min : la file ne donne plus de tâche. Fusionne ce qui est fait, fais vérifier, puis termine."]);
+    expect(missionOf(nodesStore.getState().nodes.chef)?.windDownTold).toBe(true);
+    checkBudgets(100 * min);
+    expect(notify).toHaveBeenCalledTimes(2);
+    expect(toast.warning).not.toHaveBeenCalled();
+  });
+
+  it("says it in English", () => {
+    langStore.setState({ lang: "en" });
+    try {
+      night();
+      checkBudgets(11 * min);
+      expect(vi.mocked(notify).mock.calls[0][1]).toBe("Target passed: Isis (Login) went past its 10 min, which is only a target. See where it stands with read_output; let it finish if it is moving.");
+      updateMember("chef", "isis", { overdue: 2 });
+      checkBudgets(90 * min);
+      expect(vi.mocked(notify).mock.calls[1][1]).toBe("10 min left: the queue gives out no more tasks. Merge what is done, have it checked, then finish.");
+    } finally {
+      langStore.setState({ lang: "fr" });
+    }
+  });
 });
 
 it("says nothing about the mission of a closed orchestrator (spec première version §5.4)", () => {

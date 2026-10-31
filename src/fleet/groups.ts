@@ -2,7 +2,7 @@ import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { canvasStore } from "@/canvas/canvasStore";
 import { returnKeyboardToCanvas } from "@/canvas/keyboardFocus";
-import { createGroupFrame, groupInfoOf, isGroup, withGroupSpeciality } from "@/canvas/groups";
+import { createGroupFrame, groupInfoOf, isGroup, withGroupFolded, withGroupSpeciality } from "@/canvas/groups";
 import { allowRemoval } from "@/canvas/removalGuard";
 import { createNodeElement } from "@/canvas/nodeElement";
 import type { AgentId } from "@/ipc/pty";
@@ -134,6 +134,18 @@ export function setGroupSpeciality(groupId: string, speciality: string) {
     elements: api
       .getSceneElementsIncludingDeleted()
       .map((e) => (e.id === groupId && groupInfoOf(e) ? newElementWith(e, { customData: withGroupSpeciality(e.customData, speciality) }) : e)),
+    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+  });
+}
+
+/** Folds a group onto its label, or unfolds it: one undoable step, nothing stops (spec replier un groupe). */
+export function setGroupFolded(groupId: string, folded: boolean) {
+  const api = canvasStore.getState().api;
+  if (!api) return;
+  api.updateScene({
+    elements: api
+      .getSceneElementsIncludingDeleted()
+      .map((e) => (e.id === groupId && groupInfoOf(e) ? newElementWith(e, { customData: withGroupFolded(e.customData, folded) }) : e)),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
 }
