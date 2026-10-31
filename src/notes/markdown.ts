@@ -85,7 +85,7 @@ export function safeUrl(raw: string): string | null {
   }
 }
 
-const INLINE = /`([^`\n]+)`|\[\[([^[\]\n]+)\]\]|\[([^\]\n]+)\]\(([^\s]+)\)|\*\*([^*\n]+)\*\*|~~([^~\n]+)~~|(?<![\w*])\*([^\s*](?:[^*\n]*[^\s*])?)\*(?![\w*])|https?:\/\/[^\s)]+/g;
+const INLINE = /`([^`\n]+)`|\[\[([^[\]\n]+)\]\]|\[([^\]\n]+)\]\(([^\s]+)\)|\*\*([^*\n]+)\*\*|~~([^~\n]+)~~|(?<![\w*])\*([^\s*](?:[^*\n]*[^\s*])?)\*(?![\w*])|https?:\/\/[^\s)]*[^\s).,;:!?'"]/g;
 
 /** One line's spans; whatever is not understood stays plain text. */
 export function parseInline(text: string): Inline[] {

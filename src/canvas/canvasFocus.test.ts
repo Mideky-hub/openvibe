@@ -103,3 +103,30 @@ describe("focusGroup (spec fenêtre §7.2)", () => {
     expect(scrollToContent).not.toHaveBeenCalled();
   });
 });
+
+describe("releaseToCanvas in a rename field (plan E1)", () => {
+  it("cancels the edit instead of validating it through the loss of focus", () => {
+    withScene([]);
+    document.body.insertAdjacentHTML("beforeend", '<input id="rename" />');
+    const field = document.getElementById("rename") as HTMLInputElement;
+    const keys: string[] = [];
+    const events: string[] = [];
+    field.addEventListener("keydown", (e) => keys.push(e.key));
+    field.addEventListener("blur", () => events.push("blur"));
+    field.focus();
+    releaseToCanvas();
+    expect(keys).toEqual(["Escape"]);
+    // The Escape comes first: the field cancels, then loses the focus.
+    expect(events).toEqual(["blur"]);
+  });
+
+  it("never types Escape into a terminal's input", () => {
+    withScene([]);
+    const keys: string[] = [];
+    const xterm = document.querySelector("textarea")!;
+    xterm.addEventListener("keydown", (e) => keys.push(e.key));
+    xterm.focus();
+    releaseToCanvas();
+    expect(keys).toEqual([]);
+  });
+});

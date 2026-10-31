@@ -1,4 +1,6 @@
 import { toast } from "sonner";
+import { messages } from "@/i18n";
+import { commandsMessages } from "./messages";
 import { reach, type ReachKind } from "./reach";
 
 export interface PendingArrival {
@@ -16,6 +18,11 @@ export function requestArrival(target: PendingArrival) {
   pending = target;
 }
 
+/** An arrival still waits for the scene of `workspaceId`, which may already be the active workspace. */
+export function arrivalPending(workspaceId: string): boolean {
+  return pending?.workspaceId === workspaceId;
+}
+
 /** Reaches the pending item of `workspaceId`, now on screen; says so when it is gone (spec fenêtre §9). */
 export function completeArrival(workspaceId: string) {
   if (!pending) return;
@@ -26,5 +33,5 @@ export function completeArrival(workspaceId: string) {
   }
   const target = pending;
   pending = null;
-  if (!reach(target.kind, target.id)) toast.error(`${target.label} n'existe plus`);
+  if (!reach(target.kind, target.id)) toast.error(messages(commandsMessages).goTo.gone(target.label));
 }

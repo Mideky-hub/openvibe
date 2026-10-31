@@ -12,6 +12,17 @@ export type Theme = "light" | "dark";
 export const THEME_KEY = "ui.theme";
 export const TRANSPARENCY_KEY = "ui.transparency";
 
+/** What public/first-paint.js reads before the first paint (the settings live in SQLite, read later). */
+function mirror() {
+  const { choice, transparency } = themeStore.getState();
+  try {
+    localStorage.setItem("ov.theme", choice);
+    localStorage.setItem("ov.transparency", transparency ? "on" : "off");
+  } catch {
+    // No storage: the next start paints in Windows' theme until the settings are read.
+  }
+}
+
 /** Anything but light or dark (missing, corrupted) means System. */
 export function readThemeChoice(raw: unknown): ThemeChoice {
   return raw === "light" || raw === "dark" ? raw : "system";
@@ -83,6 +94,7 @@ export async function loadThemeSettings() {
   try {
     const [choice, transparency] = await Promise.all([getSetting<unknown>(THEME_KEY), getSetting<unknown>(TRANSPARENCY_KEY)]);
     themeStore.setState({ choice: readThemeChoice(choice), transparency: readTransparency(transparency) });
+    mirror();
   } catch (error) {
     console.warn(`theme settings: ${String(error)}`);
   }
@@ -97,10 +109,12 @@ async function save(key: string, value: string) {
 /** Applies at once; the choice stays for the session even if it cannot be saved. */
 export async function setThemeChoice(choice: ThemeChoice) {
   themeStore.setState({ choice });
+  mirror();
   await save(THEME_KEY, choice);
 }
 
 export async function setTransparency(on: boolean) {
   themeStore.setState({ transparency: on });
+  mirror();
   await save(TRANSPARENCY_KEY, on ? "on" : "off");
 }

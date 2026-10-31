@@ -21,8 +21,18 @@ export function ShapesMenu(props: { active: boolean; current: string; onPick: (t
   const { active, current, onPick } = props;
   const t = useMessages(shellMessages).shapes;
   const [open, setOpen] = useState(false);
+  // The button keeps the last shape: using it takes that shape as the tool, like the pen.
+  const [last, setLast] = useState<ShapeTool>("rectangle");
+  const shape = SHAPES.find(({ tool }) => tool === current);
+  if (shape && shape.tool !== last) setLast(shape.tool);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) onPick(last);
+      }}
+    >
       <PopoverTrigger asChild>
         <ToolButton label={t.title} active={active}>
           <Shapes />
@@ -35,7 +45,9 @@ export function ShapesMenu(props: { active: boolean; current: string; onPick: (t
             <button
               key={tool}
               type="button"
+              data-shape={tool}
               onClick={() => {
+                setLast(tool);
                 onPick(tool);
                 setOpen(false);
               }}

@@ -29,6 +29,7 @@ const TOOLS: Record<string, string> = {
   add_tasks: "add_tasks",
   queue: "queue",
   next_task: "next_task",
+  notes: "notes",
 };
 
 /** The former names, for the agent that still calls one: what it is called now. */

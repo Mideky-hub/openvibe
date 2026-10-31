@@ -1,5 +1,6 @@
 import { memo } from "react";
 import type { NonDeleted, ExcalidrawEmbeddableElement } from "@excalidraw/excalidraw/element/types";
+import { useCanvas } from "@/canvas/canvasStore";
 import { nodeKindOf } from "@/canvas/nodeElement";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { CrashNotice } from "@/shell/CrashNotice";
@@ -22,6 +23,9 @@ export const NodeHost = memo(function NodeHost({ element }: { element: NonDelete
 
 function NodeOfKind({ element }: { element: NonDeleted<ExcalidrawEmbeddableElement> }) {
   const t = useMessages(nodesMessages);
+  // A folded group keeps its terminals off the screen; their processes and screens go on (spec replier un groupe).
+  const hidden = useCanvas((s) => s.frames.some((f) => f.group?.folded && f.memberIds.includes(element.id)));
+  if (hidden) return null;
   switch (nodeKindOf(element)) {
     case "terminal":
       return <TerminalNode nodeId={element.id} />;

@@ -6,7 +6,8 @@ import { useMessages } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/app/theme";
 import { displayColorFor, sceneColorFor } from "@/theme/sceneColors";
-import { PEN_COLORS, PEN_WIDTHS } from "./tools";
+import { PEN_COLORS } from "@/theme/penColors";
+import { PEN_WIDTHS } from "./tools";
 import { ToolButton } from "./buttons";
 import { shellMessages } from "./messages";
 

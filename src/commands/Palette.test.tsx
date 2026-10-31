@@ -16,6 +16,7 @@ import { goTo } from "./goToRun";
 import { openPalette, paletteStore, setPaletteQuery } from "./paletteState";
 import { Palette } from "./Palette";
 import { recentStore } from "./recent";
+import { presetsStore } from "@/presets/store";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
 vi.mock("@/nodes/terminal/registry", () => ({ focusTerminal: vi.fn(), terminalSelection: vi.fn(() => "") }));
@@ -156,14 +157,22 @@ describe("the palette (spec fenêtre §7.1, §7.2)", () => {
     expect(document.body.textContent).not.toContain("Chargement…");
   });
 
-  it("greys an agent not found on this computer, with why, and never chooses it", async () => {
+  it("greys what cannot be installed, with why, and never chooses it", async () => {
+    agentsStore.setState({ agents: [{ id: "shell", available: false }], loaded: true } as never);
+    await act(async () => openPalette("functions", busy));
+    await act(async () => setPaletteQuery("> lancer shell"));
+    const line = items().find((i) => i.textContent?.startsWith("Lancer Shell"))!;
+    expect(line.getAttribute("data-disabled")).toBe("true");
+    expect(line.textContent).toContain("introuvable dans le PATH");
+    expect(selected()).not.toBe(line);
+  });
+
+  it("offers to install a missing agent (spec installation §4.1)", async () => {
     agentsStore.setState({ agents: [{ id: "claude", available: false }], loaded: true } as never);
     await act(async () => openPalette("functions", busy));
-    await act(async () => setPaletteQuery("> lancer claude"));
-    const line = items().find((i) => i.textContent?.startsWith("Lancer Claude"))!;
-    expect(line.getAttribute("data-disabled")).toBe("true");
-    expect(line.textContent).toContain("claude introuvable dans le PATH");
-    expect(selected()).not.toBe(line);
+    await act(async () => setPaletteQuery("> installer claude"));
+    const line = items().find((i) => i.textContent?.startsWith("Installer Claude…"))!;
+    expect(line.getAttribute("data-disabled")).not.toBe("true");
   });
 
   it("offers the last function again first: Ctrl+Maj+P then Entrée repeats it (retours J8b)", async () => {
@@ -221,5 +230,18 @@ describe("while scenes are read (plan F1 finding)", () => {
     const text = document.body.textContent ?? "";
     expect(text).toContain("Chargement…");
     expect(text).not.toContain("Aucun résultat");
+  });
+});
+
+describe("the team presets in the functions list (spec presets §3)", () => {
+  it("lists the saved presets under « Équipes », and reads them when the functions open", async () => {
+    presetsStore.setState({
+      presets: [{ id: "1", name: "Dev HQ", savedAt: 1, groups: [{ name: "G", role: "docs", agents: ["claude", "codex"], x: 0, y: 0 }], orchestrators: [] }],
+      loaded: true,
+    });
+    await act(async () => openPalette("functions", busy));
+    await act(async () => setPaletteQuery("> dev hq"));
+    expect(items().map((i) => i.textContent).sort()).toEqual(["Déployer l'équipe : Dev HQ (2 agents)", "Supprimer le preset : Dev HQ"]);
+    expect(document.body.textContent).toContain("Équipes");
   });
 });

@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { canvasStore } from "@/canvas/canvasStore";
 import { nodesStore, terminalOf } from "@/store/nodes";
-import { answer } from "./router";
+import { answer, handleCall } from "./router";
+import type { McpCall } from "@/ipc/mcp";
 import { pauseAgents } from "@/fleet/broadcast";
 import { setRemoteControl } from "@/fleet/remoteControl";
 import { ptySendText } from "@/ipc/pty";
@@ -48,10 +49,26 @@ beforeAll(async () => {
   await nodesStore.getState().create("chef", { workspaceId: "w1", kind: "orchestrator", payload: { name: "chef" } });
 });
 
+describe("the notes tool (spec notes §3)", () => {
+  const notes = (node: string) => call(node, "notes", {});
+  afterEach(() => void mockIPC(() => undefined));
+
+  it("answers agents and orchestrators alike, with the same tool", async () => {
+    mockIPC((command) => (command === "notes_agent_list" ? [{ name: "Auth", attached: true }] : undefined));
+    expect(textOf(await notes("isis"))).toContain("Auth (attachée à ton groupe)");
+    expect(textOf(await notes("chef"))).toContain("Auth");
+  });
+
+  it("answers an agent whose project is not on screen", async () => {
+    mockIPC((command) => (command === "notes_agent_list" ? [] : undefined));
+    expect(await notes("elsewhere")).not.toHaveProperty("isError");
+  });
+});
+
 describe("the agent's tools (spec orchestrateur §4.4)", () => {
   it("lists them for any Claude session", async () => {
     const list = (await answer({ callId: 1, nodeId: "isis", method: "tools/list", params: {} })) as { tools: { name: string; inputSchema: object }[] };
-    expect(list.tools.map((t) => t.name)).toEqual(["declare_steps", "step", "report"]);
+    expect(list.tools.map((t) => t.name)).toEqual(["declare_steps", "step", "report", "notes"]);
     expect(list.tools.every((t) => typeof t.inputSchema === "object")).toBe(true);
   });
 
@@ -94,7 +111,7 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
 
   it("lists them for the orchestrator only, and each side refuses the other's", async () => {
     const list = (await answer({ callId: 1, nodeId: "chef", method: "tools/list", params: {} })) as { tools: { name: string }[] };
-    expect(list.tools.map((t) => t.name)).toEqual(["mission", "propose_plan", "add_tasks", "queue", "next_task", "team", "read_output", "write", "extend", "interrupt", "reassign", "merge", "finish", "remote_control"]);
+    expect(list.tools.map((t) => t.name)).toEqual(["mission", "propose_plan", "add_tasks", "queue", "next_task", "team", "read_output", "write", "extend", "interrupt", "reassign", "merge", "finish", "remote_control", "notes"]);
     expect(textOf(await call("isis", "propose_plan", plan))).toBe("Outil réservé à l'orchestrateur.");
     expect(textOf(await call("chef", "report", { summary: "x", status: "done" }))).toBe("Outil réservé aux agents.");
   });
@@ -362,5 +379,53 @@ describe("the English protocol (spec première version §7.1)", () => {
     } finally {
       langStore.setState({ lang: "fr" });
     }
+  });
+});
+
+describe("every call gets its reply, even under load or a failing reply", () => {
+  const stepCall = (callId: number, nodeId: string): McpCall => ({ callId, nodeId, method: "tools/call", params: { name: "step", arguments: { title: "Plan", state: "done" } } });
+
+  it("answers 8 agents calling 25 times at once, each call once", async () => {
+    const replies = new Map<number, unknown>();
+    const calls = Array.from({ length: 200 }, (_, i) => stepCall(i, i % 2 ? "isis" : "chef"));
+    // The reply path is slow and out of order, as under a busy page.
+    const reply = async (callId: number, result: unknown) => {
+      await new Promise((resolve) => setTimeout(resolve, (callId * 7) % 13));
+      replies.set(callId, result);
+    };
+    await Promise.all(calls.map((c) => handleCall(c, reply)));
+    expect(replies.size).toBe(200);
+    expect([...replies.values()].every((r) => (r as { content: unknown[] }).content.length > 0)).toBe(true);
+  });
+
+  it("replies with a readable error when a tool's answer cannot be sent as JSON", async () => {
+    const replies: unknown[] = [];
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    const reply = async (_id: number, result: unknown) => void replies.push(result);
+    await handleCall({ callId: 1, nodeId: "isis", method: "tools/call", params: { name: "step", arguments: { title: "Plan", state: "done" } } }, reply);
+    expect(replies).toHaveLength(1);
+    const bad = vi.fn(async (_id: number, result: unknown) => {
+      if (result === cyclic) throw new Error("not serializable");
+      replies.push(result);
+    });
+    await handleCall({ callId: 2, nodeId: "isis", method: "tools/call", params: { name: "step", arguments: cyclic } }, bad);
+    expect(replies).toHaveLength(2);
+    expect(replies[1]).toMatchObject({ isError: true });
+  });
+
+  it("tries a reply that failed once more, in a form that cannot fail", async () => {
+    const seen: unknown[] = [];
+    let first = true;
+    const reply = async (_id: number, result: unknown) => {
+      if (first) {
+        first = false;
+        throw new Error("ipc hiccup");
+      }
+      seen.push(result);
+    };
+    await handleCall(stepCall(1, "isis"), reply);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ isError: true });
   });
 });

@@ -5,7 +5,7 @@ import { groupOf, isGroup, type SceneGroup } from "@/canvas/groups";
 import { setAgentsFilter, setAgentsPanel } from "@/fleet/agentsPanelState";
 import { canPause, canResume, pauseAgents, pauseAll, resumeAgent, resumeAll, type AgentFacts } from "@/fleet/broadcast";
 import { AGENTS } from "@/fleet/catalog";
-import { groupMembers, requestCloseGroup, ungroup } from "@/fleet/groups";
+import { groupMembers, requestCloseGroup, setGroupFolded, ungroup } from "@/fleet/groups";
 import { orchestrateGroup } from "@/fleet/orchestrators";
 import { duplicateTerminal, requestClose } from "@/fleet/terminals";
 import type { TerminalPayload } from "@/nodes/types";
@@ -164,6 +164,12 @@ export const CURRENT: readonly Command[] = [
     run: forGroup(async (id) => {
       await orchestrateGroup(id);
     }),
+  }),
+  command("group.fold", {
+    section: groupSection,
+    available: hasGroup,
+    // Folds an unfolded group onto its label, unfolds a folded one (spec replier un groupe).
+    run: forGroup((id) => setGroupFolded(id, !canvasStore.getState().frames.find((f) => f.id === id)?.group?.folded)),
   }),
   command("group.ungroup", { section: groupSection, available: hasGroup, run: forGroup((id) => ungroup(id)) }),
   command("group.close", { section: groupSection, available: hasGroup, run: forGroup((id) => requestCloseGroup(id)) }),

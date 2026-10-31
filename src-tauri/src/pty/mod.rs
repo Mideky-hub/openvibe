@@ -5,7 +5,7 @@ pub mod session;
 pub mod shell;
 
 use crate::tr;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -20,6 +20,8 @@ use shell::SpawnPlan;
 
 /// Reported once a terminal's process has exited and its output is drained.
 pub struct ExitInfo {
+    /// The process that exited: a relaunched terminal has another one.
+    pub pid: Option<u32>,
     pub code: Option<u32>,
     pub scrollback: scrollback::Capture,
 }
@@ -30,6 +32,21 @@ pub struct PtyManager {
     sessions: Arc<Mutex<HashMap<String, Arc<Session>>>>,
     /// Processes whose exit is not fully handled yet (final save included).
     exiting: Arc<AtomicUsize>,
+    /// Terminals being started: a second start of the same one is refused
+    /// before it can touch the first one's token and files.
+    starting: Arc<Mutex<HashSet<String>>>,
+}
+
+/// The right to start one terminal; released when dropped.
+pub struct StartClaim {
+    starting: Arc<Mutex<HashSet<String>>>,
+    node_id: String,
+}
+
+impl Drop for StartClaim {
+    fn drop(&mut self) {
+        lock(&self.starting).remove(&self.node_id);
+    }
 }
 
 pub fn pty_size(cols: u16, rows: u16) -> PtySize {
@@ -78,6 +95,7 @@ impl PtyManager {
             let _ = reader.join();
             lock(&sessions).remove(&node_id);
             on_exit(ExitInfo {
+                pid,
                 code,
                 scrollback: session.capture(),
             });
@@ -106,9 +124,9 @@ impl PtyManager {
     /// Blocks for that delay: call it off the async runtime.
     pub fn send_text(&self, node_id: &str, text: &str) -> AppResult<()> {
         let session = self.require(node_id)?;
-        session.write(&paste_payload(text, session.pastes_bracketed()))?;
-        std::thread::sleep(ENTER_DELAY);
-        session.write(b"\r")
+        send_text_with(text, session.pastes_bracketed(), |bytes| {
+            session.write(bytes)
+        })
     }
 
     /// Stops the agent's turn with its own key (spec §14); `None` for a plain
@@ -153,6 +171,22 @@ impl PtyManager {
         for session in lock(&self.sessions).values() {
             session.kill();
         }
+    }
+
+    /// Claims the start of `node_id`: refused while it runs or another start
+    /// is under way. Held until the start has succeeded or failed.
+    pub fn claim_start(&self, node_id: &str) -> AppResult<StartClaim> {
+        let mut starting = lock(&self.starting);
+        if self.is_running(node_id) || !starting.insert(node_id.to_string()) {
+            return Err(AppError::InvalidInput(tr!(
+                "le terminal {node_id} tourne déjà",
+                "terminal {node_id} is already running"
+            )));
+        }
+        Ok(StartClaim {
+            starting: self.starting.clone(),
+            node_id: node_id.to_string(),
+        })
     }
 
     pub fn is_running(&self, node_id: &str) -> bool {
@@ -206,6 +240,57 @@ impl PtyManager {
     }
 }
 
+/// The two writes of `send_text`: the paste, then Enter after `ENTER_DELAY`.
+fn send_text_with(
+    text: &str,
+    bracketed: bool,
+    mut write: impl FnMut(&[u8]) -> AppResult<()>,
+) -> AppResult<()> {
+    write(&paste_payload(text, bracketed))?;
+    std::thread::sleep(ENTER_DELAY);
+    write(b"\r")
+}
+
+#[cfg(test)]
+mod send_tests {
+    use super::*;
+
+    #[test]
+    fn writes_the_paste_then_a_separate_enter() {
+        let mut writes: Vec<Vec<u8>> = vec![];
+        send_text_with("lance\nles tests", true, |bytes| {
+            writes.push(bytes.to_vec());
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(
+            writes,
+            vec![
+                b"\x1b[200~lance\rles tests\x1b[201~".to_vec(),
+                b"\r".to_vec()
+            ]
+        );
+        writes.clear();
+        send_text_with("continue", false, |bytes| {
+            writes.push(bytes.to_vec());
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(writes, vec![b"continue".to_vec(), b"\r".to_vec()]);
+    }
+
+    #[test]
+    fn stops_before_enter_when_the_paste_fails() {
+        let mut writes = 0;
+        let result = send_text_with("x", false, |_| {
+            writes += 1;
+            Err(AppError::Io(std::io::Error::other("closed")))
+        });
+        assert!(result.is_err());
+        assert_eq!(writes, 1);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -215,6 +300,16 @@ mod tests {
         // fit() reports 0x0 for a collapsed or not-yet-laid-out container.
         let size = pty_size(0, 0);
         assert_eq!((size.cols, size.rows), (1, 1));
+    }
+
+    #[test]
+    fn a_second_start_of_the_same_terminal_is_refused_until_the_first_is_over() {
+        let pty = PtyManager::default();
+        let first = pty.claim_start("n1").unwrap();
+        assert!(pty.claim_start("n1").is_err());
+        assert!(pty.claim_start("n2").is_ok(), "another terminal is free");
+        drop(first);
+        assert!(pty.claim_start("n1").is_ok());
     }
 }
 
@@ -305,6 +400,7 @@ mod windows_tests {
         );
         let info = wait_exit(&exited);
         assert_eq!(info.code, Some(0));
+        assert!(info.pid.is_some(), "the exit names its process");
         assert!(
             sink.text().contains("openvibe-hello"),
             "output: {:?}",

@@ -28,7 +28,7 @@ pnpm install
 pnpm tauri dev --config '{"identifier":"dev.openvibe.probe"}'
 ```
 
-The `--config` flag gives the development build its own data folder (`%APPDATA%\dev.openvibe.probe\`), so your experiments never touch the projects you use OpenVibe for. Use it whenever you try a change in the app.
+The `--config` flag gives the development build its own data folder (`%APPDATA%\dev.openvibe.probe\`), so your experiments never touch the projects you use OpenVibe for. Use it whenever you try a change in the app. It also lets the development build run next to an installed OpenVibe: only one instance runs per identifier, and a second launch just brings the first one's window back.
 
 ### Testing your agent setup safely
 
