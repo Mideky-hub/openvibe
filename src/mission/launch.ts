@@ -300,6 +300,8 @@ export async function reassignTask(orchestratorId: string, fromNodeId: string, t
   let to: Member;
   if (sameName(target, NEW_AGENT)) {
     if (!orchestratorShown(orchestratorId)) return r.hidden;
+    // A handed-away agent's session stays open: only the running ones count against the cap.
+    if (mission.members.filter((m) => isRunning(m.nodeId)).length >= mission.maxAgents) return r.teamFull(mission.maxAgents);
     const made = await newMember(orchestratorId, record.workspaceId, mission, task);
     if (typeof made === "string") return made;
     to = made;
@@ -307,6 +309,8 @@ export async function reassignTask(orchestratorId: string, fromNodeId: string, t
     const found = mission.members.find((m) => sameName(m.name, target) && m.nodeId !== from.nodeId && !m.handedTo);
     if (!found) return r.notOther(target);
     if (!found.report) return r.notDone(found.name);
+    // A stopped session would only say « n'a pas démarré » a minute later.
+    if (!isRunning(found.nodeId)) return r.targetStopped(found.name);
     // Its entry takes the new sub-task: its finished work must be in the mission's branch first (final review H3).
     const finished = found.report.status === "termine";
     if (finished && !found.merged) return r.notMerged(found.name, found.task);

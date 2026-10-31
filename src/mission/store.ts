@@ -64,6 +64,9 @@ export function linkedClaudeAgents(orchestratorId: string): { nodeId: string; na
   const { links, frames } = canvasStore.getState();
   const nodes = nodesStore.getState().nodes;
   return linkedAgents(links[orchestratorId] ?? NO_LINKS, frames).agentIds.flatMap((nodeId) => {
+    // An agent already working for another running mission is not free to be enrolled in this one.
+    const elsewhere = memberOf(nodeId);
+    if (elsewhere && elsewhere.orchestratorId !== orchestratorId) return [];
     const payload = terminalOf(nodes[nodeId]);
     return payload?.agent === "claude" ? [{ nodeId, name: payload.name || AGENTS.claude.label }] : [];
   });

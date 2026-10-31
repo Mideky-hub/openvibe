@@ -1,7 +1,7 @@
 import { messages } from "@/i18n";
 import { ptySendText } from "@/ipc/pty";
 import { agentMessages } from "@/mcp/messages";
-import { freshText, quietFor } from "@/nodes/terminal/registry";
+import { freshText, quietFor, typedAgo } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore } from "@/store/nodes";
 import { isRunning, terminalStatusStore } from "@/store/terminalStatus";
@@ -9,9 +9,12 @@ import { whenReady } from "./ready";
 import { memberOf } from "./store";
 
 /** Lines waiting for their orchestrator to be free. */
-const queues = new Map<string, string[]>();
+const queues = new Map<string, { line: string; typed?: () => void }[]>();
 /** Orchestrators just (re)started whose Claude's prompt is not up yet (final review H2). */
 const starting = new Set<string>();
+
+/** A line waits this long after the user's last keystroke: it would be typed into their half-written text. */
+export const TYPING_PAUSE_MS = 4000;
 
 /** An orchestrator takes a line while its Claude's prompt is up and no dialog waits for the user (spec §7.5). */
 function free(orchestratorId: string): boolean {
@@ -25,13 +28,22 @@ function free(orchestratorId: string): boolean {
 function flush(orchestratorId: string) {
   const queue = queues.get(orchestratorId);
   if (!queue?.length || !free(orchestratorId)) return;
+  const sinceKey = typedAgo(orchestratorId);
+  if (sinceKey < TYPING_PAUSE_MS) {
+    // Looked at again when the pause is over.
+    setTimeout(() => flush(orchestratorId), TYPING_PAUSE_MS - sinceKey + 50);
+    return;
+  }
   queues.delete(orchestratorId);
   // ptySendText keeps a node's writes in order; Claude queues what comes while it works.
-  for (const line of queue) {
-    void ptySendText(orchestratorId, `[OpenVibe] ${line}`).catch(() => {
-      // Not typed (its session ended meanwhile): back in line for its next start.
-      queues.set(orchestratorId, [...(queues.get(orchestratorId) ?? []), line]);
-    });
+  for (const entry of queue) {
+    void ptySendText(orchestratorId, `[OpenVibe] ${entry.line}`).then(
+      () => entry.typed?.(),
+      () => {
+        // Not typed (its session ended meanwhile): back in line for its next start.
+        queues.set(orchestratorId, [...(queues.get(orchestratorId) ?? []), entry]);
+      },
+    );
   }
 }
 
@@ -52,14 +64,14 @@ function awaitPrompt(orchestratorId: string) {
   })();
 }
 
-/** Types `line` in the orchestrator's terminal, now or as soon as it is free. */
-export function notify(orchestratorId: string, line: string) {
-  queues.set(orchestratorId, [...(queues.get(orchestratorId) ?? []), line]);
+/** Types `line` in the orchestrator's terminal, now or as soon as it is free; `typed` runs once it has been. */
+export function notify(orchestratorId: string, line: string, typed?: () => void) {
+  queues.set(orchestratorId, [...(queues.get(orchestratorId) ?? []), { line, typed }]);
   flush(orchestratorId);
 }
 
 export function pendingEvents(orchestratorId: string): readonly string[] {
-  return queues.get(orchestratorId) ?? [];
+  return (queues.get(orchestratorId) ?? []).map((entry) => entry.line);
 }
 
 /** Watches the members of running missions, and frees held lines when an orchestrator is free again. */

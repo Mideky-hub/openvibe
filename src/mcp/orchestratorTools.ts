@@ -97,6 +97,12 @@ function memberNamed(mission: Mission, raw: unknown): Member | string {
   return mission.members.find((m) => sameName(m.name, name)) ?? t().orchestrator.notMember(name);
 }
 
+function modelOfSubTask(mission: Mission, subtask: { title: string; level?: keyof typeof LEVELS }): string | null {
+  const holder = mission.members.find((m) => !m.handedTo && m.task === subtask.title);
+  if (holder) return holder.model ? modelLabel(holder.model) : null;
+  return mission.router && subtask.level ? LEVELS[subtask.level].modelLabel : null;
+}
+
 function describeMission(orchestratorId: string, mission: Mission): ToolResult {
   const team = new Set(mission.members.map((m) => m.nodeId));
   return json({
@@ -114,13 +120,15 @@ function describeMission(orchestratorId: string, mission: Mission): ToolResult {
         agent: outAgent(s.agent),
         budget_min: s.budgetMin,
         level: s.level ? outLevel(s.level) : null,
-        model: mission.router && s.level ? LEVELS[s.level].modelLabel : null,
+        // Once an agent holds the sub-task, its own model counts: reassign may have given it to one that keeps its own.
+        model: modelOfSubTask(mission, s),
       })) ?? null,
     linked_agents: orchestratorShown(orchestratorId)
       ? linkedClaudeAgents(orchestratorId)
           .filter((a) => !team.has(a.nodeId))
           .map((a) => ({ name: a.name, state: outAgentState(agentState(a.nodeId)) }))
-      : t().orchestrator.hiddenAgents,
+      : null,
+    linked_agents_note: orchestratorShown(orchestratorId) ? null : t().orchestrator.hiddenAgents,
     left_min: remainingGlobal(mission) ?? null,
     elapsed_min: mission.state === "en_cours" && mission.startedAt !== undefined ? Math.floor((Date.now() - mission.startedAt) / 60_000) : null,
     error: mission.error ?? null,
@@ -184,6 +192,8 @@ function prolong(orchestratorId: string, mission: Mission, args: Record<string, 
   if (mission.state !== "en_cours") return refused(t().orchestrator.noMission);
   const member = memberNamed(mission, args.agent);
   if (typeof member === "string") return refused(member);
+  if (member.handedTo) return refused(t().orchestrator.handedAway(member.name));
+  if (member.report) return refused(t().orchestrator.alreadyReported(member.name));
   const minutes = args.minutes;
   if (typeof minutes !== "number" || !Number.isInteger(minutes) || minutes < 1) return refused(t().orchestrator.wholeMinutes);
   const left = remainingGlobal(mission);
