@@ -94,6 +94,16 @@ pub async fn pty_spawn(
     let output_id = node_id.clone();
     let exit_app = app.clone();
     agents::started(&app, &node_id);
+    // A relaunch keeps what the terminal's screen still shows: the buffer starts
+    // from the saved output, so its first save does not replace it (backlog R1).
+    match app
+        .state::<Db>()
+        .with(|conn| scrollback::load(conn, &node_id))
+    {
+        Ok(Some(history)) => pty.seed_history(&node_id, history),
+        Ok(None) => {}
+        Err(err) => log::warn!("saved output of {node_id} not read: {err}"),
+    }
     let spawned = pty.spawn(
         &node_id,
         plan,

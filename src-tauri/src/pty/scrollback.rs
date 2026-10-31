@@ -49,6 +49,16 @@ impl Scrollback {
         }
     }
 
+    /// A buffer that starts with the output a previous run of the terminal left
+    /// in the database: the relaunch's first save then keeps it, as the screen does.
+    /// Not dirty until the new process prints something.
+    pub fn with_history(capacity: usize, history: &[u8]) -> Self {
+        let mut buffer = Self::new(capacity);
+        buffer.push(history);
+        buffer.dirty = false;
+        buffer
+    }
+
     pub fn push(&mut self, bytes: &[u8]) {
         if bytes.is_empty() {
             return;
@@ -101,6 +111,15 @@ mod tests {
     fn capture_times_always_grow() {
         let times: Vec<i64> = (0..1000).map(|_| capture_time()).collect();
         assert!(times.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[test]
+    fn a_relaunch_starts_from_the_saved_history_and_is_not_dirty_for_it() {
+        let mut sb = Scrollback::with_history(64, b"old\n");
+        assert!(!sb.take_dirty());
+        sb.push(b"new");
+        assert!(sb.take_dirty());
+        assert_eq!(sb.snapshot(), b"old\nnew");
     }
 
     #[test]
