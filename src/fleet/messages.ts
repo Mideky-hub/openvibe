@@ -63,6 +63,11 @@ export const fleetMessages = defineMessages(
     broadcast: {
       skipped: (names: readonly string[]) =>
         names.length === 1 ? `1 agent arrêté ignoré : ${names[0]}` : `${names.length} agents arrêtés ignorés : ${names.join(", ")}`,
+      starting: (names: readonly string[]) =>
+        names.length === 1
+          ? `1 agent en démarrage ignoré : ${names[0]} — réessaie dans un instant`
+          : `${names.length} agents en démarrage ignorés : ${names.join(", ")} — réessaie dans un instant`,
+      resumeFailed: (name: string) => `${name} n'a pas pu reprendre : le processus vient de s'arrêter`,
       waiting: (names: readonly string[]) =>
         names.length === 1
           ? `1 agent en attente ignoré : ${names[0]} — réponds-lui dans son terminal`
@@ -279,6 +284,9 @@ export const fleetMessages = defineMessages(
     broadcast: {
       skipped: (names: readonly string[]) =>
         names.length === 1 ? `1 stopped agent ignored: ${names[0]}` : `${names.length} stopped agents ignored: ${names.join(", ")}`,
+      starting: (names: readonly string[]) =>
+        names.length === 1 ? `1 agent still starting ignored: ${names[0]} — try again in a moment` : `${names.length} agents still starting ignored: ${names.join(", ")} — try again in a moment`,
+      resumeFailed: (name: string) => `${name} could not resume: its process just stopped`,
       waiting: (names: readonly string[]) =>
         names.length === 1
           ? `1 waiting agent ignored: ${names[0]} — answer it in its terminal`
