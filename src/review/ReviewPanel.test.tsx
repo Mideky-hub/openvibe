@@ -17,6 +17,7 @@ vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { warning: vi.fn(), err
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const DIFF = "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,2 +1,2 @@\n const x = 1;\n-const y = 2;\n+const y = 3;\n";
+let cutList = false;
 let calls: { cmd: string; args: Record<string, unknown> }[];
 let host: HTMLDivElement;
 let root: Root;
@@ -29,6 +30,7 @@ beforeEach(async () => {
     if (cmd === "review_changes")
       return {
         compared: "abc123",
+        truncated: cutList,
         files: [
           { path: "src/a.ts", oldPath: null, status: "modified", added: 1, removed: 1 },
           { path: "notes.md", oldPath: null, status: "untracked", added: 4, removed: 0 },
@@ -71,6 +73,14 @@ it("lists what the agent changed since its base, and shows a file's diff (spec m
   expect([...host.querySelectorAll("[data-diff-line]")].map((l) => l.getAttribute("data-diff-line"))).toEqual(["hunk", "ctx", "del", "add"]);
   await act(async () => button("Non commité").click());
   await vi.waitFor(() => expect(calls.filter((c) => c.cmd === "review_changes").pop()?.args).toEqual({ path: "C:/code/proj", base: null }));
+});
+
+it("says when the list of changes was cut", async () => {
+  await vi.waitFor(() => expect(text()).toContain("src/a.ts"));
+  expect(text()).not.toContain("Liste coupée");
+  cutList = true;
+  await act(async () => button("Non commité").click());
+  await vi.waitFor(() => expect(text()).toContain("Liste coupée : seuls les 2 premiers changements"));
 });
 
 it("takes remarks on lines and sends them to the agent in one message", async () => {
