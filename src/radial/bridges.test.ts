@@ -72,6 +72,16 @@ describe("Excalidraw's own actions, driven from outside (spec menu radial §6.3)
     expect((seen[1] as ClipboardEvent).clipboardData!.getData("text/plain")).toBe("hello");
   });
 
+  it("does not paste over a node and says so: Excalidraw would paste nothing (plan G1)", async () => {
+    document.body.insertAdjacentHTML("beforeend", '<div data-terminal="isis"><span id="body"></span></div>');
+    vi.spyOn(document, "elementFromPoint").mockReturnValue(document.getElementById("body"));
+    clipboard(async () => [textItem("hello")]);
+    await pasteOnCanvasAt({ x: 40, y: 50 });
+    expect(seen).toEqual([]);
+    expect(toast).toHaveBeenCalledWith("Collage impossible ici : un terminal occupe ce point");
+    vi.restoreAllMocks();
+  });
+
   it("says when the clipboard is empty or cannot be read, and pastes nothing", async () => {
     clipboard(async () => []);
     await pasteOnCanvasAt({ x: 1, y: 1 });
@@ -87,7 +97,8 @@ describe("Excalidraw's own actions, driven from outside (spec menu radial §6.3)
     expect(await readClipboardText()).toBe("echo hi");
     clipboard(async () => [{ types: ["image/png"], getType: async () => new Blob([], { type: "image/png" }) }]);
     expect(await readClipboardText()).toBeNull();
-    expect(toast).toHaveBeenCalledWith("Presse-papiers vide");
+    // An image is not an empty clipboard.
+    expect(toast).toHaveBeenCalledWith("Pas de texte dans le presse-papiers");
   });
 
   it("starts a text at the point by a double-click on the canvas, with the selection tool and nothing selected (final review)", async () => {

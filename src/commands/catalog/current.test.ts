@@ -19,7 +19,7 @@ import { reviewStore } from "@/review/reviewStore";
 import { CURRENT } from "./current";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
-vi.mock("@/canvas/arrive", () => ({ showNode: vi.fn(() => true), arrive: vi.fn() }));
+vi.mock("@/canvas/arrive", () => ({ showNode: vi.fn(() => true), arrive: vi.fn(), arrivingNode: vi.fn(() => null) }));
 vi.mock("@/canvas/canvasFocus", () => ({ focusGroup: vi.fn(() => true), releaseToCanvas: vi.fn() }));
 vi.mock("@/fleet/broadcast", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/fleet/broadcast")>()),
@@ -180,3 +180,20 @@ it("opens the review of the terminal of the moment (spec maj §5)", async () => 
   expect(reviewStore.getState().nodeId).toBe("thot");
 });
 
+
+describe("a target that went between the palette and Entrée (plan F2)", () => {
+  it("does nothing, without a TypeError: the group is gone", async () => {
+    canvasStore.setState({ frames: [] });
+    for (const id of ["group.rename", "group.addAgent", "group.orchestrate", "group.ungroup", "group.close", "group.pause", "group.resume", "group.frame"]) {
+      await expect(Promise.resolve(find(id).run(ctx("isis")))).resolves.toBeUndefined();
+    }
+    expect(ungroup).not.toHaveBeenCalled();
+    expect(requestCloseGroup).not.toHaveBeenCalled();
+  });
+
+  it("does nothing for Relancer when the terminal is gone", async () => {
+    vi.mocked(relaunchTerminal).mockClear();
+    await expect(Promise.resolve(find("terminal.relaunch").run(ctx("closed")))).resolves.toBeUndefined();
+    expect(relaunchTerminal).not.toHaveBeenCalled();
+  });
+});

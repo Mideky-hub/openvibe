@@ -51,10 +51,21 @@ const FOCUS_FRAMES = 10;
  * Excalidraw shows a node that was off screen once the view has moved, and
  * after a workspace switch its terminal may only be mounted a frame later.
  */
-function focusSoon(focus: () => boolean, frames = FOCUS_FRAMES) {
+function focusSoon(focus: () => boolean, token: number, frames = FOCUS_FRAMES) {
   requestAnimationFrame(() => {
-    if (!focus() && frames > 1) focusSoon(focus, frames - 1);
+    // A newer arrival owns the keyboard: its loop replaces this one.
+    if (token !== generation) return;
+    if (!focus() && frames > 1) focusSoon(focus, token, frames - 1);
+    else arriving = null;
   });
+}
+
+let generation = 0;
+let arriving: string | null = null;
+
+/** The node an arrival is still giving the keyboard to: a Ctrl+Tab repeat steps on from it, not from the terminal left (plan E1). */
+export function arrivingNode(): string | null {
+  return arriving;
 }
 
 /** Gives the keyboard to the xterm of a terminal or of an orchestrator's session. */
@@ -83,7 +94,9 @@ export function arrive(nodeId: string): boolean {
     appState: { ...move, activeEmbeddable: { element, state: "active" }, selectedElementIds: {}, selectedGroupIds: {} },
   });
   const kind = nodeKindOf(element);
-  focusSoon(() => focusNodeInput(nodeId, kind));
+  generation += 1;
+  arriving = nodeId;
+  focusSoon(() => focusNodeInput(nodeId, kind), generation);
   if (kind === "terminal") signalArrival(nodeId);
   return true;
 }

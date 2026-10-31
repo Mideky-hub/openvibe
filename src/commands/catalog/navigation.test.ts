@@ -17,7 +17,7 @@ import { NAVIGATION } from "./navigation";
 import { WORKSPACES } from "./workspaces";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
-vi.mock("@/canvas/arrive", () => ({ arrive: vi.fn(), showNode: vi.fn() }));
+vi.mock("@/canvas/arrive", () => ({ arrive: vi.fn(), showNode: vi.fn(), arrivingNode: vi.fn(() => null) }));
 vi.mock("@/canvas/viewActions", () => ({ fitScene: vi.fn(), zoomTo: vi.fn() }));
 vi.mock("@/shell/commandBarFocus", () => ({ focusCommandBar: vi.fn() }));
 vi.mock("@/shell/workspaceActions", () => ({ removeWorkspace: vi.fn(() => Promise.resolve()) }));

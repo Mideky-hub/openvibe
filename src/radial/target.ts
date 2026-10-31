@@ -51,10 +51,26 @@ const TOLERANCE = 6;
 /** The band above a group's frame where its label sits (canvas/overlay/GroupLabels.tsx). */
 const LABEL_HEIGHT = 24;
 
+/**
+ * The box Excalidraw turns an element around: its own, except for a line or an
+ * arrow, whose points may go left of or above (x, y).
+ */
+function boxOf(element: ExcalidrawElement) {
+  if ((element.type === "line" || element.type === "arrow") && "points" in element && element.points.length > 0) {
+    const xs = element.points.map(([x]) => x);
+    const ys = element.points.map(([, y]) => y);
+    const x = element.x + Math.min(...xs);
+    const y = element.y + Math.min(...ys);
+    return { x, y, width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+  }
+  return { x: element.x, y: element.y, width: element.width, height: element.height };
+}
+
 /** `point` in the element's own axes: Excalidraw turns an element around its center. */
 function unturned(element: ExcalidrawElement, point: Point): Point {
-  const cx = element.x + element.width / 2;
-  const cy = element.y + element.height / 2;
+  const box = boxOf(element);
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
   const cos = Math.cos(-element.angle);
   const sin = Math.sin(-element.angle);
   const dx = point.x - cx;
@@ -76,16 +92,18 @@ function hits(element: ExcalidrawElement, point: Point, tolerance: number): bool
     if (points.length === 1) return Math.hypot(p.x - points[0].x, p.y - points[0].y) <= reach;
     return points.slice(1).some((b, i) => distanceToSegment(p, points[i], b) <= reach);
   }
-  return p.x >= element.x - tolerance && p.x <= element.x + element.width + tolerance && p.y >= element.y - tolerance && p.y <= element.y + element.height + tolerance;
+  const box = boxOf(element);
+  return p.x >= box.x - tolerance && p.x <= box.x + box.width + tolerance && p.y >= box.y - tolerance && p.y <= box.y + box.height + tolerance;
 }
 
 /** The box around elements, turned ones included. */
 function boundsOf(elements: readonly ExcalidrawElement[]) {
-  const corners = elements.flatMap((e) => {
+  const corners = elements.flatMap((element) => {
+    const e = boxOf(element);
     const cx = e.x + e.width / 2;
     const cy = e.y + e.height / 2;
-    const cos = Math.cos(e.angle);
-    const sin = Math.sin(e.angle);
+    const cos = Math.cos(element.angle);
+    const sin = Math.sin(element.angle);
     return [
       [e.x, e.y],
       [e.x + e.width, e.y],

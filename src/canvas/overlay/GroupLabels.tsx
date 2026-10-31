@@ -46,7 +46,7 @@ export function GroupLabels() {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[3] overflow-hidden">
-      <style>{groups.map((g) => `.excalidraw [id$="-frame-name-${g.id}"]{color:transparent!important}`).join("\n")}</style>
+      <style>{groups.map((g) => `.excalidraw [id$="-frame-name-${CSS.escape(g.id)}"]{color:transparent!important}`).join("\n")}</style>
       {groups.map((group) =>
         group.id === view.editingFrame ? null : (
           <GroupLabel
@@ -99,6 +99,11 @@ function NameField({ name, onDone }: { name: string; onDone: (name: string | nul
   const t = useMessages(canvasMessages);
   // Removing the focused field may fire one last blur: only the first ending counts.
   const done = useRef(false);
+  const field = useRef<HTMLInputElement>(null);
+  // `autoFocus` would scroll the label layer (overflow-hidden) when the label is still out of view.
+  useEffect(() => {
+    field.current?.focus({ preventScroll: true });
+  }, []);
   const finish = (value: string | null) => {
     if (done.current) return;
     done.current = true;
@@ -107,7 +112,7 @@ function NameField({ name, onDone }: { name: string; onDone: (name: string | nul
   };
   return (
     <input
-      autoFocus
+      ref={field}
       defaultValue={name}
       aria-label={t.groupNameLabel}
       size={Math.max(4, name.length + 1)}

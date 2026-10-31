@@ -16,8 +16,11 @@ const LAUNCHED: readonly AgentId[] = ["claude", "codex", "gemini", "qwen", "curs
 const section = sectionNamed((s) => s.agents);
 
 /** Like the Agent menu: an agent not found on this computer is listed greyed, with why. */
-const notFound = (agent: AgentId) => () =>
-  agentsStore.getState().agents.some((a) => a.id === agent && a.available) ? null : catalog().reasons.notFound(AGENTS[agent].binary);
+const notFound = (agent: AgentId) => () => {
+  const { agents, loaded } = agentsStore.getState();
+  // Before the first look nothing is known to be missing (the Shell has no binary name yet).
+  return !loaded || agents.some((a) => a.id === agent && a.available) ? null : catalog().reasons.notFound(AGENTS[agent].binary);
+};
 
 export const AGENT_COMMANDS: readonly Command[] = [
   ...LAUNCHED.map(

@@ -1,4 +1,4 @@
-import { arrive } from "@/canvas/arrive";
+import { arrive, arrivingNode } from "@/canvas/arrive";
 import { overview, releaseToCanvas } from "@/canvas/canvasFocus";
 import { canvasStore } from "@/canvas/canvasStore";
 import { stepTerminal, terminalOrder } from "@/canvas/terminalOrder";
@@ -19,7 +19,7 @@ const always = () => true;
 function step(direction: 1 | -1, ctx: CommandContext) {
   const api = canvasStore.getState().api;
   if (!api) return;
-  const target = stepTerminal(terminalOrder(api.getSceneElements()), ctx.terminalId, direction);
+  const target = stepTerminal(terminalOrder(api.getSceneElements()), arrivingNode() ?? ctx.terminalId, direction);
   if (target) arrive(target);
 }
 

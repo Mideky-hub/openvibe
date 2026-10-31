@@ -57,7 +57,11 @@ export function commandFor(commands: readonly Command[], shortcut: Shortcut, ctx
 
 /** Runs a command; a failure says so, like the menus (spec fenêtre §9). */
 export function runCommand(command: Command, ctx: CommandContext) {
-  const fail = (error: unknown) => toast.error(messages(commandsMessages).failed(labelOf(command, ctx), String(error)));
+  const fail = (error: unknown) => {
+    const text = messages(commandsMessages);
+    const like = text.failedLike[command.id];
+    toast.error(like ? like(String(error)) : text.failed(labelOf(command, ctx), String(error)));
+  };
   try {
     void Promise.resolve(command.run(ctx)).catch(fail);
   } catch (error) {
