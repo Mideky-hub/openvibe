@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { RESUME_OFFER_ROOM, resumeOfferStore } from "./ResumeAllToast";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -112,4 +113,14 @@ it("opens « Composer un groupe » and a group's menu on request", async () => {
   );
   await act(async () => requestUi({ kind: "groupMenu", id: "g1" }));
   expect([...document.querySelectorAll('[role="menuitem"]')].map((i) => i.textContent)).toContain("Renommer");
+});
+
+it("stops above the « Reprendre » offer instead of sitting under it", async () => {
+  const panel = host.firstElementChild as HTMLElement;
+  const before = panel.style.maxHeight;
+  await act(async () => resumeOfferStore.setState({ open: true }));
+  expect(panel.style.maxHeight).toBe(`calc(100% - ${TOP_ROW_HEIGHT + 14 + RESUME_OFFER_ROOM + 14}px)`);
+  expect(panel.style.maxHeight).not.toBe(before);
+  await act(async () => resumeOfferStore.setState({ open: false }));
+  expect(panel.style.maxHeight).toBe(before);
 });
