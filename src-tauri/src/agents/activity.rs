@@ -26,6 +26,8 @@ pub const HOOK_SAFETY_NET: Duration = Duration::from_secs(30);
 pub enum HookSource {
     Claude,
     Codex,
+    /// Gemini CLI's hooks (BeforeAgent, AfterAgent, Notification) report like Claude's.
+    Gemini,
 }
 
 /// A terminal's new activity, and since when.
@@ -143,7 +145,7 @@ impl Tracker {
         message: Option<String>,
     ) -> Option<Change> {
         let node = self.nodes.get_mut(node_id)?;
-        if source == HookSource::Claude {
+        if matches!(source, HookSource::Claude | HookSource::Gemini) {
             node.hooked = true;
         }
         node.answered = None;
@@ -359,6 +361,18 @@ pub fn claude_activity(event: &str, notification_type: Option<&str>) -> Option<A
             "idle_prompt" => Some(Activity::Idle),
             _ => None,
         },
+        _ => None,
+    }
+}
+
+/// Gemini CLI's hook events, as its hooks reference lists them: `BeforeAgent`
+/// (a prompt was submitted), `AfterAgent` (the turn ended) and a `Notification`
+/// of type `ToolPermission` (it asks to run a tool).
+pub fn gemini_activity(event: &str, notification_type: Option<&str>) -> Option<Activity> {
+    match event {
+        "BeforeAgent" => Some(Activity::Working),
+        "AfterAgent" => Some(Activity::Idle),
+        "Notification" => (notification_type? == "ToolPermission").then_some(Activity::Waiting),
         _ => None,
     }
 }
