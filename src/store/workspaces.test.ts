@@ -108,6 +108,16 @@ describe("workspaces store", () => {
     expect(db.workspaces[0].name).toBe("Front");
   });
 
+  it("refuses a name another workspace of the project already has, case aside", async () => {
+    const db = fakeBackend(["A", "Front"]);
+    await state().load("p1");
+    await expect(state().rename("w1", " front ")).rejects.toThrow("front");
+    expect(names()).toEqual(["A", "Front"]);
+    expect(db.workspaces[0].name).toBe("A");
+    await state().rename("w2", "FRONT");
+    expect(names()).toEqual(["A", "FRONT"]);
+  });
+
   it("never removes the last workspace", async () => {
     const db = fakeBackend(["A"]);
     await state().load("p1");

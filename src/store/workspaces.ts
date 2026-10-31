@@ -10,6 +10,8 @@ import {
   type Workspace,
 } from "@/ipc/db";
 import { nextPantheon } from "@/fleet/names";
+import { messages } from "@/i18n";
+import { storeMessages } from "./messages";
 
 export type { Workspace };
 
@@ -84,6 +86,9 @@ export function createWorkspacesStore() {
       rename: async (id, name) => {
         const trimmed = name.trim();
         if (!trimmed) return;
+        // Two tabs of one project with the same name cannot be told apart.
+        const clash = get().workspaces.some((w) => w.id !== id && w.name.toLowerCase() === trimmed.toLowerCase());
+        if (clash) throw new Error(messages(storeMessages).duplicateName(trimmed));
         await renameWorkspace(id, trimmed);
         set((s) => ({ workspaces: s.workspaces.map((w) => (w.id === id ? { ...w, name: trimmed } : w)) }));
       },
