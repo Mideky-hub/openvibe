@@ -155,3 +155,24 @@ it("reads a model's own limit alone, without the session or week windows (backlo
   expect(limits?.fiveHour).toBeUndefined();
   expect(limits?.models.map((m) => [m.label, m.limit.usedPercent])).toEqual([["Fable", 40]]);
 });
+
+describe("a resumed conversation's spending (backlog usage)", () => {
+  const status = (cost: number) => ({ session_id: "s1", cost: { total_cost_usd: cost, total_lines_added: cost * 10 } });
+
+  it("counts only what this launch spent, the first report being the baseline", async () => {
+    const { usageStore, markResumedLaunch } = await import("./usageStore");
+    markResumedLaunch("n1");
+    usageStore.getState().apply({ nodeId: "n1", status: status(2) }, 1);
+    usageStore.getState().apply({ nodeId: "n1", status: status(2.5) }, 2);
+    const session = usageStore.getState().sessions.s1;
+    expect(session.costUsd).toBe(2.5);
+    expect(totals([session]).costUsd).toBeCloseTo(0.5);
+    expect(totals([session]).linesAdded).toBeCloseTo(5);
+  });
+
+  it("counts everything for a conversation that was not resumed", async () => {
+    const { usageStore } = await import("./usageStore");
+    usageStore.getState().apply({ nodeId: "n2", status: { session_id: "s2", cost: { total_cost_usd: 1 } } }, 1);
+    expect(totals([usageStore.getState().sessions.s2]).costUsd).toBe(1);
+  });
+});
