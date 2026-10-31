@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import type { TerminalPayload } from "@/nodes/types";
-import { createNodesStore, nodesStore, sessionOf, terminalOf, updateSession } from "./nodes";
+import { createNodesStore, nodesStore, rebaseTerminalFolders, sessionOf, terminalOf, updateSession } from "./nodes";
 
 const payload: TerminalPayload = { title: "A", name: "", cwd: "C:/code", agent: "shell", command: "", shell: "default" };
 let saves: { id: string; payloadJson: string }[];
@@ -102,4 +102,20 @@ it("finds a node's Claude session, a terminal's own or an orchestrator's, and ch
   expect(nodesStore.getState().nodes.o1.payload).toEqual({ name: "Chef", session: { ...session, claudeSessionId: "s2" } });
   expect(sessionOf(nodesStore.getState().nodes.t1)?.claudeSessionId).toBe("s3");
   expect(nodesStore.getState().nodes.o2.payload).toEqual({ name: "Ancien" });
+});
+
+it("moves an orchestrator's session and mission paths with the project's folder (backlog H2)", async () => {
+  await nodesStore.getState().create("chef", {
+    workspaceId: "w1",
+    kind: "orchestrator",
+    payload: {
+      name: "Chef",
+      session: { ...payload, cwd: "C:/code/api", agent: "claude" },
+      mission: { state: "plan", maxAgents: 4, project: "C:/code/api", members: [] },
+    },
+  });
+  rebaseTerminalFolders("C:/code/api", "D:/api");
+  const record = nodesStore.getState().nodes.chef;
+  expect(record.kind === "orchestrator" && record.payload.session?.cwd).toBe("D:/api");
+  expect(record.kind === "orchestrator" && record.payload.mission?.project).toBe("D:/api");
 });

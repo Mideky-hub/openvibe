@@ -123,7 +123,21 @@ export function useNodes<T>(selector: (state: NodesState) => T): T {
 /** After "Changer de dossier": terminals in memory follow the project's new folder. */
 export function rebaseTerminalFolders(from: string, to: string) {
   for (const [id, node] of Object.entries(nodesStore.getState().nodes)) {
-    if (node.kind !== "terminal") continue;
+    if (node.kind === "orchestrator") {
+      // Its Claude session and the paths of its mission follow the project too.
+      const { session, mission } = node.payload;
+      const cwd = session && rebasePath(session.cwd, from, to);
+      const project = mission?.project && rebasePath(mission.project, from, to);
+      const worktree = mission?.worktree && rebasePath(mission.worktree, from, to);
+      const members = mission?.members.map((m) => ({ ...m, worktree: rebasePath(m.worktree, from, to) ?? m.worktree }));
+      const patch: Partial<OrchestratorPayload> = {};
+      if (session && cwd) patch.session = { ...session, cwd };
+      if (mission && (project || worktree || members?.some((m, i) => m.worktree !== mission.members[i].worktree))) {
+        patch.mission = { ...mission, project: project || mission.project, worktree: worktree || mission.worktree, members: members ?? mission.members };
+      }
+      if (Object.keys(patch).length > 0) nodesStore.getState().update(id, patch);
+      continue;
+    }
     const cwd = rebasePath(node.payload.cwd, from, to);
     if (cwd) nodesStore.getState().update(id, { cwd });
   }
