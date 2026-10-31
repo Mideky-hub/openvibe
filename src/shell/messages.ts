@@ -17,7 +17,7 @@ export const shellMessages = defineMessages(
       fallbackName: "cet agent",
       several: (names: string[]) => `Ces agents tournent encore ; les fermer met fin à leur session : ${names.join(", ")}.`,
       inMission: (name: string) =>
-        `${name} mène une mission en cours. Le fermer arrête sa session ; ses agents continuent, mais personne ne lira leurs comptes rendus.`,
+        `${name} mène une mission en cours. Le fermer arrête sa session ; ses agents continuent, mais personne ne lira leurs comptes rendus. Les worktrees et les branches de la mission restent sur le disque.`,
       orchestrator: (name: string) => `${name} tourne encore. Le fermer met fin à sa session.`,
       agent: (name: string) => `${name} tourne encore. La fermer met fin à sa session.`,
       titleOne: (name: string) => `Fermer ${name} ?`,
@@ -219,7 +219,7 @@ export const shellMessages = defineMessages(
       fallbackName: "this agent",
       several: (names: string[]) => `These agents are still running; closing them ends their session: ${names.join(", ")}.`,
       inMission: (name: string) =>
-        `${name} is leading a mission in progress. Closing it stops its session; its agents keep going, but nobody will read their reports.`,
+        `${name} is leading a mission in progress. Closing it stops its session; its agents keep going, but nobody will read their reports. The mission's worktrees and branches stay on disk.`,
       orchestrator: (name: string) => `${name} is still running. Closing it ends its session.`,
       agent: (name: string) => `${name} is still running. Closing it ends its session.`,
       titleOne: (name: string) => `Close ${name}?`,

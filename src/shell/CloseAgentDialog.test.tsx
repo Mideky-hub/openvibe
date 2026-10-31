@@ -71,7 +71,7 @@ it("tells what closing an orchestrator in mission leaves behind (spec première 
   });
   await act(async () => uiStore.getState().setClosing({ agents: ["chef"], remove: ["chef", "fil"] }));
   const dialog = document.querySelector('[role="dialog"]')!;
-  expect(dialog.textContent).toContain("Chef mène une mission en cours. Le fermer arrête sa session ; ses agents continuent, mais personne ne lira leurs comptes rendus.");
+  expect(dialog.textContent).toContain("Chef mène une mission en cours. Le fermer arrête sa session ; ses agents continuent, mais personne ne lira leurs comptes rendus. Les worktrees et les branches de la mission restent sur le disque.");
   await act(async () => button("Fermer l'orchestrateur").click());
   expect(removeNodes).toHaveBeenLastCalledWith(["chef", "fil"]);
 });
