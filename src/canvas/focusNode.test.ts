@@ -21,6 +21,7 @@ it("activates the element a fleet panel click centers on (spec habillage §5.5)"
 
 it("unfolds the folded group of the agent first (spec replier un groupe §2)", async () => {
   const setGroupFolded = vi.fn();
+  vi.stubGlobal("requestAnimationFrame", () => 0);
   vi.doMock("@/fleet/groups", () => ({ setGroupFolded }));
   const element = { id: "t1", x: 0, y: 0, width: 400, height: 300 };
   canvasStore.setState({

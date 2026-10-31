@@ -190,6 +190,7 @@ describe("revealNode (plan B1)", () => {
 describe("arriving at a terminal of a folded group (spec replier un groupe §2)", () => {
   it("unfolds the group first, then arrives", async () => {
     const setGroupFolded = vi.fn();
+    vi.stubGlobal("requestAnimationFrame", () => 0);
     vi.doMock("@/fleet/groups", () => ({ setGroupFolded }));
     const updateScene = vi.fn();
     canvasStore.setState({
