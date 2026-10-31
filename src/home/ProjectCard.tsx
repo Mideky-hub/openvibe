@@ -90,7 +90,7 @@ export function ProjectCard({ project }: { project: Project }) {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-            <DropdownMenuItem onSelect={() => setEditing(true)}>{t.rename}</DropdownMenuItem>
+            {!project.missing && <DropdownMenuItem onSelect={() => setEditing(true)}>{t.rename}</DropdownMenuItem>}
             <DropdownMenuItem onSelect={() => void relocate(project).catch(fail("changeFailed"))}>
               {t.changeFolder}
             </DropdownMenuItem>

@@ -43,9 +43,10 @@ export function resumeOfferOf(status: TerminalStatus, agent: AgentId, hasSession
 /**
  * Typing in a terminal where nothing runs starts it again. Only real keystrokes
  * count: a restored screen makes xterm answer old terminal queries by itself.
+ * A stray key must not run an installer again: a one-shot command never starts this way.
  */
-export function startsOnKeystroke(status: TerminalStatus): boolean {
-  return status.state !== "running" && status.state !== "starting";
+export function startsOnKeystroke(status: TerminalStatus, oneShot = false): boolean {
+  return !oneShot && status.state !== "running" && status.state !== "starting";
 }
 
 /**

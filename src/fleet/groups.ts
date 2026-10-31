@@ -1,6 +1,7 @@
 import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { canvasStore } from "@/canvas/canvasStore";
+import { returnKeyboardToCanvas } from "@/canvas/keyboardFocus";
 import { createGroupFrame, isGroup } from "@/canvas/groups";
 import { allowRemoval } from "@/canvas/removalGuard";
 import { createNodeElement } from "@/canvas/nodeElement";
@@ -137,6 +138,7 @@ export function ungroup(groupId: string) {
     }),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
+  returnKeyboardToCanvas();
 }
 
 /**
@@ -158,6 +160,7 @@ export function closeGroup(groupId: string) {
     elements: elements.map((e) => (going.has(e.id) ? newElementWith(e, { isDeleted: true }) : e)),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
+  returnKeyboardToCanvas();
 }
 
 /** Asks first when agents of the group are still running (spec §11.4). */

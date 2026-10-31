@@ -36,7 +36,14 @@ export function PenMenu({ active }: { active: boolean }) {
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (next) choose({});
+        if (!next) return;
+        // Opening picks the pen with the colour and width in force (shared with the shapes): it writes nothing.
+        const api = canvasStore.getState().api;
+        if (!api) return;
+        const app = api.getAppState();
+        setColor(app.currentItemStrokeColor);
+        setWidth(app.currentItemStrokeWidth);
+        api.setActiveTool({ type: "freedraw" });
       }}
     >
       <PopoverTrigger asChild>

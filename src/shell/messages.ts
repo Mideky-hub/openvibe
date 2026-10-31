@@ -51,7 +51,7 @@ export const shellMessages = defineMessages(
       agentsKeepRunning: "Tes agents continuent de tourner : recharger l'interface les retrouve.",
       reload: "Recharger l'interface",
     },
-    projectPicker: { project: "Projet", allProjects: "Tous les projets…", closeProject: "Fermer le projet" },
+    projectPicker: { project: "Projet", allProjects: "Tous les projets…", closeProject: "Fermer le projet", openFailed: (error: string) => `Ouverture impossible : ${error}` },
     searchField: { project: "Rechercher un projet", inProject: (name: string) => `Rechercher dans ${name}` },
     settings: {
       theme: "Thème",
@@ -257,7 +257,7 @@ export const shellMessages = defineMessages(
       agentsKeepRunning: "Your agents keep running: reloading the interface finds them again.",
       reload: "Reload the interface",
     },
-    projectPicker: { project: "Project", allProjects: "All projects…", closeProject: "Close the project" },
+    projectPicker: { project: "Project", allProjects: "All projects…", closeProject: "Close the project", openFailed: (error: string) => `Could not open: ${error}` },
     searchField: { project: "Search for a project", inProject: (name: string) => `Search in ${name}` },
     settings: {
       theme: "Theme",
