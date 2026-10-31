@@ -30,6 +30,12 @@ export function useAgents<T>(selector: (state: AgentsState) => T): T {
   return useStore(agentsStore, selector);
 }
 
+/** The agents, looked for first if they never were: a launch before the list loads must not fall back to a Shell. */
+export async function loadedAgents(): Promise<AgentInfo[]> {
+  if (!agentsStore.getState().loaded) await agentsStore.getState().load().catch(() => undefined);
+  return agentsStore.getState().agents;
+}
+
 /** Whether Claude Code is installed, the agents looked for first if they never were. */
 export async function claudeInstalled(): Promise<boolean> {
   if (!agentsStore.getState().loaded) await agentsStore.getState().load();
