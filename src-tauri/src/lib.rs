@@ -36,7 +36,14 @@ pub fn run() {
             // Built here, not from the config, for the one thing the config cannot
             // say: the page reads the clipboard without WebView2's prompt, since
             // the radial menu's Coller has no Ctrl+V to carry it (spec menu radial §6.3).
-            WebviewWindowBuilder::from_config(app.handle(), &app.config().app.windows[0])?
+            let main = app
+                .config()
+                .app
+                .windows
+                .iter()
+                .find(|window| window.label == "main")
+                .ok_or("no window labelled main in tauri.conf.json")?;
+            WebviewWindowBuilder::from_config(app.handle(), main)?
                 .enable_clipboard_access()
                 .build()?;
             log::info!(
@@ -139,4 +146,16 @@ fn spawn_scrollback_flusher(app: AppHandle) {
             commands::pty::flush_scrollbacks(&app, false);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    /// `run` builds the window from the config by its label, not its position.
+    #[test]
+    fn the_config_declares_a_window_labelled_main() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let windows = config["app"]["windows"].as_array().unwrap();
+        assert!(windows.iter().any(|window| window["label"] == "main"));
+    }
 }
