@@ -33,3 +33,20 @@ export function trackTerminalFocus(doc: Document = document): () => void {
 export function lastTerminalOf(workspaceId: string): string | null {
   return lastTerminals.get(workspaceId) ?? null;
 }
+
+/**
+ * After an action of ours (Dégrouper, Lancer 4…), Excalidraw's shortcuts
+ * (Ctrl+Z first) answer only inside its container: the keyboard goes back
+ * there once the menu or popover has handed it to its trigger (plan B1). A
+ * terminal or a text field that has it keeps it.
+ */
+export function returnKeyboardToCanvas(doc: Document = document) {
+  // Two frames: Radix gives the focus back to the trigger after the item's own handler.
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      const active = doc.activeElement;
+      if (active instanceof HTMLElement && active.matches("input, textarea, [contenteditable='true'], [contenteditable='']")) return;
+      doc.querySelector<HTMLElement>(".excalidraw-container")?.focus();
+    }),
+  );
+}
