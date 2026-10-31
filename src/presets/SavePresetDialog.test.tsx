@@ -112,3 +112,12 @@ it("refuses clearly when no canvas is on screen, instead of saving an empty team
   expect(saved).toHaveLength(0);
   expect(presetsStore.getState().presets).toEqual([]);
 });
+
+it("speaks English when the interface does", async () => {
+  langStore.setState({ lang: "en" });
+  await act(async () => requestUi({ kind: "savePreset" }));
+  expect(document.querySelector('input[aria-label="Preset name"]')).not.toBeNull();
+  expect(document.body.textContent).toContain("Save the team as a preset");
+  expect(button("Save")).toBeTruthy();
+  expect(button("Cancel")).toBeTruthy();
+});
