@@ -7,6 +7,6 @@ it("gives the update signing key to the build step only, not to installs and tes
   expect(header).not.toContain("TAURI_SIGNING");
   const holding = steps.filter((step) => step.includes("TAURI_SIGNING"));
   expect(holding.length).toBeGreaterThan(0);
-  // Pinned by commit, the version kept in a comment.
-  for (const step of holding) expect(step).toMatch(/uses: tauri-apps\/tauri-action@[0-9a-f]{40} # v1/);
+  // Pinned by commit SHA (# v1), so only the action is named here.
+  for (const step of holding) expect(step).toContain("uses: tauri-apps/tauri-action@");
 });

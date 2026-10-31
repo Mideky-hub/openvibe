@@ -11,6 +11,7 @@ use tiny_http::{Header, Method, Request, Response, Server};
 
 use super::activity::{
     Activity, HookSource, claude_activity, claude_session_ended, clean_message, codex_activity,
+    gemini_activity,
 };
 use super::mcp;
 
@@ -64,6 +65,7 @@ impl HookServer {
         let kind = match source {
             HookSource::Claude => "claude",
             HookSource::Codex => "codex",
+            HookSource::Gemini => "gemini",
         };
         format!("http://127.0.0.1:{}/hook/{kind}/{node_id}", self.port)
     }
@@ -85,8 +87,15 @@ impl HookServer {
     }
 }
 
-/// Starts the server; hooks are answered on its thread, MCP calls each on
-/// their own (a tools call waits for the interface, never in the hooks' way).
+/// Past this announced length a request is abandoned, not answered: tiny_http
+/// allocates what is left of a body when it drops a request, and an absurd
+/// `Content-Length` would abort the whole application, token or not.
+const MAX_ANNOUNCED_BODY: usize = 64 * 1024 * 1024;
+
+/// Starts the server; every request is answered on its own thread: a tools call
+/// waits for the interface, and a client that announces a body and sends none
+/// holds its own thread, not the others. tiny_http reads what is left of that
+/// body even for a refused caller.
 pub fn start(sink: impl HookSink) -> std::io::Result<HookServer> {
     let server =
         Server::http("127.0.0.1:0").map_err(|err| std::io::Error::other(err.to_string()))?;
@@ -96,38 +105,52 @@ pub fn start(sink: impl HookSink) -> std::io::Result<HookServer> {
         .map(|addr| addr.port())
         .ok_or_else(|| std::io::Error::other("no TCP port for the hook server"))?;
     let token = uuid::Uuid::new_v4().to_string();
-    let expected = token.clone();
+    let expected: Arc<str> = token.as_str().into();
     let sink = Arc::new(sink);
     std::thread::spawn(move || {
-        for mut request in server.incoming_requests() {
-            if request.url().split('?').next() == Some("/mcp") {
-                let sink = Arc::clone(&sink);
-                dispatch_mcp(request, move |request| answer_mcp(request, &*sink));
+        for request in server.incoming_requests() {
+            if request
+                .body_length()
+                .is_some_and(|length| length > MAX_ANNOUNCED_BODY)
+            {
+                log::warn!("request abandoned: its announced body is absurd");
+                std::mem::forget(request);
                 continue;
             }
-            // A panic in the sink must not stop the loop: hooks and MCP would
-            // stay silent until restart (backlog R1). Answer 500 instead.
-            let status = catch_unwind(AssertUnwindSafe(|| {
-                if request.url().starts_with("/status/") {
-                    status_line_of(&mut request, &expected, &*sink)
-                } else {
-                    status_of(&mut request, &expected, &*sink)
-                }
-            }))
-            .unwrap_or(500);
-            let _ = request.respond(Response::empty(status));
+            let sink = Arc::clone(&sink);
+            if request.url().split('?').next() == Some("/mcp") {
+                dispatch(request, move |request| answer_mcp(request, &*sink));
+            } else {
+                let expected = Arc::clone(&expected);
+                dispatch(request, move |request| {
+                    answer_hook(request, &expected, &*sink)
+                });
+            }
         }
     });
     Ok(HookServer { port, token })
 }
 
-/// One thread per MCP request: a tools call waits for the interface. When the
-/// system refuses the thread, the caller is told so (503) instead of the
-/// process panicking.
-fn dispatch_mcp(request: Request, answer: impl FnOnce(Request) + Send + 'static) {
+/// A hook or a status line. A panic in the sink is answered 500 rather than
+/// lost (backlog R1).
+fn answer_hook(mut request: Request, token: &str, sink: &dyn HookSink) {
+    let status = catch_unwind(AssertUnwindSafe(|| {
+        if request.url().starts_with("/status/") {
+            status_line_of(&mut request, token, sink)
+        } else {
+            status_of(&mut request, token, sink)
+        }
+    }))
+    .unwrap_or(500);
+    let _ = request.respond(Response::empty(status));
+}
+
+/// One thread per request. When the system refuses the thread, the caller is
+/// told so (503) instead of the process panicking.
+fn dispatch(request: Request, answer: impl FnOnce(Request) + Send + 'static) {
     dispatch_with(request, answer, |job| {
         std::thread::Builder::new()
-            .name("mcp-request".into())
+            .name("local-request".into())
             .spawn(job)
             .map(drop)
     });
@@ -147,7 +170,7 @@ fn dispatch_with(
         }
     });
     if let Err(err) = spawn(job) {
-        log::error!("MCP request not served, no thread: {err}");
+        log::error!("request not served, no thread: {err}");
         if let Some(request) = crate::sync::lock(&slot).take() {
             let _ = request.respond(Response::empty(503));
         }
@@ -199,6 +222,9 @@ pub fn parse_route(
         }
         ["hook", "codex", node_id] if valid_node_id(node_id) => {
             Ok((HookSource::Codex, node_id.to_string()))
+        }
+        ["hook", "gemini", node_id] if valid_node_id(node_id) => {
+            Ok((HookSource::Gemini, node_id.to_string()))
         }
         _ => Err(404),
     }
@@ -300,6 +326,13 @@ fn status_of(request: &mut Request, token: &str, sink: &dyn HookSink) -> u16 {
             codex_activity(json["type"].as_str().unwrap_or_default()),
             false,
         ),
+        HookSource::Gemini => {
+            let event = json["hook_event_name"].as_str().unwrap_or_default();
+            (
+                gemini_activity(event, json["notification_type"].as_str()),
+                false,
+            )
+        }
     };
     if let Some(activity) = activity {
         let message = (activity == Activity::Waiting)
@@ -437,7 +470,7 @@ mod tests {
     #[test]
     fn refuses_unknown_routes_and_doubtful_node_ids() {
         for path in [
-            "/hook/gemini/n",
+            "/hook/aider/n",
             "/hook/claude",
             "/hook/claude/a/b",
             "/hook/claude/..",
@@ -628,6 +661,40 @@ mod tests {
                 message: None,
             }
         );
+    }
+
+    #[test]
+    fn hears_gemini_cli_s_hooks() {
+        let (tx, rx) = mpsc::channel();
+        let server = start(Arc::new(TestSink::new(tx))).unwrap();
+        let url = server.url(HookSource::Gemini, "g1");
+        let path = url.trim_start_matches(&format!("http://127.0.0.1:{}", server.port));
+        let post = |body: &[u8]| send(server.port, "POST", path, body);
+        let next = || rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(
+            post(br#"{"hook_event_name":"BeforeAgent","prompt":"hi"}"#),
+            204
+        );
+        let hit = next();
+        assert_eq!(
+            (hit.source, hit.activity),
+            (HookSource::Gemini, Activity::Working)
+        );
+        let ask = br#"{"hook_event_name":"Notification","notification_type":"ToolPermission","message":"Run ls?"}"#;
+        assert_eq!(post(ask), 204);
+        let hit = next();
+        assert_eq!(
+            (hit.activity, hit.message.as_deref()),
+            (Activity::Waiting, Some("Run ls?"))
+        );
+        assert_eq!(
+            post(br#"{"hook_event_name":"AfterAgent","prompt_response":"ok"}"#),
+            204
+        );
+        assert_eq!(next().activity, Activity::Idle);
+        // Events OpenVibe does not follow are accepted and ignored.
+        assert_eq!(post(br#"{"hook_event_name":"BeforeTool"}"#), 204);
+        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
     }
 
     #[test]
@@ -957,7 +1024,7 @@ mod tests {
     }
 
     #[test]
-    fn an_mcp_request_without_a_thread_is_answered_503() {
+    fn a_request_without_a_thread_is_answered_503() {
         // A listener of our own, its spawner always failing.
         let probe = Server::http("127.0.0.1:0").unwrap();
         let port = probe.server_addr().to_ip().unwrap().port();
@@ -985,14 +1052,9 @@ mod tests {
     fn a_client_stalling_on_its_body_does_not_hold_the_others_up() {
         let (tx, _rx) = mpsc::channel();
         let server = start(Arc::new(TestSink::new(tx))).unwrap();
-        // Announces a body, sends none, and keeps the connection open.
-        let mut stalled = TcpStream::connect(("127.0.0.1", server.port)).unwrap();
-        let head = format!(
-            "POST /status/n1?t={} HTTP/1.1\r\nHost: x\r\nContent-Length: 100\r\n\r\n",
-            server.token
-        );
-        stalled.write_all(head.as_bytes()).unwrap();
-        std::thread::sleep(Duration::from_millis(200));
+        // Past 1024 bytes: tiny_http reads smaller bodies itself, before the server sees them.
+        let path = format!("/status/n1?t={}", server.token);
+        let stalled = announce(server.port, &path, 100_000);
 
         let (done, finished) = mpsc::channel();
         let port = server.port;
@@ -1011,6 +1073,57 @@ mod tests {
             send_headed(server.port, "POST", "/status/n1", &header, b"{}"),
             204
         );
+        drop(stalled);
+    }
+
+    /// Announces a body, sends none of it, and keeps the connection open.
+    fn announce(port: u16, path: &str, length: u64) -> TcpStream {
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let head = format!("POST {path} HTTP/1.1\r\nHost: x\r\nContent-Length: {length}\r\n\r\n");
+        stream.write_all(head.as_bytes()).unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        stream
+    }
+
+    /// Whether the server still serves, hooks and MCP, within a few seconds.
+    fn still_serving(port: u16, token: &str) -> bool {
+        let (done, finished) = mpsc::channel();
+        let token = token.to_string();
+        std::thread::spawn(move || {
+            let mcp = [("Authorization", "Bearer tok-n1")];
+            let call = br#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
+            let header = format!("{TOKEN_HEADER}: {token}\r\n");
+            let _ = done.send((
+                exchange(port, "POST", "/mcp", &mcp, call).0,
+                send_headed(port, "POST", "/status/n1", &header, b"{}"),
+            ));
+        });
+        finished.recv_timeout(Duration::from_secs(3)) == Ok((200, 204))
+    }
+
+    #[test]
+    fn a_caller_without_the_token_cannot_stall_the_server() {
+        let (tx, _rx) = mpsc::channel();
+        let server = start(Arc::new(TestSink::new(tx))).unwrap();
+        let stalled = announce(server.port, "/status/n1", 100_000);
+        assert!(
+            still_serving(server.port, &server.token),
+            "a client without the token blocks the server loop"
+        );
+        drop(stalled);
+    }
+
+    /// tiny_http allocates what is left of an announced body when it drops the
+    /// request: an absurd length aborts the whole application, agents included.
+    #[test]
+    fn an_absurd_announced_length_does_not_bring_the_application_down() {
+        let (tx, _rx) = mpsc::channel();
+        let server = start(Arc::new(TestSink::new(tx))).unwrap();
+        let mut stalled = Vec::new();
+        for path in ["/status/n1", "/hook/claude/n1", "/mcp"] {
+            stalled.push(announce(server.port, path, 9_000_000_000_000_000));
+        }
+        assert!(still_serving(server.port, &server.token));
         drop(stalled);
     }
 

@@ -65,9 +65,9 @@ L'aperçu vient du champ `message` du hook `Notification`, jamais de l'écran :
 Règles :
 
 - **Repli** : pas de `message`, ou rien de lisible après nettoyage : pas d'aperçu, la ligne reste « <nom> a une question ». La documentation de Claude Code ne garantit pas le champ pour chaque type de notification.
-- **Texte non fiable** : son origine n'est pas documentée, il peut reprendre des noms d'outils ou de serveurs MCP. Rust le nettoie à la réception : séquences d'échappement et caractères de contrôle retirés, caractères de direction et invisibles retirés (ils peuvent déguiser un texte), espaces regroupés. L'interface l'affiche en texte brut, jamais en HTML ni en Markdown.
+- **Texte non fiable** : son origine n'est pas documentée, il peut reprendre des noms d'outils ou de serveurs MCP. Rust le nettoie à la réception : séquences d'échappement retirées avec leur contenu, caractères de contrôle retirés, caractères de direction et invisibles retirés (ils peuvent déguiser un texte ou laisser une ligne vide), espaces regroupés. Le nettoyage est itératif : un corps de hook rempli de séquences imbriquées ne peut pas épuiser la pile. L'interface l'affiche en texte brut, jamais en HTML ni en Markdown.
 - **Longueur** : 140 caractères au plus, coupés avec « … ». L'affichage tronque sur une ligne ; l'infobulle montre le texte plafonné.
-- **Durée de vie** : l'aperçu ne vit que le temps de l'attente. Un nouveau hook d'attente le remplace, ou l'efface s'il n'a pas de message, sans changer l'ordre d'attente.
+- **Durée de vie** : l'aperçu ne vit que le temps de l'attente. Un nouveau hook d'attente le remplace, ou l'efface s'il n'a pas de message, sans changer l'ordre d'attente. Une date à plus de 50 ms de la date gardée désigne une autre attente, pour que les événements arrivés dans le désordre restent écartés.
 - **Dans la fenêtre seulement** : la notification Windows garde « <nom> a une question ». Elle peut s'afficher sur l'écran verrouillé, où un chemin ou un nom de commande n'a rien à faire.
 
 Le texte d'exemple de la documentation est générique (« Claude needs your permission ») et en anglais quelle que soit la langue de l'interface : l'aperçu peut donc dire peu de chose.
@@ -100,7 +100,7 @@ Voir aussi les §10 et §11.
 Deux instances sur une même base, c'est un risque de perte de données pour les testeurs.
 
 - **Plugin** : `tauri-plugin-single-instance` officiel, à version exacte, enregistré avant tout le reste : la seconde instance se ferme avant de toucher au journal ou à la base.
-- **Seconde lancée** : elle ramène la fenêtre en cours (restaurée si réduite, au premier plan).
+- **Seconde lancée** : elle ramène la fenêtre en cours (restaurée si réduite, au premier plan). Pendant la fermeture de la première instance, il n'y a plus de fenêtre à ramener : les deux se ferment, et il faut relancer.
 - **Par identifiant** : le verrou porte sur l'identifiant de l'application. Le profil de développement (`dev.openvibe.probe`) tourne donc à côté d'une version installée, mais deux exécutables de même identifiant ne tournent jamais ensemble, quelle que soit leur version : ils partagent la même base. La fonction `semver` du plugin reste donc coupée.
 - **Clic dans le centre de notifications** : Windows relance l'application sans argument, la bibliothèque des notifications n'en posant aucun. La fenêtre en cours revient, mais on ne sait pas de quelle notification vient la relance. OpenVibe ne devine pas : une relance manuelle est identique, et elle déplacerait le canvas sans raison. La notification du §4 attend dans la fenêtre.
 

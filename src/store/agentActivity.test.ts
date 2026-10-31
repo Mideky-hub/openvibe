@@ -43,6 +43,14 @@ describe("agent activity store", () => {
     expect(state().activities.q).toEqual({ activity: "waiting", since: 20 });
   });
 
+  it("does not take a later wait for the same one: an older event stays dropped", () => {
+    state().apply({ nodeId: "w", activity: "waiting", since: 100 });
+    state().apply({ nodeId: "w", activity: "waiting", since: 300, message: "Next?" });
+    expect(state().activities.w).toEqual({ activity: "waiting", since: 300, message: "Next?" });
+    state().apply({ nodeId: "w", activity: "working", since: 200 });
+    expect(state().activities.w.activity).toBe("waiting");
+  });
+
   it("forgets a terminal whose process exited", () => {
     state().apply({ nodeId: "a", activity: "idle", since: 1 });
     state().remove("a");
