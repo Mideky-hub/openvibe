@@ -2,7 +2,10 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import type { TerminalPayload } from "@/nodes/types";
+import { toast } from "sonner";
 import { createNodesStore, nodesStore, rebaseTerminalFolders, sessionOf, terminalOf, updateSession } from "./nodes";
+
+vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 const payload: TerminalPayload = { title: "A", name: "", cwd: "C:/code", agent: "shell", command: "", shell: "default" };
 let saves: { id: string; payloadJson: string }[];
@@ -118,4 +121,16 @@ it("moves an orchestrator's session and mission paths with the project's folder 
   const record = nodesStore.getState().nodes.chef;
   expect(record.kind === "orchestrator" && record.payload.session?.cwd).toBe("D:/api");
   expect(record.kind === "orchestrator" && record.payload.mission?.project).toBe("D:/api");
+});
+
+it("tells the user when a deferred save is refused", async () => {
+  const { store } = createNodesStore();
+  await store.getState().create("n1", { workspaceId: "w1", kind: "terminal", payload });
+  mockIPC((cmd) => {
+    if (cmd === "save_node") throw new Error("disk full");
+  });
+  vi.useFakeTimers();
+  store.getState().update("n1", { title: "B" });
+  await vi.advanceTimersByTimeAsync(500);
+  expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("disk full"));
 });

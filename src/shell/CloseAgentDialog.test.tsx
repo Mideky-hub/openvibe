@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { removeNodes } from "@/fleet/terminals";
+import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore } from "@/store/nodes";
 import { uiStore } from "@/store/ui";
 import { CloseAgentDialog } from "./CloseAgentDialog";
@@ -74,4 +75,12 @@ it("tells what closing an orchestrator in mission leaves behind (spec première 
   expect(dialog.textContent).toContain("Chef mène une mission en cours. Le fermer arrête sa session ; ses agents continuent, mais personne ne lira leurs comptes rendus. Les worktrees et les branches de la mission restent sur le disque.");
   await act(async () => button("Fermer l'orchestrateur").click());
   expect(removeNodes).toHaveBeenLastCalledWith(["chef", "fil"]);
+});
+
+it("says whether the agent is at work or ready, as the spec asks (§7.5)", async () => {
+  agentActivityStore.getState().apply({ nodeId: "isis", activity: "working", since: 1 });
+  await act(async () => uiStore.getState().setClosing({ agents: ["isis"], remove: ["isis"] }));
+  expect(document.querySelector('[role="dialog"]')!.textContent).toContain("Isis est en cours.");
+  await act(async () => agentActivityStore.getState().apply({ nodeId: "isis", activity: "idle", since: 2 }));
+  expect(document.querySelector('[role="dialog"]')!.textContent).toContain("Isis est prête.");
 });

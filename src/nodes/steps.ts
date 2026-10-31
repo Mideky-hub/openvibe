@@ -33,6 +33,12 @@ export function declaredSteps(raw: unknown): Step[] | string {
   if (raw.some(tooLong)) return t().tooLong(MAX_STEP_TITLE);
   const titles = raw.map(titleOf);
   if (titles.some((title) => title === null)) return t().shortTitle;
+  // The second of two equal titles could never be marked: marking finds the first.
+  const seen = new Set<string>();
+  for (const title of titles as string[]) {
+    if (seen.has(title.toLowerCase())) return t().duplicate(title);
+    seen.add(title.toLowerCase());
+  }
   return titles.map((title) => ({ title: title!, state: "a_venir" }));
 }
 

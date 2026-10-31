@@ -97,6 +97,7 @@ function Settings({ nodeId, mission }: { nodeId: string; mission: Mission }) {
       </span>
       <button
         type="button"
+        data-link-toggle
         onClick={() => uiStore.getState().setLinking(linking ? null : nodeId)}
         className="rounded-full bg-ov-accent px-2.5 py-0.5 text-[11px] font-semibold text-white hover:brightness-110"
       >

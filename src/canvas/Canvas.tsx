@@ -9,7 +9,8 @@ import { completeArrival } from "@/commands/pendingArrival";
 import { assignMissingNames } from "@/fleet/naming";
 import { dismissResumeOffer, offerResumeAll } from "@/fleet/ResumeAllToast";
 import { adoptCopies } from "@/fleet/terminals";
-import { orchestratorLinks, unmarkedWires } from "@/fleet/wires";
+import { scheduleWireUpkeep } from "@/fleet/wireUpkeep";
+import { orchestratorLinks } from "@/fleet/wires";
 import { saveFiles, saveScene } from "@/ipc/db";
 import { onFlushAll } from "@/lib/flush";
 import { NodeHost } from "@/nodes/NodeHost";
@@ -159,8 +160,7 @@ function LoadedCanvas({ workspaceId, scene }: { workspaceId: string; scene: Load
       canvasStore.getState().setNodeIds(liveNodeIds(elements));
       canvasStore.getState().setNodeRects(liveNodeRects(elements));
       canvasStore.getState().setLinks(orchestratorLinks(elements));
-      const unmarked = unmarkedWires(elements);
-      if (unmarked.length > 0 && api) requestAnimationFrame(() => markWires(api, unmarked));
+      if (api) scheduleWireUpkeep(api, elements);
       const activated = trackActivation(appState.activeEmbeddable);
       // Deferred: changing the view from inside onChange would re-enter it.
       if (activated && api) requestAnimationFrame(() => showAtFullSize(api, activated));
@@ -229,13 +229,3 @@ function settleRemovals({ dispose, restore, ask }: RemovalVerdict) {
   });
 }
 
-/** Hand-drawn wires get their mark, outside the undo history (spec habillage §13). */
-function markWires(api: ExcalidrawImperativeAPI, ids: readonly string[]) {
-  const marked = new Set(ids);
-  api.updateScene({
-    elements: api
-      .getSceneElementsIncludingDeleted()
-      .map((e) => (marked.has(e.id) ? newElementWith(e, { customData: { ...e.customData, openvibe: { kind: "wire" } } }) : e)),
-    captureUpdate: CaptureUpdateAction.NEVER,
-  });
-}

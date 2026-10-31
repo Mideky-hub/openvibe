@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
 import { renameGroup } from "@/fleet/groups";
-import type { Activity } from "@/ipc/activity";
 import { GroupMenu } from "@/fleet/GroupMenu";
-import { countsText, waitingText } from "@/fleet/groupSummary";
+import { countsText, membersIn, waitingText } from "@/fleet/groupSummary";
 import { screenRectOf } from "@/fleet/placement";
 import { ROLES } from "@/fleet/roles";
 import { useActivities } from "@/store/agentActivity";
+import { terminalStatusStore } from "@/store/terminalStatus";
+import { useStore } from "zustand";
 import { uiStore, useUi } from "@/store/ui";
 import { canvasStore, useCanvas, type CanvasView } from "../canvasStore";
 import { groupBeingRenamed, isGroup, type SceneGroup } from "../groups";
@@ -29,9 +30,10 @@ export function GroupLabels() {
   const frames = useCanvas((s) => s.frames);
   const view = useCanvas((s) => s.view);
   const activities = useActivities();
-  // An activity ends with its process (`pty-exit`): stopped members never count.
-  const members = (group: SceneGroup, activity: Activity) =>
-    group.memberIds.filter((id) => activities[id]?.activity === activity).length;
+  const statuses = useStore(terminalStatusStore, (s) => s.statuses);
+  // An activity ends with its process (`pty-exit`), but may outlive a stopped one for a moment: only running members count.
+  const members = (group: SceneGroup, activity: "working" | "waiting") =>
+    membersIn(group.memberIds, activity, (id) => activities[id]?.activity, (id) => statuses[id]?.state === "running");
   const groups = frames.filter(isGroup);
   const renaming = useUi((s) => s.renamingGroup);
   const takeover = groupBeingRenamed(view.editingFrame, frames);
