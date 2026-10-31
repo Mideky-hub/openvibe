@@ -9,6 +9,7 @@ import { GoToRow } from "./GoToRow";
 import { goTo } from "./goToRun";
 import { commandsMessages } from "./messages";
 import { closePalette, modeOf, setPaletteQuery, stripPrefix, usePalette } from "./paletteState";
+import { agentsStore, useAgents } from "@/fleet/agentsStore";
 import { rememberFunction, useRecentFunctions } from "./recent";
 import { COMMANDS } from "./registry";
 import { useGoToData } from "./useGoToData";
@@ -33,6 +34,11 @@ function PaletteBody() {
   const mode = modeOf(query);
   const search = stripPrefix(query);
   const goToData = useGoToData();
+  // « Lancer … » greys the agents not found: look again when the functions open, and follow the answer.
+  useAgents((s) => s.agents);
+  useEffect(() => {
+    if (mode === "functions") void agentsStore.getState().load().catch(() => undefined);
+  }, [mode]);
   const recent = useRecentFunctions();
   const goToList = mode === "goTo" ? goToSections(goToData.items, search) : [];
   const functionList = mode === "functions" && context ? functionSections(COMMANDS, context, search, recent) : [];

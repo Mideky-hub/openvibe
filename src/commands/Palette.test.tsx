@@ -36,6 +36,7 @@ const projects = [
 beforeEach(async () => {
   mockIPC(() => undefined);
   vi.mocked(goTo).mockClear();
+  agentsStore.setState({ agents: [], loaded: true, load: () => Promise.resolve() });
   projectsStore.setState({ view: "home", projects, activeId: null } as never);
   paletteStore.setState({ open: false, query: "", context: null, returnFocus: null });
   host = document.createElement("div");
@@ -156,7 +157,7 @@ describe("the palette (spec fenêtre §7.1, §7.2)", () => {
   });
 
   it("greys an agent not found on this computer, with why, and never chooses it", async () => {
-    agentsStore.setState({ agents: [{ id: "claude", available: false }] } as never);
+    agentsStore.setState({ agents: [{ id: "claude", available: false }], loaded: true } as never);
     await act(async () => openPalette("functions", busy));
     await act(async () => setPaletteQuery("> lancer claude"));
     const line = items().find((i) => i.textContent?.startsWith("Lancer Claude"))!;
@@ -190,5 +191,22 @@ describe("Escape and held keys (plan F1 findings)", () => {
     window.removeEventListener("keydown", heard);
     expect(paletteStore.getState().open).toBe(false);
     expect(heard).not.toHaveBeenCalled();
+  });
+});
+
+describe("agents in the functions list (plan F2)", () => {
+  it("looks for the agents when the functions open, and lists the agents already found", async () => {
+    const load = vi.spyOn(agentsStore.getState(), "load").mockResolvedValue();
+    await act(async () => openPalette("functions", busy));
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not grey an agent before the first look has run", async () => {
+    agentsStore.setState({ agents: [], loaded: false });
+    await act(async () => openPalette("functions", busy));
+    await act(async () => setPaletteQuery("> lancer shell"));
+    const line = items().find((i) => i.textContent?.includes("Lancer Shell"));
+    expect(line?.getAttribute("data-disabled")).not.toBe("true");
+    expect(line?.textContent).not.toContain("introuvable");
   });
 });
