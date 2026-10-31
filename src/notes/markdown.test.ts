@@ -107,6 +107,7 @@ describe("safe addresses", () => {
     expect(safeUrl("https://a.dev")).toBe("https://a.dev/");
     expect(safeUrl("HTTP://a.dev/x")).toBe("http://a.dev/x");
     expect(safeUrl("java\nscript:alert(1)")).toBeNull();
+    expect(safeUrl("https://a.dev/a b")).toBeNull();
     expect(safeUrl("not a url")).toBeNull();
   });
 });
