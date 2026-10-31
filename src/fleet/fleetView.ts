@@ -7,10 +7,11 @@ import { fleetMessages } from "./messages";
 import { ROLES } from "./roles";
 
 /** What the fleet panel tells about an agent (spec habillage §5.5). */
-export type FleetState = "working" | "waiting" | "idle" | "stopped";
+/** `active`: the process runs and its activity is not known (the pill says ACTIF). */
+export type FleetState = "working" | "waiting" | "active" | "idle" | "stopped";
 export type FleetFilter = "all" | FleetState;
 
-export const FLEET_FILTERS: readonly { id: FleetFilter; label: string }[] = (["all", "working", "waiting", "idle", "stopped"] as const).map(
+export const FLEET_FILTERS: readonly { id: FleetFilter; label: string }[] = (["all", "working", "waiting", "active", "idle", "stopped"] as const).map(
   (id) => ({
     id,
     get label() {
@@ -38,7 +39,7 @@ export interface FleetSection {
 
 /** A running agent takes its activity (idle until known); any other process state is stopped. */
 export function fleetStateOf(status: TerminalStatus, activity?: AgentActivity): FleetState {
-  if (status.state === "running") return activity?.activity ?? "idle";
+  if (status.state === "running") return activity?.activity ?? "active";
   if (status.state === "starting") return "idle";
   return "stopped";
 }
@@ -66,7 +67,7 @@ export function fleetSections(
 }
 
 export function filterCounts(agents: readonly FleetAgent[]): Record<FleetFilter, number> {
-  const counts: Record<FleetFilter, number> = { all: agents.length, working: 0, waiting: 0, idle: 0, stopped: 0 };
+  const counts: Record<FleetFilter, number> = { all: agents.length, working: 0, waiting: 0, active: 0, idle: 0, stopped: 0 };
   for (const a of agents) counts[a.state]++;
   return counts;
 }

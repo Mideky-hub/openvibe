@@ -62,10 +62,10 @@ it("starts « Nouvelle console » at the center of the view, the click not taken
 
 it("filters on the store's filter, labelled Prêts for idle agents", async () => {
   const filters = [...host.querySelectorAll<HTMLButtonElement>("[data-filter]")];
-  expect(filters.map((f) => f.textContent?.replace(/\d+$/, ""))).toEqual(["Tous", "En cours", "Attend", "Prêts", "Arrêtés"]);
-  await act(async () => filters[4].click());
+  expect(filters.map((f) => f.textContent?.replace(/\d+$/, ""))).toEqual(["Tous", "En cours", "Attend", "Actifs", "Prêts", "Arrêtés"]);
+  await act(async () => filters[5].click());
   expect(agentsPanelStore.getState().filter).toBe("stopped");
-  expect(filters[4].dataset.on).toBe("true");
+  expect(filters[5].dataset.on).toBe("true");
 });
 
 it("wraps its filters rather than clipping one, and says when a filter hides every agent", async () => {
