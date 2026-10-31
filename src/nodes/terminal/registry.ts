@@ -33,6 +33,8 @@ interface Entry {
   session: SessionState;
   /** When output was last written: a quiet agent is ready (spec orchestrateur §7.3). */
   lastOutput?: number;
+  /** When the user last typed in it: an event typed meanwhile would join their half-written text. */
+  lastInput?: number;
   /** Where the current session's output starts; above it is the previous session's (final review H2). */
   since?: IMarker;
 }
@@ -93,6 +95,7 @@ function create(nodeId: string): Entry {
     return false;
   });
   term.onData((data) => {
+    entry.lastInput = Date.now();
     if (acceptsInput(nodeId, entry.session)) void ptyWrite(nodeId, data).catch(() => undefined);
   });
   // Spec habillage §7.3: typing in a terminal where nothing runs starts it again.
@@ -212,6 +215,12 @@ async function startFresh(nodeId: string, entry: Entry) {
 export function quietFor(nodeId: string): number {
   const last = entries.get(nodeId)?.lastOutput;
   return last === undefined ? 0 : Date.now() - last;
+}
+
+/** How long since the user last typed in the terminal; Infinity if never. */
+export function typedAgo(nodeId: string): number {
+  const last = entries.get(nodeId)?.lastInput;
+  return last === undefined ? Infinity : Date.now() - last;
 }
 
 /** The last `lines` lines its current session wrote: a relaunched agent is judged on its new screen (final review H2). */

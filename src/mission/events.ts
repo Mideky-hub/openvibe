@@ -1,7 +1,7 @@
 import { messages } from "@/i18n";
 import { ptySendText } from "@/ipc/pty";
 import { agentMessages } from "@/mcp/messages";
-import { freshText, quietFor } from "@/nodes/terminal/registry";
+import { freshText, quietFor, typedAgo } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore } from "@/store/nodes";
 import { isRunning, terminalStatusStore } from "@/store/terminalStatus";
@@ -12,6 +12,9 @@ import { memberOf } from "./store";
 const queues = new Map<string, { line: string; typed?: () => void }[]>();
 /** Orchestrators just (re)started whose Claude's prompt is not up yet (final review H2). */
 const starting = new Set<string>();
+
+/** A line waits this long after the user's last keystroke: it would be typed into their half-written text. */
+export const TYPING_PAUSE_MS = 4000;
 
 /** An orchestrator takes a line while its Claude's prompt is up and no dialog waits for the user (spec §7.5). */
 function free(orchestratorId: string): boolean {
@@ -25,6 +28,12 @@ function free(orchestratorId: string): boolean {
 function flush(orchestratorId: string) {
   const queue = queues.get(orchestratorId);
   if (!queue?.length || !free(orchestratorId)) return;
+  const sinceKey = typedAgo(orchestratorId);
+  if (sinceKey < TYPING_PAUSE_MS) {
+    // Looked at again when the pause is over.
+    setTimeout(() => flush(orchestratorId), TYPING_PAUSE_MS - sinceKey + 50);
+    return;
+  }
   queues.delete(orchestratorId);
   // ptySendText keeps a node's writes in order; Claude queues what comes while it works.
   for (const entry of queue) {

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { langStore } from "@/i18n";
 import { ptySendText } from "@/ipc/pty";
+import { typedAgo } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore } from "@/store/nodes";
 import { terminalStatusStore } from "@/store/terminalStatus";
@@ -11,7 +12,7 @@ import { whenReady } from "./ready";
 import type { Member } from "./mission";
 
 vi.mock("@/ipc/pty", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/ipc/pty")>()), ptySendText: vi.fn(() => Promise.resolve()) }));
-vi.mock("@/nodes/terminal/registry", () => ({ freshText: vi.fn(() => ""), quietFor: vi.fn(() => 0) }));
+vi.mock("@/nodes/terminal/registry", () => ({ freshText: vi.fn(() => ""), quietFor: vi.fn(() => 0), typedAgo: vi.fn(() => Infinity) }));
 vi.mock("./ready", () => ({ whenReady: vi.fn(() => Promise.resolve(true)) }));
 
 /** Lets the started orchestrator's readiness settle. */
@@ -44,6 +45,16 @@ beforeEach(async () => {
 });
 
 describe("events to the orchestrator (spec orchestrateur §7.5)", () => {
+  it("waits for the user to stop typing before it types a line (backlog H2)", async () => {
+    vi.useFakeTimers();
+    vi.mocked(typedAgo).mockReturnValueOnce(1000).mockReturnValue(Infinity);
+    notify("chef", "Isis a rendu compte");
+    expect(sent()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(sent()).toEqual(["chef: [OpenVibe] Isis a rendu compte"]);
+    vi.useRealTimers();
+  });
+
   it("types a line in a free orchestrator at once", () => {
     notify("chef", "Isis a rendu compte (termine) : fait");
     expect(sent()).toEqual(["chef: [OpenVibe] Isis a rendu compte (termine) : fait"]);

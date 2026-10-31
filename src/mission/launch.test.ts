@@ -28,7 +28,7 @@ vi.mock("@/ipc/pty", async (importOriginal) => ({
   ptySendText: vi.fn(() => Promise.resolve()),
   ptyWrite: vi.fn(() => Promise.resolve()),
 }));
-vi.mock("@/nodes/terminal/registry", () => ({ relaunchTerminal: vi.fn(), stopTerminal: vi.fn(), quietFor: vi.fn(() => 0), freshText: vi.fn(() => ""), markForAutostart: vi.fn() }));
+vi.mock("@/nodes/terminal/registry", () => ({ relaunchTerminal: vi.fn(), stopTerminal: vi.fn(), quietFor: vi.fn(() => 0), typedAgo: vi.fn(() => Infinity), freshText: vi.fn(() => ""), markForAutostart: vi.fn() }));
 vi.mock("@/fleet/groups", () => ({ launchGroup: vi.fn(), closeGroup: vi.fn() }));
 vi.mock("@/fleet/orchestrators", () => ({ linkOrchestrator: vi.fn() }));
 vi.mock("@/fleet/terminals", () => ({ addTerminal: vi.fn(() => Promise.resolve("n9")) }));
