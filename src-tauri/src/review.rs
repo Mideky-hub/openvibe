@@ -114,7 +114,10 @@ fn diff_output(dir: &Path, args: &[&str], codes: &[i32]) -> Result<String, Strin
         let _ = err.read_to_string(&mut stderr);
     }
     let status = child.wait().map_err(|err| err.to_string())?;
-    if status.code().is_some_and(|code| codes.contains(&code)) {
+    // `--no-index` answers 1 for a difference but also for an error: only
+    // a message without any diff is the error.
+    let failed_quietly = bytes.is_empty() && !stderr.trim().is_empty();
+    if !failed_quietly && status.code().is_some_and(|code| codes.contains(&code)) {
         Ok(String::from_utf8_lossy(&bytes).into_owned())
     } else {
         Err(stderr.trim().to_string())
@@ -263,7 +266,8 @@ pub fn changes(dir: &Path, base: Option<&str>) -> Result<Changes, String> {
     let untracked = git(&root, &["ls-files", "--others", "--exclude-standard", "-z"])?;
     for path in untracked
         .split('\0')
-        .filter(|p| !p.is_empty())
+        // A nested repository is listed as `nested/`: not a file to diff.
+        .filter(|p| !p.is_empty() && !p.ends_with('/'))
         .take(MAX_ENTRIES)
     {
         let full = root.join(path);
@@ -566,6 +570,23 @@ mod tests {
             added: None,
             removed: None,
         }
+    }
+
+    #[test]
+    fn a_nested_repository_is_not_listed_and_its_diff_is_an_error() {
+        let Some(repo) = repo() else { return };
+        let dir = repo.path();
+        let nested = dir.join("nested");
+        std::fs::create_dir(&nested).unwrap();
+        sh(&nested, &["init", "-q", "-b", "main"]);
+        std::fs::write(nested.join("x.txt"), "x\n").unwrap();
+        let listed = changes(dir, None).unwrap();
+        assert!(
+            listed.files.iter().all(|f| !f.path.ends_with('/')),
+            "{:?}",
+            listed.files
+        );
+        assert!(file_diff(dir, &untracked("nested/"), None).is_err());
     }
 
     #[test]
