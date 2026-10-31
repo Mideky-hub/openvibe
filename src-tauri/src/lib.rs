@@ -30,6 +30,7 @@ pub fn run() {
         // First: the other plugins and the setup can already write to the log.
         .plugin(logging::plugin())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .manage(PtyManager::default())

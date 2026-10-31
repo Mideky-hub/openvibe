@@ -13,6 +13,10 @@ export const shellMessages = defineMessages(
       active: "Agents actifs du projet",
       activeCount: (count: number) => plural("fr", count, "actif", "actifs"),
     },
+    waitingNotice: {
+      question: (name: string) => `${name} a une question`,
+      others: (count: number) => `+ ${plural("fr", count, "autre", "autres")}`,
+    },
     closeAgent: {
       fallbackName: "cet agent",
       several: (names: string[]) => `Ces agents tournent encore ; les fermer met fin à leur session : ${names.join(", ")}.`,
@@ -219,6 +223,10 @@ export const shellMessages = defineMessages(
       waiting: "Agents waiting for your answer",
       active: "Active agents in the project",
       activeCount: (count: number) => plural("en", count, "active", "active"),
+    },
+    waitingNotice: {
+      question: (name: string) => `${name} has a question`,
+      others: (count: number) => `+ ${plural("en", count, "more", "more")}`,
     },
     closeAgent: {
       fallbackName: "this agent",
