@@ -11,6 +11,7 @@ use tiny_http::{Header, Method, Request, Response, Server};
 
 use super::activity::{
     Activity, HookSource, claude_activity, claude_session_ended, clean_message, codex_activity,
+    gemini_activity,
 };
 use super::mcp;
 
@@ -64,6 +65,7 @@ impl HookServer {
         let kind = match source {
             HookSource::Claude => "claude",
             HookSource::Codex => "codex",
+            HookSource::Gemini => "gemini",
         };
         format!("http://127.0.0.1:{}/hook/{kind}/{node_id}", self.port)
     }
@@ -200,6 +202,9 @@ pub fn parse_route(
         ["hook", "codex", node_id] if valid_node_id(node_id) => {
             Ok((HookSource::Codex, node_id.to_string()))
         }
+        ["hook", "gemini", node_id] if valid_node_id(node_id) => {
+            Ok((HookSource::Gemini, node_id.to_string()))
+        }
         _ => Err(404),
     }
 }
@@ -300,6 +305,13 @@ fn status_of(request: &mut Request, token: &str, sink: &dyn HookSink) -> u16 {
             codex_activity(json["type"].as_str().unwrap_or_default()),
             false,
         ),
+        HookSource::Gemini => {
+            let event = json["hook_event_name"].as_str().unwrap_or_default();
+            (
+                gemini_activity(event, json["notification_type"].as_str()),
+                false,
+            )
+        }
     };
     if let Some(activity) = activity {
         let message = (activity == Activity::Waiting)
@@ -437,7 +449,7 @@ mod tests {
     #[test]
     fn refuses_unknown_routes_and_doubtful_node_ids() {
         for path in [
-            "/hook/gemini/n",
+            "/hook/aider/n",
             "/hook/claude",
             "/hook/claude/a/b",
             "/hook/claude/..",
@@ -620,6 +632,40 @@ mod tests {
                 message: None,
             }
         );
+    }
+
+    #[test]
+    fn hears_gemini_cli_s_hooks() {
+        let (tx, rx) = mpsc::channel();
+        let server = start(Arc::new(TestSink::new(tx))).unwrap();
+        let url = server.url(HookSource::Gemini, "g1");
+        let path = url.trim_start_matches(&format!("http://127.0.0.1:{}", server.port));
+        let post = |body: &[u8]| send(server.port, "POST", path, body);
+        let next = || rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(
+            post(br#"{"hook_event_name":"BeforeAgent","prompt":"hi"}"#),
+            204
+        );
+        let hit = next();
+        assert_eq!(
+            (hit.source, hit.activity),
+            (HookSource::Gemini, Activity::Working)
+        );
+        let ask = br#"{"hook_event_name":"Notification","notification_type":"ToolPermission","message":"Run ls?"}"#;
+        assert_eq!(post(ask), 204);
+        let hit = next();
+        assert_eq!(
+            (hit.activity, hit.message.as_deref()),
+            (Activity::Waiting, Some("Run ls?"))
+        );
+        assert_eq!(
+            post(br#"{"hook_event_name":"AfterAgent","prompt_response":"ok"}"#),
+            204
+        );
+        assert_eq!(next().activity, Activity::Idle);
+        // Events OpenVibe does not follow are accepted and ignored.
+        assert_eq!(post(br#"{"hook_event_name":"BeforeTool"}"#), 204);
+        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
     }
 
     #[test]
