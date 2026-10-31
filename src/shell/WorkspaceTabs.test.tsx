@@ -98,3 +98,18 @@ it("opens a tab's name editor on request (« Renommer le workspace »)", async (
   expect(field.value).toBe("Backend");
   expect(document.activeElement).toBe(field);
 });
+
+it("moves a tab with Alt+arrows from the keyboard, or by dragging it onto another", async () => {
+  workspacesStore.setState({ projectId: "p1" });
+  const first = tabs()[0].querySelector("button")!;
+  await act(async () => void first.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, bubbles: true })));
+  expect(tabs().map((t) => t.dataset.tab)).toEqual(["w2", "w1"]);
+  // Dragging w2 (now first) onto the tab at the right puts it there.
+  await act(async () => {
+    tabs()[0].dispatchEvent(new Event("dragstart", { bubbles: true }));
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    tabs()[1].dispatchEvent(new Event("dragover", { bubbles: true, cancelable: true }));
+    tabs()[1].dispatchEvent(drop);
+  });
+  expect(tabs().map((t) => t.dataset.tab)).toEqual(["w1", "w2"]);
+});

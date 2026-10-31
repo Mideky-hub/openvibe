@@ -158,6 +158,8 @@ export const shellMessages = defineMessages(
     tabs: {
       deleteWorkspace: "Supprimer le workspace",
       rename: "Renommer",
+      moveLeft: "Déplacer à gauche",
+      moveRight: "Déplacer à droite",
       delete: "Supprimer",
       newWorkspace: "Nouveau workspace",
       activeAgents: (count: number) => plural("fr", count, "agent actif", "agents actifs"),
@@ -366,6 +368,8 @@ export const shellMessages = defineMessages(
     tabs: {
       deleteWorkspace: "Delete the workspace",
       rename: "Rename",
+      moveLeft: "Move left",
+      moveRight: "Move right",
       delete: "Delete",
       newWorkspace: "New workspace",
       activeAgents: (count: number) => plural("en", count, "active agent", "active agents"),
