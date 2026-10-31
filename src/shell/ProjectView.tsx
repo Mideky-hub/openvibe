@@ -7,6 +7,7 @@ import { useMessages } from "@/i18n";
 import { agentsStore } from "@/fleet/agentsStore";
 import { LinkMode } from "@/fleet/LinkMode";
 import { RadialMenu } from "@/radial/RadialMenu";
+import { GitWindow } from "@/git/GitWindow";
 import { ReviewPanel } from "@/review/ReviewPanel";
 import { PlacementGhost } from "@/fleet/PlacementGhost";
 import { useWorkspaces } from "@/store/workspaces";
@@ -88,6 +89,7 @@ export function ProjectView() {
           <RadialMenu />
           <ErrorBoundary scope="review" fallback={panelCrash}>
             <ReviewPanel />
+            <GitWindow />
           </ErrorBoundary>
           <ErrorBoundary scope="studio" fallback={panelCrash}>
             <Studio />

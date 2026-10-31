@@ -9,22 +9,13 @@ import { BOTTOM_BAR_HEIGHT, TOP_ROW_HEIGHT } from "@/shell/layout";
 import { messages, useMessages } from "@/i18n";
 import { AccentButton, IconButton } from "@/shell/buttons";
 import { sessionOf, useNodes } from "@/store/nodes";
+import { DiffRow, FILE_STATUS, MAX_LINES } from "./DiffRow";
 import { missionBranchFor, parseDiff, remarkRow, reviewMessage, type DiffLine, type Remark } from "./review";
 import { reviewMessages } from "./messages";
 import { reviewStore, useReview } from "./reviewStore";
 
-/** A diff or a file longer than this shows its start only. */
-const MAX_LINES = 4000;
 /** The files tab lists this many paths at most; the filter finds the others. */
 const MAX_FILES = 400;
-
-const STATUS: Record<ChangedFile["status"], { letter: string; color: string }> = {
-  added: { letter: "A", color: "var(--ov-ok)" },
-  untracked: { letter: "N", color: "var(--ov-ok)" },
-  modified: { letter: "M", color: "var(--ov-accent)" },
-  deleted: { letter: "D", color: "var(--ov-danger)" },
-  renamed: { letter: "R", color: "var(--ov-wait)" },
-};
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -168,7 +159,7 @@ function ChangesTab({ cwd, base, refresh }: { cwd: string; base: string | null; 
     <div className="flex min-h-0 flex-1">
       <ul className="w-[260px] shrink-0 overflow-y-auto border-r border-ov-line py-1">
         {files.map((file) => {
-          const status = STATUS[file.status];
+          const status = FILE_STATUS[file.status];
           return (
             <li key={file.path}>
               <button
@@ -266,36 +257,6 @@ function FileDiffView({ cwd, file, base, refresh }: { cwd: string; file: Changed
         </div>
       ))}
       {diff.lines.length > MAX_LINES && <p className="px-3 py-2 font-sans text-xs text-ov-text-2">{t.moreLines(diff.lines.length - MAX_LINES)}</p>}
-    </div>
-  );
-}
-
-const ROW_COLOR: Partial<Record<DiffLine["kind"], string>> = {
-  add: "color-mix(in srgb, var(--ov-ok) 16%, transparent)",
-  del: "color-mix(in srgb, var(--ov-danger) 16%, transparent)",
-};
-
-function DiffRow({ line, onClick }: { line: DiffLine; onClick?: () => void }) {
-  const t = useMessages(reviewMessages);
-  if (line.kind === "hunk" || line.kind === "meta") {
-    return (
-      <div data-diff-line={line.kind} className="bg-ov-field px-3 text-ov-text-3">
-        {line.text}
-      </div>
-    );
-  }
-  return (
-    <div
-      data-diff-line={line.kind}
-      onClick={onClick}
-      title={t.rowTitle}
-      className="flex cursor-pointer hover:brightness-125"
-      style={{ backgroundColor: ROW_COLOR[line.kind] }}
-    >
-      <span className="w-10 shrink-0 select-none pr-1 text-right text-ov-text-3">{line.old ?? ""}</span>
-      <span className="w-10 shrink-0 select-none pr-1 text-right text-ov-text-3">{line.new ?? ""}</span>
-      <span className="w-4 shrink-0 select-none text-center text-ov-text-3">{line.kind === "add" ? "+" : line.kind === "del" ? "−" : ""}</span>
-      <span className="whitespace-pre pr-3 text-ov-text">{line.text}</span>
     </div>
   );
 }
