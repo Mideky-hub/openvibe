@@ -11,7 +11,7 @@ Un orchestrateur relié à plusieurs groupes (frontend, backend, design…) dist
 ## 2. La spécialité d'un groupe
 
 - Texte libre d'une ligne, 40 caractères au plus (espaces réduits), enregistré avec le groupe : `customData.openvibe.speciality` du cadre, optionnel. Annuler (Ctrl+Z) le retire ou le remet ; dégrouper ou fermer le groupe l'emporte avec lui.
-- Menu du groupe → « Spécialité » : un champ libre (Entrée valide), les rôles de groupe en suggestions (Frontend, Backend, Testeurs, Relecteurs, Design, Docs, Sécurité : déjà traduits) et « Aucune » quand une spécialité est posée.
+- Menu du groupe → « Spécialité » : un champ libre qui prend le clavier à l'ouverture (Entrée valide, flèche bas passe aux suggestions, et le texte en cours garde le clavier quand la souris passe sur une suggestion), les rôles de groupe en suggestions (Frontend, Backend, Testeurs, Relecteurs, Design, Docs, Sécurité : déjà traduits) et « Aucune » quand une spécialité est posée.
 - L'étiquette du groupe sur le canvas l'affiche après le nom, tronquée, le texte entier au survol.
 - La spécialité est indépendante du rôle : le rôle donne la couleur, la spécialité ne parle qu'à l'orchestrateur. Le rôle d'un groupe n'en tient pas lieu : sans spécialité posée, rien ne change.
 
@@ -22,7 +22,7 @@ Tout est additif (spec orchestrateur §4.3 et §7.2 inchangées).
 | Outil | Ajout |
 |---|---|
 | `mission` | Chaque élément de `linked_agents` : `group` et `speciality` (`null` hors groupe, ou sans spécialité). Nouveau `linked_groups` : `{ name, speciality }` de chaque groupe relié, même sans agent libre. Espace non affiché : `linked_groups` porte le même texte que `linked_agents`. Le plan : `group` de chaque sous-tâche. |
-| `team` | Chaque agent : `group` et `speciality`, pour choisir à qui réattribuer. |
+| `team` | Chaque agent : `group` et `speciality`, pour choisir à qui réattribuer ; absents quand l'espace n'est pas affiché (`null` dirait « pas de groupe »). |
 | `propose_plan` | Sous-tâche : `group` facultatif, le nom d'un groupe relié, **seulement avec `agent: "new"`**. Un groupe inconnu, ou `group` avec un agent nommé, est refusé (`isError`), le plan en attente intact. Sans `group`, l'agent nouveau va dans le groupe « Mission <nom> », comme aujourd'hui. |
 
 Le panneau de la mission affiche le groupe choisi sur la ligne de la sous-tâche (`nouveau → Frontend`).

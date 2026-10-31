@@ -64,6 +64,27 @@ it("sets a suggestion, and clears with « Aucune »", async () => {
   expect(setGroupSpeciality).toHaveBeenLastCalledWith("g1", "");
 });
 
+it("gives the field the keyboard as it opens, and ArrowDown goes on to the suggestions: Radix's arrows and Tab only know its items", async () => {
+  await open();
+  await vi.waitFor(() => expect(document.activeElement).toBe(field()));
+  await act(async () => field().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+  expect(document.activeElement).toBe(items()[0]);
+});
+
+it("keeps the keyboard in the field under a hovered suggestion once something is typed: Enter would pick the suggestion", async () => {
+  await open("API");
+  await vi.waitFor(() => expect(document.activeElement).toBe(field()));
+  const hover = (type: string) => items()[0].dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerType: "mouse" }));
+  field().value = "Base";
+  await act(async () => hover("pointermove"));
+  expect(document.activeElement).toBe(field());
+  await act(async () => hover("pointerleave"));
+  expect(document.activeElement).toBe(field());
+  field().value = "API";
+  await act(async () => hover("pointermove"));
+  expect(document.activeElement).toBe(items()[0]);
+});
+
 it("keeps free text on Enter; the menu does not take the keys typed in it", async () => {
   await open("API");
   expect(field().defaultValue).toBe("API");
