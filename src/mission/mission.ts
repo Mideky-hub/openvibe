@@ -18,6 +18,20 @@ export interface SubTask {
   group?: PlanGroup;
 }
 
+/** A task waiting for a free agent (spec mission de nuit §4.1). */
+export type QueuedTask = Omit<SubTask, "agent">;
+
+/** A task an agent is through with, for the morning report. */
+export interface PastTask {
+  task: string;
+  status: ReportStatus;
+  summary: string;
+  merged: boolean;
+  spentMin: number;
+  budgetMin: number;
+  branch: string;
+}
+
 /** A group by its id, which survives a renaming, and the name to show. */
 export interface PlanGroup {
   id: string;
@@ -57,6 +71,8 @@ export interface Member {
   model?: string;
   /** The existing group it joined; it closes alone at the end (spec groupes spécialisés §4). */
   group?: string;
+  /** The tasks it went through before this one. */
+  past?: PastTask[];
 }
 
 export interface Mission {
@@ -85,6 +101,8 @@ export interface Mission {
   globalOverdue?: boolean;
   /** Each agent gets the model of its sub-task's level (spec maj §3). */
   router?: boolean;
+  /** Tasks beyond the team, in order; a free agent takes the next one (spec mission de nuit §4). */
+  queue?: QueuedTask[];
   /** Launched for the user's absence: the global budget is the time away, agents' budgets are targets (spec mission de nuit §3). */
   overnight?: boolean;
   /** The end of the night was told. */
@@ -94,6 +112,7 @@ export interface Mission {
 export const NEW_AGENT = "nouveau";
 export const DEFAULT_MAX_AGENTS = 4;
 export const MAX_AGENTS = 8;
+export const MAX_QUEUE = 100;
 export const NEW_MISSION: Mission = { state: "redaction", maxAgents: DEFAULT_MAX_AGENTS, members: [] };
 
 const STATES: readonly string[] = ["redaction", "plan", "lancement", "en_cours", "terminee"];
@@ -108,6 +127,20 @@ export const sameName = (a: string, b: string) => fold(a) === fold(b);
 
 /** Text typed in a terminal ends at its first line break: briefs and messages go on one line. */
 export const oneLine = (value: string) => value.replace(/\s*[\r\n]+\s*/g, " ").trim();
+
+function readPast(raw: unknown): PastTask | null {
+  const r = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
+  if (typeof r.task !== "string" || typeof r.status !== "string" || !STATUSES.includes(r.status)) return null;
+  return {
+    task: r.task,
+    status: r.status as ReportStatus,
+    summary: typeof r.summary === "string" ? r.summary : "",
+    merged: r.merged === true,
+    spentMin: typeof r.spentMin === "number" ? r.spentMin : 0,
+    budgetMin: typeof r.budgetMin === "number" ? r.budgetMin : 0,
+    branch: typeof r.branch === "string" ? r.branch : "",
+  };
+}
 
 function readMember(raw: unknown): Member | null {
   if (typeof raw !== "object" || raw === null) return null;
@@ -134,22 +167,28 @@ function readMember(raw: unknown): Member | null {
   if (Array.isArray(r.done)) member.done = r.done.filter((title): title is string => typeof title === "string");
   if (typeof r.model === "string" && r.model) member.model = r.model;
   if (typeof r.group === "string") member.group = r.group;
+  if (Array.isArray(r.past)) member.past = r.past.map(readPast).filter((p): p is PastTask => p !== null);
   return member;
 }
 
-function isSubTask(raw: unknown): raw is SubTask {
+function isQueued(raw: unknown): raw is QueuedTask {
   const r = raw as Record<string, unknown>;
-  return typeof raw === "object" && raw !== null && typeof r.title === "string" && typeof r.brief === "string" && typeof r.agent === "string" && typeof r.budgetMin === "number";
+  return typeof raw === "object" && raw !== null && typeof r.title === "string" && typeof r.brief === "string" && typeof r.budgetMin === "number";
 }
 
+const isSubTask = (raw: unknown): raw is SubTask => isQueued(raw) && typeof (raw as unknown as Record<string, unknown>).agent === "string";
+
 function readSubTask(task: SubTask): SubTask {
-  const { title, brief, agent, budgetMin } = task;
+  return { ...readQueued(task), agent: task.agent };
+}
+
+function readQueued(task: QueuedTask): QueuedTask {
+  const { title, brief, budgetMin } = task;
   const level = readLevel(task.level);
   const group = task.group as Partial<PlanGroup> | undefined;
   return {
     title,
     brief,
-    agent,
     budgetMin,
     ...(level ? { level } : {}),
     ...(typeof group?.id === "string" && typeof group.name === "string" ? { group: { id: group.id, name: group.name } } : {}),
@@ -171,6 +210,7 @@ export function readMission(raw: unknown): Mission | undefined {
     if (typeof r[key] === "string") mission[key] = r[key];
   }
   if (Array.isArray(r.plan)) mission.plan = r.plan.filter(isSubTask).map(readSubTask);
+  if (Array.isArray(r.queue)) mission.queue = r.queue.filter(isQueued).map(readQueued);
   if (typeof r.startedAt === "number") mission.startedAt = r.startedAt;
   if (typeof r.endedAt === "number") mission.endedAt = r.endedAt;
   if (r.globalOverdue === true) mission.globalOverdue = true;
@@ -178,6 +218,53 @@ export function readMission(raw: unknown): Mission | undefined {
   if (r.overnight === true) mission.overnight = true;
   if (r.windDownTold === true) mission.windDownTold = true;
   return mission;
+}
+
+/** What a sub-task of the plan and a queued task share, read from internal names, or what is wrong. */
+function readTaskFields(r: Record<string, unknown>, n: number, mission: Mission): Omit<QueuedTask, "group"> | string {
+  const e = messages(agentMessages).plan;
+  const title = text(r.titre);
+  const brief = text(r.consigne);
+  const budget = r.budget_min;
+  if (!title || title.length > MAX_TITLE) return e.title(n, MAX_TITLE);
+  if (!brief) return e.brief(n);
+  if (typeof budget !== "number" || !Number.isInteger(budget) || budget < 1) return e.budget(n);
+  // The global budget is real time: agents in parallel share it, only one sub-task alone could not fit (spec mission de nuit §3).
+  if (mission.budgetMin !== undefined && budget > mission.budgetMin) return e.overBudget(n, budget, mission.budgetMin);
+  const given = r.niveau !== undefined && r.niveau !== null;
+  const level = readLevel(r.niveau);
+  if (given && !level) return e.level(n);
+  if (mission.router && !level) return e.levelRouter(n);
+  return { title, brief, budgetMin: budget, ...(level ? { level } : {}) };
+}
+
+/** The titles the mission's tasks already use: `reassign` and `team` name a task by its title. */
+const takenTitles = (mission: Mission, withPlan: boolean) => [
+  ...(withPlan ? (mission.plan ?? []).map((s) => s.title) : []),
+  ...(mission.queue ?? []).map((s) => s.title),
+  ...mission.members.flatMap((m) => [m.task, ...(m.done ?? [])]),
+];
+
+/** `add_tasks`' arguments as tasks for the queue, or what is wrong (spec mission de nuit §4.2). */
+export function proposedTasks(args: Record<string, unknown>, mission: Mission, groups: readonly PlanGroup[]): QueuedTask[] | string {
+  const e = messages(agentMessages).plan;
+  const raw = args.tasks;
+  if (!Array.isArray(raw) || raw.length === 0) return e.atLeastOne;
+  if ((mission.queue?.length ?? 0) + raw.length > MAX_QUEUE) return e.queueFull(MAX_QUEUE);
+  const taken = takenTitles(mission, true);
+  const tasks: QueuedTask[] = [];
+  for (const [i, item] of raw.entries()) {
+    const r = (typeof item === "object" && item !== null ? item : {}) as Record<string, unknown>;
+    const fields = readTaskFields(r, i + 1, mission);
+    if (typeof fields === "string") return fields;
+    if (taken.some((title) => sameName(title, fields.title))) return e.titleTaken(i + 1, fields.title);
+    const wanted = text(r.groupe);
+    const group = wanted ? groups.find((g) => sameName(g.name, wanted)) : undefined;
+    if (wanted && !group) return e.notLinkedGroup(i + 1, wanted);
+    taken.push(fields.title);
+    tasks.push({ ...fields, ...(group ? { group: { id: group.id, name: group.name } } : {}) });
+  }
+  return tasks;
 }
 
 /** `propose_plan`'s arguments (internal names, `@/mcp/protocol`) as a plan, or what is wrong (spec §7.2). `linked`: names of the linked Claude agents; `groups`: the linked groups. */
@@ -196,30 +283,23 @@ export function proposedPlan(
   if (!Array.isArray(raw) || raw.length === 0) return e.atLeastOne;
   if (raw.length > mission.maxAgents) return e.tooMany(mission.maxAgents);
   const plan: SubTask[] = [];
+  // A plan replaces the pending one: only the queue's titles stand against it.
+  const taken = takenTitles(mission, false);
   for (const [i, item] of raw.entries()) {
     const r = (typeof item === "object" && item !== null ? item : {}) as Record<string, unknown>;
     const n = i + 1;
-    const title = text(r.titre);
-    const brief = text(r.consigne);
+    const fields = readTaskFields(r, n, mission);
+    if (typeof fields === "string") return fields;
     const agent = text(r.agent);
-    const budget = r.budget_min;
-    if (!title || title.length > MAX_TITLE) return e.title(n, MAX_TITLE);
-    if (!brief) return e.brief(n);
-    if (typeof budget !== "number" || !Number.isInteger(budget) || budget < 1) return e.budget(n);
-    // The global budget is real time: agents in parallel share it, only one sub-task alone could not fit (spec mission de nuit §3).
-    if (mission.budgetMin !== undefined && budget > mission.budgetMin) return e.overBudget(n, budget, mission.budgetMin);
     const known = sameName(agent, NEW_AGENT) ? NEW_AGENT : linked.find((l) => sameName(l, agent));
     if (!known) return e.notLinked(n, agent);
     if (known !== NEW_AGENT && plan.some((s) => s.agent === known)) return e.alreadyHas(known);
-    const given = r.niveau !== undefined && r.niveau !== null;
-    const level = readLevel(r.niveau);
-    if (given && !level) return e.level(n);
-    if (mission.router && !level) return e.levelRouter(n);
+    if ([...taken, ...plan.map((s) => s.title)].some((title) => sameName(title, fields.title))) return e.titleTaken(n, fields.title);
     const wanted = text(r.groupe);
     if (wanted && known !== NEW_AGENT) return e.groupForNew(n);
     const group = wanted ? groups.find((g) => sameName(g.name, wanted)) : undefined;
     if (wanted && !group) return e.notLinkedGroup(n, wanted);
-    plan.push({ title, brief, agent: known, budgetMin: budget, ...(level ? { level } : {}), ...(group ? { group: { id: group.id, name: group.name } } : {}) });
+    plan.push({ ...fields, agent: known, ...(group ? { group: { id: group.id, name: group.name } } : {}) });
   }
   return { name, task, plan };
 }

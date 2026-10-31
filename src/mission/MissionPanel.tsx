@@ -37,6 +37,7 @@ export function MissionPanel({ nodeId }: { nodeId: string }) {
         </p>
       )}
       {(mission.state === "en_cours" || mission.state === "terminee") && <Team mission={mission} />}
+      {mission.queue && mission.queue.length > 0 && <Queue mission={mission} />}
       {mission.state === "terminee" && <Summary nodeId={nodeId} summary={mission.summary ?? ""} />}
     </section>
   );
@@ -148,6 +149,28 @@ function Plan({ nodeId, mission }: { nodeId: string; mission: Mission }) {
           {launching ? t.launching : t.launch}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** The tasks no agent has taken yet (spec mission de nuit §4). */
+function Queue({ mission }: { mission: Mission }) {
+  const t = useMessages(missionMessages);
+  const queue = mission.queue ?? [];
+  return (
+    <div data-queue className="flex flex-col gap-1">
+      <span className="font-semibold text-ov-text">{t.waitingTasks(queue.length)}</span>
+      <ol className="flex flex-col gap-0.5">
+        {queue.map((task) => (
+          <li key={task.title} className="flex items-center gap-2 rounded bg-ov-card px-2 py-0.5">
+            <span className="min-w-0 truncate">{task.title}</span>
+            <span className="ml-auto shrink-0 font-mono text-[11px]">
+              {task.group ? `${task.group.name} · ` : ""}
+              {task.budgetMin} {t.min}
+            </span>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }

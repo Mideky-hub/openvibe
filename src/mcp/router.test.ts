@@ -94,7 +94,7 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
 
   it("lists them for the orchestrator only, and each side refuses the other's", async () => {
     const list = (await answer({ callId: 1, nodeId: "chef", method: "tools/list", params: {} })) as { tools: { name: string }[] };
-    expect(list.tools.map((t) => t.name)).toEqual(["mission", "propose_plan", "team", "read_output", "write", "extend", "interrupt", "reassign", "merge", "finish", "remote_control"]);
+    expect(list.tools.map((t) => t.name)).toEqual(["mission", "propose_plan", "add_tasks", "queue", "next_task", "team", "read_output", "write", "extend", "interrupt", "reassign", "merge", "finish", "remote_control"]);
     expect(textOf(await call("isis", "propose_plan", plan))).toBe("Outil réservé à l'orchestrateur.");
     expect(textOf(await call("chef", "report", { summary: "x", status: "done" }))).toBe("Outil réservé aux agents.");
   });
@@ -143,6 +143,35 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
       const mission = JSON.parse(textOf(await call("chef", "mission", {})));
       expect(mission.linked_agents).toEqual([expect.objectContaining({ name: "Isis", group: null, speciality: null })]);
       expect(mission.linked_groups).toEqual([]);
+    });
+  });
+
+  describe("the queue (spec mission de nuit §4)", () => {
+    const task = { title: "Docs", brief: "Écris la doc", budget_min: 10 };
+
+    it("adds tasks beyond the team, says how many wait and reads them back", async () => {
+      await nodesStore.getState().create("file", { workspaceId: "w1", kind: "orchestrator", payload: { name: "File" } });
+      expect(textOf(await call("file", "add_tasks", { tasks: [task, { ...task, title: "Tests", level: "low" }] }))).toBe("2 tâches ajoutées. En attente : 2.");
+      expect(JSON.parse(textOf(await call("file", "queue", {})))).toEqual({
+        waiting: [
+          { title: "Docs", brief: "Écris la doc", budget_min: 10, level: null, group: null },
+          { title: "Tests", brief: "Écris la doc", budget_min: 10, level: "low", group: null },
+        ],
+        free_agents: [],
+      });
+      expect(JSON.parse(textOf(await call("file", "mission", {})))).toMatchObject({ queue_waiting: 2 });
+    });
+
+    it("refuses what a plan would refuse, and a finished mission", async () => {
+      expect(await call("file", "add_tasks", { tasks: [{ ...task, title: "docs" }] })).toMatchObject({ isError: true });
+      expect(textOf(await call("isis", "add_tasks", { tasks: [task] }))).toBe("Outil réservé à l'orchestrateur.");
+      setMission("file", { state: "terminee" });
+      expect(textOf(await call("file", "add_tasks", { tasks: [{ ...task, title: "Autre" }] }))).toContain("terminée");
+    });
+
+    it("says next_task needs a formed team", async () => {
+      await nodesStore.getState().create("seul", { workspaceId: "w1", kind: "orchestrator", payload: { name: "Seul" } });
+      expect(textOf(await call("seul", "next_task", { agent: "Isis" }))).toBe("L'équipe n'est pas encore formée.");
     });
   });
 
