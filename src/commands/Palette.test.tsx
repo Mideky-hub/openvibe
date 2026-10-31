@@ -180,3 +180,15 @@ describe("the palette (spec fenêtre §7.1, §7.2)", () => {
     expect(selected()).toBe(first);
   });
 });
+
+describe("Escape and held keys (plan F1 findings)", () => {
+  it("Échap closes the palette without reaching the window listeners of placement and link modes", async () => {
+    const heard = vi.fn();
+    window.addEventListener("keydown", heard);
+    await act(async () => openPalette("goTo", home));
+    await act(async () => void press("Escape"));
+    window.removeEventListener("keydown", heard);
+    expect(paletteStore.getState().open).toBe(false);
+    expect(heard).not.toHaveBeenCalled();
+  });
+});

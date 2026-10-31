@@ -60,6 +60,8 @@ function PaletteBody() {
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.preventDefault();
+              // Placement and link modes end on Escape at the window: not this one.
+              e.stopPropagation();
               closePalette();
             }
             // The keyboard never leaves an open palette.

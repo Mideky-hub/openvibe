@@ -1,7 +1,7 @@
 import { commandFor, runCommand, type Command, type CommandContext } from "./command";
 import { closePalette, paletteStore } from "./paletteState";
 import { COMMANDS, commandContext } from "./registry";
-import { isModalOpen, shortcutOf } from "./shortcuts";
+import { heldShortcutOf, isModalOpen, shortcutOf } from "./shortcuts";
 
 /**
  * The application's single keydown listener (spec fenêtre §6.2): on the
@@ -16,7 +16,16 @@ export function installShortcuts(
 ): () => void {
   const listener = (event: KeyboardEvent) => {
     const shortcut = shortcutOf(event);
-    if (!shortcut || isModalOpen(target.document)) return;
+    if (isModalOpen(target.document)) return;
+    if (!shortcut) {
+      // A held Ctrl+P must not reach the palette's list (cmdk reads the repeats).
+      const held = heldShortcutOf(event);
+      if (held && commandFor(commands, held, context())) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+      return;
+    }
     const ctx = context();
     const command = commandFor(commands, shortcut, ctx);
     if (!command) return;

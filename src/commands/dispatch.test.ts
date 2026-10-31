@@ -80,3 +80,13 @@ it("is installed once, at startup, for the app's whole life, with the focus trac
   expect(main).toContain("installShortcuts(window);");
   expect(main).toContain("trackTerminalFocus(document);");
 });
+
+it("consumes the repeats of a held shortcut that does not repeat, without running it again", () => {
+  const p: Command = { ...next, id: "palette.goTo", shortcut: "Ctrl+P" };
+  uninstall();
+  uninstall = installShortcuts(window, [p], () => ctx);
+  const event = press({ key: "p", ctrlKey: true, repeat: true });
+  expect(run).not.toHaveBeenCalled();
+  expect(event.defaultPrevented).toBe(true);
+  expect(reachedXterm).not.toHaveBeenCalled();
+});
