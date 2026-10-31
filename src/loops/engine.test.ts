@@ -243,3 +243,100 @@ describe("the spending guards (spec boucles §1)", () => {
     expect(runtimes.l1.runs).toBe(1);
   });
 });
+
+describe("proof by mutation (guards that stayed green)", () => {
+  it("counts a run after a failed one as the first: the failure is not a run", async () => {
+    let failing = true;
+    const flaky: EngineDeps = {
+      ...deps(),
+      send: async (ids) => {
+        if (failing) throw new Error("dead");
+        sent.push({ ids, text: "x" });
+        return { sent: ids.length };
+      },
+    };
+    const e = createLoopEngine(flaky, (id, runtime) => (runtimes[id] = runtime));
+    e.start(loop({ maxRuns: 2 }));
+    now += 10 * MIN;
+    await e.tick();
+    failing = false;
+    now += 10 * MIN;
+    await e.tick();
+    // One real run so far, not two: the loop still has a run left.
+    expect(runtimes.l1).toMatchObject({ running: true, runs: 1 });
+    now += 10 * MIN;
+    await e.tick();
+    expect(runtimes.l1).toMatchObject({ running: false, runs: 2, stoppedBecause: "runs" });
+  });
+
+  it("never lets a send overlap the one in flight, whichever trigger comes", async () => {
+    let release: (value: { sent: number }) => void = () => undefined;
+    const slow: EngineDeps = { ...deps(), send: vi.fn(() => new Promise<{ sent: number }>((resolve) => (release = resolve))) };
+    const e = createLoopEngine(slow, (id, runtime) => (runtimes[id] = runtime));
+    e.start(loop({ trigger: { kind: "idle" }, maxRuns: 10 }));
+    e.activity("a", "idle", "working");
+    const first = e.tick();
+    now += COOLDOWN_MS;
+    e.activity("b", "idle", "working");
+    await e.tick();
+    expect(slow.send).toHaveBeenCalledTimes(1);
+    release({ sent: 1 });
+    await first;
+  });
+});
+
+describe("the timing race: an agent starts waiting between the check and the send", () => {
+  it("re-reads the activity at the last moment: the interval run spares an agent that turned waiting after the check", async () => {
+    // `isLive` is read in the check, before the run's own look: the agent turns waiting there.
+    const racing: EngineDeps = {
+      ...deps(),
+      isLive: (id) => {
+        if (id === "a") activities.a = "waiting";
+        return live.has(id);
+      },
+    };
+    const e = createLoopEngine(racing, (id, runtime) => (runtimes[id] = runtime));
+    e.start(loop());
+    now += 10 * MIN;
+    await e.tick();
+    expect(sent).toEqual([{ ids: ["b"], text: "fais un point" }]);
+  });
+
+  it("spares an agent that became idle, then turned waiting before the tick (idle trigger)", async () => {
+    const e = engine();
+    e.start(loop({ trigger: { kind: "idle" } }));
+    e.activity("a", "idle", "working");
+    activities.a = "waiting";
+    await tick(e);
+    expect(sent).toEqual([]);
+    expect(runtimes.l1.runs).toBe(0);
+  });
+
+  it("spares an agent whose screen showed the text but who is now waiting (output trigger)", async () => {
+    const e = engine();
+    e.start(loop({ trigger: { kind: "output", text: "FAIL" } }));
+    screens.a = "FAIL";
+    activities.a = "waiting";
+    await tick(e, 2000);
+    expect(sent).toEqual([]);
+  });
+});
+
+describe("the timing race: an agent is closed between the check and the send", () => {
+  it("does not type into a terminal that went after the check", async () => {
+    const seen = new Map<string, number>();
+    const racing: EngineDeps = {
+      ...deps(),
+      // Live for the check, gone when the run looks again.
+      isLive: (id) => {
+        seen.set(id, (seen.get(id) ?? 0) + 1);
+        return id === "b" || seen.get(id) === 1;
+      },
+    };
+    const e = createLoopEngine(racing, (id, runtime) => (runtimes[id] = runtime));
+    e.start(loop());
+    now += 10 * MIN;
+    await e.tick();
+    expect(sent).toEqual([{ ids: ["b"], text: "fais un point" }]);
+  });
+});
