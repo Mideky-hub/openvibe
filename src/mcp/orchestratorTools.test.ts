@@ -37,3 +37,22 @@ it("refuses to extend an agent that handed its sub-task over or has already repo
   expect(reported.isError).toBe(true);
   expect(fine.isError).not.toBe(true);
 });
+
+it("mission() gives the model of the agent that holds a sub-task, not the planned one, after a reassign (backlog Routeur)", async () => {
+  await nodesStore.getState().create("chef2", {
+    workspaceId: "w1",
+    kind: "orchestrator",
+    payload: {
+      name: "Chef",
+      mission: {
+        state: "en_cours",
+        maxAgents: 4,
+        router: true,
+        plan: [{ title: "Login", brief: "b", agent: "Horus", budgetMin: 10, level: "faible" }],
+        members: [member("a", "Isis", { task: "Login", handedTo: "Horus" }), member("b", "Horus", { task: "Login", model: "claude-opus-5-5" })],
+      },
+    },
+  });
+  const result = await orchestratorTool("chef2", "mission", {});
+  expect(JSON.parse(result.content[0].text).plan[0].model).toBe("Opus 5.5");
+});

@@ -426,3 +426,20 @@ it("leaves a handed-over agent's branch to its successor when merging (final rev
   expect(vi.mocked(missionMerge).mock.calls.map(([, , branch]) => branch)).toEqual(["openvibe/auth-n1"]);
 });
 
+
+it("gives a reassigned new agent the model of the sub-task's level when the router is on (backlog Routeur)", async () => {
+  await setup({
+    state: "en_cours",
+    router: true,
+    plan: [{ title: "Login", brief: "b", agent: "Isis", budgetMin: 20, level: "eleve" }],
+    project: "C:/code/proj",
+    slug: "auth",
+    frameId: "f1",
+    members: [member("isis", "Isis", true, { task: "Login" })],
+  });
+  canvasStore.setState({ frames: [{ id: "f1", x: 0, y: 0, width: 800, height: 500, name: "Mission Auth", group: { role: "general", pantheon: "egyptian" }, memberIds: ["isis"] }] });
+  const result = await reassignTask("chef", "isis", "nouveau");
+  expect(typeof result).toBe("object");
+  expect(addTerminal).toHaveBeenCalledWith("w1", expect.objectContaining({ model: "claude-opus-5-5" }), expect.anything(), "f1");
+  expect(missionNow().members[missionNow().members.length - 1]?.model).toBe("claude-opus-5-5");
+});

@@ -97,6 +97,12 @@ function memberNamed(mission: Mission, raw: unknown): Member | string {
   return mission.members.find((m) => sameName(m.name, name)) ?? t().orchestrator.notMember(name);
 }
 
+function modelOfSubTask(mission: Mission, subtask: { title: string; level?: keyof typeof LEVELS }): string | null {
+  const holder = mission.members.find((m) => !m.handedTo && m.task === subtask.title);
+  if (holder) return holder.model ? modelLabel(holder.model) : null;
+  return mission.router && subtask.level ? LEVELS[subtask.level].modelLabel : null;
+}
+
 function describeMission(orchestratorId: string, mission: Mission): ToolResult {
   const team = new Set(mission.members.map((m) => m.nodeId));
   return json({
@@ -114,7 +120,8 @@ function describeMission(orchestratorId: string, mission: Mission): ToolResult {
         agent: outAgent(s.agent),
         budget_min: s.budgetMin,
         level: s.level ? outLevel(s.level) : null,
-        model: mission.router && s.level ? LEVELS[s.level].modelLabel : null,
+        // Once an agent holds the sub-task, its own model counts: reassign may have given it to one that keeps its own.
+        model: modelOfSubTask(mission, s),
       })) ?? null,
     linked_agents: orchestratorShown(orchestratorId)
       ? linkedClaudeAgents(orchestratorId)
