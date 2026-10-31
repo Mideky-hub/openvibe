@@ -23,8 +23,18 @@ pub struct ProjectView {
 }
 
 pub fn project_views(db: &Db, pty: &PtyManager) -> AppResult<Vec<ProjectView>> {
+    project_views_with(db, pty, |path| path.is_dir())
+}
+
+/// `is_dir` runs after the database lock is released: an offline network
+/// drive would otherwise hold every command up.
+fn project_views_with(
+    db: &Db,
+    pty: &PtyManager,
+    is_dir: impl Fn(&Path) -> bool,
+) -> AppResult<Vec<ProjectView>> {
     let live: HashSet<String> = pty.list().into_iter().collect();
-    db.with(|conn| {
+    let counted = db.with(|conn| {
         projects::list(conn)?
             .into_iter()
             .map(|project| {
@@ -32,15 +42,51 @@ pub fn project_views(db: &Db, pty: &PtyManager) -> AppResult<Vec<ProjectView>> {
                     .iter()
                     .filter(|id| live.contains(*id))
                     .count();
-                let missing = !Path::new(&project.path).is_dir();
-                Ok(ProjectView {
-                    project,
-                    missing,
-                    live_agents,
-                })
+                Ok((project, live_agents))
             })
-            .collect()
-    })
+            .collect::<AppResult<Vec<_>>>()
+    })?;
+    Ok(counted
+        .into_iter()
+        .map(|(project, live_agents)| ProjectView {
+            missing: !is_dir(Path::new(&project.path)),
+            project,
+            live_agents,
+        })
+        .collect())
+}
+
+#[cfg(test)]
+mod lock_tests {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    use super::*;
+
+    #[test]
+    fn folders_are_checked_without_holding_the_database() {
+        let db = Db::open_in_memory().unwrap();
+        db.with(|conn| projects::create(conn, "C:/somewhere"))
+            .unwrap();
+        let pty = PtyManager::default();
+        let views = project_views_with(&db, &pty, |_| {
+            // Another command, meanwhile, must get the database.
+            let (tx, rx) = mpsc::channel();
+            std::thread::scope(|scope| {
+                scope.spawn(|| {
+                    let _ = db.with(|_| Ok(()));
+                    let _ = tx.send(());
+                });
+                assert!(
+                    rx.recv_timeout(Duration::from_secs(3)).is_ok(),
+                    "the database stayed locked during the folder check"
+                );
+            });
+            false
+        })
+        .unwrap();
+        assert!(views[0].missing);
+    }
 }
 
 fn existing_folder(path: &str) -> AppResult<()> {
