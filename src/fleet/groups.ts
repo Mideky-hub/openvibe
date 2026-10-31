@@ -105,6 +105,8 @@ export async function addAgentToGroup(groupId: string, agent: AgentId) {
   const workspaceId = workspacesStore.getState().activeId;
   const group = canvasStore.getState().frames.find((f) => f.id === groupId);
   if (!workspaceId || !group || !isGroup(group)) return;
+  // A new agent in a folded group would stay off the screen, and so would not start.
+  if (group.group.folded) setGroupFolded(groupId, false);
   const name = await nameForNewAgent(workspaceId, group.group.pantheon);
   const center = { x: group.x + group.width / 2, y: group.y + group.height / 2 };
   await addTerminal(workspaceId, newTerminalPayload({ ...defaultLaunchOptions(), agent }, name), center, groupId);

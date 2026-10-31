@@ -5,10 +5,12 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { canvasStore } from "@/canvas/canvasStore";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { workspacesStore } from "@/store/workspaces";
-import { closeGroup, launchGroup, setGroupFolded, setGroupSpeciality, showGroups } from "./groups";
+import { addAgentToGroup, closeGroup, launchGroup, setGroupFolded, setGroupSpeciality, showGroups } from "./groups";
 
 vi.mock("@excalidraw/excalidraw", () => ({ CaptureUpdateAction: { IMMEDIATELY: "i" }, newElementWith: (e: object, patch: object) => ({ ...e, ...patch }) }));
 vi.mock("@/nodes/terminal/registry", () => ({ markForAutostart: vi.fn() }));
+vi.mock("./naming", async (importOriginal) => ({ ...(await importOriginal<typeof import("./naming")>()), nameForNewAgent: vi.fn(() => Promise.resolve("Isis")) }));
+vi.mock("./terminals", async (importOriginal) => ({ ...(await importOriginal<typeof import("./terminals")>()), addTerminal: vi.fn(() => Promise.resolve()) }));
 
 interface Element {
   id: string;
@@ -109,4 +111,13 @@ it("folds and unfolds a group as one undoable step, keeping everything else (spe
   expect(scene[1].customData).toBeUndefined();
   setGroupFolded("f1", false);
   expect(scene[0].customData?.openvibe).toEqual(data);
+});
+
+it("unfolds a folded group before adding an agent to it, so the agent shows and starts", async () => {
+  const data = { kind: "group", role: "general", pantheon: "egyptian", folded: true };
+  scene = [{ id: "f1", type: "frame", customData: { openvibe: data } }];
+  canvasStore.setState({ frames: [{ id: "f1", name: "G", x: 0, y: 0, width: 800, height: 500, group: { role: "general", pantheon: "egyptian", folded: true }, memberIds: [] }] as never });
+  workspacesStore.setState({ activeId: "w1" });
+  await addAgentToGroup("f1", "shell");
+  expect(scene[0].customData?.openvibe).not.toHaveProperty("folded");
 });
