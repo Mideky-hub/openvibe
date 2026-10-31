@@ -16,6 +16,8 @@ describe("an agent's steps (spec orchestrateur §4.4, §5)", () => {
     expect(declaredSteps(["Plan", 3])).toBe("Chaque étape est un titre court.");
     expect(declaredSteps(["Plan", "  "])).toBe("Chaque étape est un titre court.");
     expect(declaredSteps("Plan")).toBe("Donne entre 1 et 12 étapes.");
+    expect(declaredSteps(["Tests", "Tests"])).toContain("même titre");
+    expect(declaredSteps(["Plan", "plan"])).toContain("même titre");
   });
 
   it("marks a step by its title, adding an unknown one at the end", () => {

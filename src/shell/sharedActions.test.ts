@@ -4,7 +4,8 @@ import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { toast } from "sonner";
 import { showAbout } from "@/app/about";
 import { canvasStore, EMPTY_VIEW } from "@/canvas/canvasStore";
-import { launchAt, launchFour, placeOrchestrator } from "@/fleet/quickActions";
+import { agentsStore } from "@/fleet/agentsStore";
+import { launchAt, launchFour, newConsole, placeOrchestrator } from "@/fleet/quickActions";
 import { launchGroup } from "@/fleet/groups";
 import { launchAgent } from "@/fleet/launchAgent";
 import { addOrchestrator } from "@/fleet/orchestrators";
@@ -46,12 +47,12 @@ it("launches an agent, or places an orchestrator, at the center of the view", ()
   expect(addOrchestrator).toHaveBeenCalledWith("w1", { x: 500, y: 400 });
 });
 
-it("launches an agent, places an orchestrator or a group of four where the radial menu was opened", () => {
+it("launches an agent, places an orchestrator or a group of four where the radial menu was opened", async () => {
   launchAt("codex", { x: 10, y: 20 });
   expect(vi.mocked(launchAgent).mock.lastCall?.[2]).toEqual({ x: 10, y: 20 });
   placeOrchestrator({ x: 30, y: 40 });
   expect(addOrchestrator).toHaveBeenLastCalledWith("w1", { x: 30, y: 40 });
-  launchFour({ x: 50, y: 60 });
+  await launchFour({ x: 50, y: 60 });
   expect(vi.mocked(launchGroup).mock.lastCall?.[2]).toEqual({ x: 50, y: 60 });
 });
 
@@ -71,4 +72,11 @@ it("keeps one implementation of each action: the buttons call the shared ones", 
   expect(readSource("home/HomeScreen.tsx")).toContain('from "./addProject"');
   expect(readSource("shell/WorkspaceTabs.tsx")).toContain('from "./workspaceActions"');
   expect(readSource("shell/WindowControls.tsx")).toContain("toggleMaximizeWindow");
+});
+
+it("waits for the agent list before « Nouvelle console », instead of launching a Shell", async () => {
+  agentsStore.setState({ agents: [], shells: [], loaded: false });
+  mockIPC((cmd) => (cmd === "list_agents" ? [{ id: "claude", available: true }] : cmd === "list_shells" ? [] : undefined));
+  await newConsole({ x: 1, y: 2 });
+  expect(vi.mocked(launchAgent).mock.lastCall?.[0]).toBe("claude");
 });

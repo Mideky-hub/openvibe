@@ -17,7 +17,7 @@ import { freshScreen, textSince } from "./freshScreen";
 import { keyAction, NEWLINE_SEQUENCE } from "./keys";
 import { newConversation, type LaunchMode } from "./launch";
 import { isTypingKey, startsNewConversation, startsOnKeystroke } from "./pill";
-import { acceptsInput, attachSession, relaunchSession, restoreSession, startSession, type SessionState } from "./session";
+import { acceptsInput, reattachSession, relaunchSession, restoreSession, startSession, type SessionState } from "./session";
 
 // Terminals live outside React (spec §6.4): Excalidraw unmounts embeddables on a
 // workspace switch, and the xterm instance must survive it. Remounting moves the
@@ -43,6 +43,11 @@ const autostart = createAutostart();
 let livePtys = new Set<string>();
 let measure: FontMeasure | null = null;
 let watchingScale = false;
+
+/** A process ended: it no longer awaits re-attachment. */
+export function forgetLivePty(nodeId: string) {
+  livePtys.delete(nodeId);
+}
 
 /** Sessions still running in Rust after a webview reload; they are re-attached. */
 export function setLivePtys(nodeIds: string[]) {
@@ -177,8 +182,8 @@ export function mountTerminal(nodeId: string, host: HTMLElement, payload: Termin
     void startSession(nodeId, entry.term, latest, "new");
   });
   if (started) return;
-  if (livePtys.delete(nodeId)) void attachSession(nodeId, entry.term, entry.session);
-  else void restoreSession(nodeId, entry.term);
+  if (livePtys.delete(nodeId)) void reattachSession(nodeId, entry.term, entry.session);
+  else void restoreSession(nodeId, entry.term, entry.session);
 }
 
 /** A new session starts: its screen and its silence are measured from here, not from the previous one's. */

@@ -1,5 +1,8 @@
 import { createStore, useStore } from "zustand";
 import { saveNode, type StoredNode } from "@/ipc/db";
+import { toast } from "sonner";
+import { messages } from "@/i18n";
+import { storeMessages } from "./messages";
 import { debounce, type Debounced } from "@/lib/debounce";
 import { onFlushAll } from "@/lib/flush";
 import { rebasePath } from "@/lib/paths";
@@ -38,7 +41,12 @@ export function createNodesStore() {
     const saveLater = (id: string) => {
       let save = pendingSaves.get(id);
       if (!save) {
-        save = debounce(() => write(id), SAVE_DELAY_MS);
+        // The timer drops the result: a refused save must reach the user, not the console as an unhandled rejection.
+        save = debounce(() => {
+          const written = write(id);
+          written?.catch((error: unknown) => toast.error(messages(storeMessages).saveFailed(String(error))));
+          return written;
+        }, SAVE_DELAY_MS);
         pendingSaves.set(id, save);
       }
       save();
