@@ -33,3 +33,13 @@ export function agentsText(count: number): string {
 export function groupsText(count: number): string {
   return messages(fleetMessages).summary.groups(count);
 }
+
+/** Members in `activity` whose process runs: an activity can outlive a process that was stopped. */
+export function membersIn(
+  memberIds: readonly string[],
+  activity: "working" | "waiting",
+  activityOf: (id: string) => string | undefined,
+  running: (id: string) => boolean,
+): number {
+  return memberIds.filter((id) => running(id) && activityOf(id) === activity).length;
+}
