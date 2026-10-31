@@ -20,7 +20,7 @@ import { useAgents } from "./agentsStore";
 import { pauseAll, resumeAll } from "./broadcast";
 import { agentInk, AGENTS, AGENTS_WITHOUT_OPTIONS } from "./catalog";
 import { fleetMessages } from "./messages";
-import { addAgentToGroup, groupMembers, requestCloseGroup, ungroup } from "./groups";
+import { addAgentToGroup, groupMembers, requestCloseGroup, setGroupFolded, ungroup } from "./groups";
 import { orchestrateGroup } from "./orchestrators";
 import { setRemoteControlAll } from "./remoteControl";
 import { SpecialityMenu } from "./SpecialityMenu";
@@ -34,6 +34,7 @@ export function GroupMenu({ groupId, trigger, answersRequests = false }: { group
   const [open, setOpen] = useState(false);
   const agents = useAgents((s) => s.agents);
   const speciality = useCanvas((s) => s.frames.find((f) => f.id === groupId)?.group?.speciality);
+  const folded = useCanvas((s) => s.frames.find((f) => f.id === groupId)?.group?.folded === true);
   const available = (id: string) => agents.some((agent) => agent.id === id && agent.available);
   // « Ajouter un agent… » of the palette opens the panel's copy of this menu.
   useUiRequest(
@@ -99,6 +100,7 @@ export function GroupMenu({ groupId, trigger, answersRequests = false }: { group
         <DropdownMenuItem onSelect={() => void setRemoteControlAll(groupMembers(groupId), false)}>{t.remote.turnOff}</DropdownMenuItem>
         <GroupNotesItem groupId={groupId} />
         <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => setGroupFolded(groupId, !folded)}>{folded ? t.groupMenu.unfold : t.groupMenu.fold}</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => ungroup(groupId)}>{t.groupMenu.ungroup}</DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={() => requestCloseGroup(groupId)}>
           {t.groupMenu.close}
