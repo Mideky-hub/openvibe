@@ -8,6 +8,7 @@ import { messages, useMessages } from "@/i18n";
 import { useNodes } from "@/store/nodes";
 import { isRunning, terminalStatusStore } from "@/store/terminalStatus";
 import { shellMessages } from "./messages";
+import { ReleaseNotes } from "./ReleaseNotes";
 
 /** « Version x disponible » in the title bar, once a check found one (spec première version §6.4). */
 export function UpdateChip() {
@@ -52,7 +53,7 @@ export function UpdateDialog() {
             {running.length > 0 ? t.willStop(running) : t.willClose}
           </DialogDescription>
         </DialogHeader>
-        {available?.notes && <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-ov-card p-2 text-[12px] text-ov-text-2">{available.notes}</pre>}
+        {available?.notes && <ReleaseNotes notes={available.notes} />}
         <DialogFooter>
           <Button variant="ghost" onClick={close} disabled={busy}>
             {t.later}
