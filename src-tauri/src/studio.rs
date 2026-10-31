@@ -84,13 +84,13 @@ fn is_device_name(name: &str) -> bool {
 /// Whether Windows would take `name` as it is. A `:` is a drive or an NTFS
 /// stream, and a final dot or space is dropped, so `.git.` would be `.git`.
 /// This also leaves out `.`, `..` and the empty name of a root.
-fn is_plain_name(name: &str) -> bool {
+pub(crate) fn is_plain_name(name: &str) -> bool {
     !name.is_empty() && !name.contains(':') && !name.ends_with(['.', ' ']) && !is_device_name(name)
 }
 
 /// The file's real path, which may not exist yet; whatever leaves `root` or
 /// reaches a `.git` is refused, through links and junctions too.
-fn resolve(root: &Path, file: &str) -> Result<PathBuf, String> {
+pub(crate) fn resolve(root: &Path, file: &str) -> Result<PathBuf, String> {
     if !file.split(['/', '\\']).all(is_plain_name) {
         return Err(refused(file));
     }

@@ -72,7 +72,6 @@ export function CodeEditor({ path, text, revision, onChange, ref }: Props) {
       alive = false;
     };
     // `text` and `dark` are read at the opening; the effects below follow them.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revision.id, path]);
 
   // The same document, from the disk: the cursor stays, and undo does not bring the old text back as an edit.
@@ -81,7 +80,6 @@ export function CodeEditor({ path, text, revision, onChange, ref }: Props) {
     if (!editor || revision.kind !== "reload") return;
     const change = smallestChange(editor.state.doc.toString(), text);
     if (change) editor.dispatch({ changes: change, annotations: [Transaction.remote.of(true), Transaction.addToHistory.of(false)] });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revision.id]);
 
   useEffect(() => {

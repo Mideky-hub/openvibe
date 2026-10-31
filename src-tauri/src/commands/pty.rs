@@ -1,4 +1,3 @@
-use crate::tr;
 use serde::Serialize;
 use tauri::ipc::{Channel, Response};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -50,12 +49,9 @@ pub async fn pty_spawn(
 ) -> AppResult<Option<u32>> {
     // Refused before anything else: a second start must leave the live
     // session's MCP token and launch files alone (seen in the app, H3).
-    if pty.is_running(&node_id) {
-        return Err(AppError::InvalidInput(tr!(
-            "le terminal {node_id} tourne déjà",
-            "terminal {node_id} is already running"
-        )));
-    }
+    // Claimed, not just checked: two starts racing would else both pass, and the
+    // second one's token would replace the live session's (backlog B2).
+    let _claim = pty.claim_start(&node_id)?;
     let mut spec = spec;
     if let Some(claude) = spec.claude.as_mut() {
         let config = claude_settings::claude_config_dir();

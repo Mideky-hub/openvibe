@@ -10,6 +10,7 @@ import { focusCommandBar } from "@/shell/commandBarFocus";
 import { closeWindow, minimizeWindow, toggleMaximizeWindow, windowStore } from "@/shell/windowState";
 import { removeWorkspace } from "@/shell/workspaceActions";
 import { projectsStore } from "@/store/projects";
+import { closeNotes, notesStore } from "@/notes/notesStore";
 import { closeStudio, studioStore } from "@/studio/studioStore";
 import { workspacesStore } from "@/store/workspaces";
 import { labelOf, type Command, type CommandContext } from "../command";
@@ -69,6 +70,7 @@ describe("Navigation (spec fenêtre §7.3)", () => {
       "Écrire une consigne",
       "Masquer le panneau Agents",
       "Studio Code",
+      "Notes",
       "Accueil",
       "Fermer le projet",
     ]);
@@ -122,6 +124,20 @@ describe("Studio Code (spec studio code §6)", () => {
     void studio.run(busy);
     expect(studioStore.getState().open).toBe(true);
     closeStudio();
+  });
+});
+
+describe("Notes (spec notes §6)", () => {
+  it("opens from the palette, in a project only", () => {
+    const notes = find(NAVIGATION, "notes.open");
+    expect(labelOf(notes, busy)).toBe("Notes");
+    expect(notes.keywords).toContain("mémoire");
+    expect(notes.available(home)).toBe(false);
+    expect(notes.available(busy)).toBe(true);
+    closeNotes();
+    void notes.run(busy);
+    expect(notesStore.getState().open).toBe(true);
+    closeNotes();
   });
 });
 
