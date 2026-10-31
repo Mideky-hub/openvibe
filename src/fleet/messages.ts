@@ -101,6 +101,7 @@ export const fleetMessages = defineMessages(
       noClaudeSession: "Aucune session Claude ici",
       done: (on: boolean, names: string) => `Remote Control ${on ? "activé" : "coupé"} : ${names}`,
       later: (names: string) => `Remote Control à la fin de leur tour : ${names}`,
+      nextStartFor: (names: string) => `Remote Control au prochain démarrage : ${names}`,
       failedFor: (name: string, error: string) => `Remote Control de ${name} : ${error}`,
     },
     agentMenu: {
@@ -295,6 +296,7 @@ export const fleetMessages = defineMessages(
       noClaudeSession: "No Claude session here",
       done: (on: boolean, names: string) => `Remote Control ${on ? "turned on" : "turned off"}: ${names}`,
       later: (names: string) => `Remote Control at the end of their turn: ${names}`,
+      nextStartFor: (names: string) => `Remote Control at next start: ${names}`,
       failedFor: (name: string, error: string) => `Remote Control for ${name}: ${error}`,
     },
     agentMenu: {
