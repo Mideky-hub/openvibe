@@ -22,6 +22,7 @@ import { TitleBar } from "./TitleBar";
 import { ToolRail } from "./ToolRail";
 import { UpdateChip } from "./UpdateDialog";
 import { UsageMeter } from "./UsageMeter";
+import { WaitingNotice } from "./WaitingNotice";
 import { WorkspaceTabs } from "./WorkspaceTabs";
 import { shellMessages } from "./messages";
 import { ZoomControl } from "./ZoomControl";
@@ -72,6 +73,7 @@ export function ProjectView() {
               <AgentsPanel />
             </ErrorBoundary>
           )}
+          <WaitingNotice />
           <div className="absolute bottom-[14px] left-3 z-30">
             <GitChip />
           </div>

@@ -34,7 +34,7 @@ it("leaves nothing at the top of the canvas but the bars: no top toast, no banne
 });
 
 it("draws the bottom row and its command bar in dense glass: they carry text over dark terminals (spec identité §4.2, §5.8)", () => {
-  for (const file of ["shell/CommandBar.tsx", "shell/GitChip.tsx", "shell/ZoomControl.tsx"]) {
+  for (const file of ["shell/CommandBar.tsx", "shell/GitChip.tsx", "shell/ZoomControl.tsx", "shell/WaitingNotice.tsx"]) {
     expect(readSource(file), file).toMatch(/ov-glass-strong/);
     expect(readSource(file), `${file} : verre léger sous du texte`).not.toMatch(/ov-glass(?!-strong)\b/);
   }
