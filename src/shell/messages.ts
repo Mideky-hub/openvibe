@@ -166,10 +166,11 @@ export const shellMessages = defineMessages(
       createFailed: "Création impossible",
     },
     removeWorkspace: {
-      confirm: (name: string, running: number) => {
+      confirm: (name: string, running: number, names: string[] = []) => {
+        const who = names.length > 0 ? ` (${names.join(", ")})` : "";
         const consequence =
           running > 0
-            ? `${plural("fr", running, "agent sera arrêté", "agents seront arrêtés")} et son contenu effacé.`
+            ? `${plural("fr", running, "agent sera arrêté", "agents seront arrêtés")}${who} et son contenu effacé.`
             : "Son contenu sera effacé.";
         return `Supprimer « ${name} » ? ${consequence}`;
       },
@@ -373,10 +374,11 @@ export const shellMessages = defineMessages(
       createFailed: "Could not create",
     },
     removeWorkspace: {
-      confirm: (name: string, running: number) => {
+      confirm: (name: string, running: number, names: string[] = []) => {
+        const who = names.length > 0 ? ` (${names.join(", ")})` : "";
         const consequence =
           running > 0
-            ? `${plural("en", running, "agent will be stopped", "agents will be stopped")} and its contents erased.`
+            ? `${plural("en", running, "agent will be stopped", "agents will be stopped")}${who} and its contents erased.`
             : "Its contents will be erased.";
         return `Delete "${name}"? ${consequence}`;
       },
