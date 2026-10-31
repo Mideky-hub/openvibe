@@ -315,6 +315,18 @@ describe("a new agent in a chosen group (spec groupes spécialisés §4)", () =>
     expect(missionDiscard).toHaveBeenCalled();
   });
 
+  it("does not start when the group goes while the mission's group is made: no member without a terminal (final review)", async () => {
+    await setup({ plan: [plan[1], inFront] });
+    vi.mocked(launchGroup).mockImplementationOnce(async () => {
+      canvasStore.setState({ frames: [] });
+      return { frameId: "f1", nodeIds: ["n1"] };
+    });
+    await launchMission("chef");
+    expect(missionNow()).toMatchObject({ state: "plan", error: "Le groupe Interface n'est plus relié à l'orchestrateur.", members: [] });
+    expect(closeGroup).toHaveBeenCalledWith("f1");
+    expect(missionDiscard).toHaveBeenCalled();
+  });
+
   it("takes back what it created when an agent cannot join, so no terminal sits in a removed worktree", async () => {
     await setup({ plan: [plan[1], inFront, { ...inFront, title: "Style" }] });
     vi.mocked(addTerminal).mockResolvedValueOnce("n9").mockResolvedValueOnce(null);

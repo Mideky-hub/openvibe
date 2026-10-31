@@ -134,9 +134,11 @@ async function formTeam(orchestratorId: string, workspaceId: string, project: st
       frameId = group.frameId;
       linkOrchestrator(orchestratorId, group.frameId);
     }
-    for (const member of members) {
-      const frame = canvasStore.getState().frames.find((f) => f.id === member.group);
-      if (!frame) continue;
+    for (const [i, member] of members.entries()) {
+      const group = plan[i].group;
+      if (!group) continue;
+      const frame = canvasStore.getState().frames.find((f) => f.id === group.id);
+      if (!frame) throw new Error(t().launch.groupLost(group.name));
       const nodeId = await addTerminal(workspaceId, agentPayload(member.name, member.worktree, member.model), frameCenter(frame), frame.id);
       if (!nodeId) throw new Error(t().launch.groupFailed);
       member.nodeId = nodeId;
