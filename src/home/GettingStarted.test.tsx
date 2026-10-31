@@ -10,9 +10,11 @@ import { langStore } from "@/i18n";
 import { AGENT_IDS, type AgentInfo } from "@/ipc/pty";
 import type { Project } from "@/ipc/db";
 import { HomeScreen } from "./HomeScreen";
+import { installFromHome } from "./installFromHome";
 
 // Excalidraw does not load under Vitest (roughjs); the search field reaches it through the command registry.
 vi.mock("@excalidraw/excalidraw", () => ({}));
+vi.mock("./installFromHome", () => ({ installFromHome: vi.fn(() => Promise.resolve()) }));
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(() => Promise.resolve()) }));
 
@@ -31,6 +33,7 @@ beforeEach(() => {
   agents = only();
   projects = [];
   calls = [];
+  vi.mocked(installFromHome).mockClear();
   agentsStore.setState({ agents: [], shells: [], loaded: false });
   mockWindows("main");
   mockIPC(
@@ -85,6 +88,51 @@ it("copies Claude Code's install command and opens the official pages", async ()
   const codex = [...host.querySelectorAll<HTMLElement>("[data-no-agent] [data-link]")].find((a) => a.textContent?.includes("Codex"))!;
   await act(async () => codex.click());
   expect(openUrl).toHaveBeenCalledWith("https://github.com/openai/codex");
+});
+
+it("installs Claude Code in one click: its command is already on screen (spec installation §4.2)", async () => {
+  await render();
+  await act(async () => button("Installer Claude Code").click());
+  expect(installFromHome).toHaveBeenCalledWith("claude");
+  expect(host.querySelector("[data-install-prompt]")).toBeNull();
+});
+
+it("shows the other agents' command before installing them", async () => {
+  await render();
+  const install = () => host.querySelector<HTMLButtonElement>("[data-no-agent] [data-install='gemini']")!;
+  await act(async () => install().click());
+  expect(installFromHome).not.toHaveBeenCalled();
+  expect(host.querySelector("[data-install-prompt='gemini'] code")!.textContent).toBe("npm install -g @google/gemini-cli");
+  await act(async () => button("Lancer dans un terminal").click());
+  expect(installFromHome).toHaveBeenCalledWith("gemini");
+  expect(host.querySelector("[data-install-prompt]")).toBeNull();
+});
+
+it("closes the prompt without installing", async () => {
+  await render();
+  await act(async () => host.querySelector<HTMLButtonElement>("[data-install='qwen']")!.click());
+  await act(async () => button("Installer Qwen Code").click());
+  expect(host.querySelector("[data-install-prompt]")).toBeNull();
+  expect(installFromHome).not.toHaveBeenCalled();
+});
+
+it("says where the install terminal will open", async () => {
+  await render();
+  expect(host.querySelector("[data-no-agent]")!.textContent).toContain("choisis d'abord son dossier");
+  await act(async () => root.unmount());
+  projects = [project];
+  root = createRoot(host);
+  await render();
+  expect(host.querySelector("[data-no-agent]")!.textContent).toContain("sur le canvas de « api »");
+});
+
+it("words the install in English", async () => {
+  langStore.setState({ lang: "en" });
+  await render();
+  const card = host.querySelector("[data-no-agent]")!;
+  expect(card.textContent).toContain("Install Claude Code");
+  expect(card.textContent).toContain("The install terminal opens on a project's canvas: pick its folder first.");
+  expect(card.textContent).toContain("The other agents:");
 });
 
 it("reads Windows' PATH again before looking for the agents, then shows the steps done (spec §7.2)", async () => {

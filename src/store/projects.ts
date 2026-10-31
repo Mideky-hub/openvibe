@@ -22,6 +22,11 @@ const CLOSED = "";
 
 export type ProjectsView = "loading" | "home" | "project" | "error";
 
+/** The most recently opened project whose folder still exists. */
+export function recentProject(projects: readonly Project[]): Project | null {
+  return projects.filter((p) => !p.missing).sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)[0] ?? null;
+}
+
 /**
  * The project to reopen at launch (spec habillage §5.1): the saved one if its
  * folder still exists; the most recently opened one when none was ever saved
@@ -33,8 +38,7 @@ export function startupProject(projects: readonly Project[], saved: string | nul
     const last = projects.find((p) => p.id === saved);
     return last && !last.missing ? last.id : null;
   }
-  const recent = projects.filter((p) => !p.missing).sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)[0];
-  return recent?.id ?? null;
+  return recentProject(projects)?.id ?? null;
 }
 
 export interface ProjectsDeps {

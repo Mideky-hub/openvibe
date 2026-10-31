@@ -19,6 +19,7 @@ export function resumableTerminals(
       ([id, node]) =>
         node.workspaceId === workspaceId &&
         node.kind === "terminal" &&
+        !node.payload.oneShot &&
         onScene.has(id) &&
         !alive.has(id) &&
         (statuses[id]?.state ?? "stopped") === "stopped",
