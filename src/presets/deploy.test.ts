@@ -35,6 +35,7 @@ function deps(over: Partial<DeployDeps> = {}) {
     }),
     link: vi.fn((o, g) => void calls.push(`link ${o} ${g}`)),
     rename: vi.fn((o, name) => void calls.push(`rename ${o} ${name}`)),
+    fit: vi.fn((ids: string[]) => void calls.push(`fit ${ids.join(",")}`)),
     ...over,
   };
   return { made, calls, plans };
@@ -44,7 +45,8 @@ describe("deployPreset", () => {
   it("poses each group in order, then the orchestrator linked to the first of its groups, then the others, and says what it made", async () => {
     const { made, calls } = deps();
     const result = await deployPreset(preset, made);
-    expect(calls).toEqual(["group Backend", "speciality f1 API", "group Tests", "orchestrate f2", "link chef1 f1", "rename chef1 Chef"]);
+    // The view ends on the whole team: every group and orchestrator posed, once, after the last one.
+    expect(calls).toEqual(["group Backend", "speciality f1 API", "group Tests", "orchestrate f2", "link chef1 f1", "rename chef1 Chef", "fit f1,f2,chef1"]);
     expect(result).toEqual({ groups: 2, agents: 3, orchestrators: 1, substituted: 0, orchestratorsSkipped: 0 });
   });
 
@@ -91,4 +93,10 @@ describe("deployPreset", () => {
     expect(calls).toContain("orchestrate f9");
     expect(calls.some((c) => c.startsWith("link"))).toBe(false);
   });
+});
+
+it("fits nothing when nothing was posed", async () => {
+  const { made } = deps({ launchGroup: vi.fn(async () => null) });
+  await deployPreset(preset, made);
+  expect(made.fit).not.toHaveBeenCalled();
 });

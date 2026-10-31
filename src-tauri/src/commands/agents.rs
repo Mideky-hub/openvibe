@@ -67,6 +67,8 @@ pub struct ActivityEvent {
     node_id: String,
     activity: Activity,
     since: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -94,6 +96,7 @@ fn event(change: &Change) -> ActivityEvent {
         node_id: change.node_id.clone(),
         activity: change.activity,
         since: epoch_ms(change.since, Instant::now(), wall_ms()),
+        message: change.message.clone(),
     }
 }
 
@@ -222,7 +225,13 @@ fn on_hook(app: &AppHandle, hit: HookHit) {
     let change = if hit.session_ended {
         tracker.session_end(&hit.node_id, Instant::now())
     } else {
-        tracker.hook(&hit.node_id, hit.source, hit.activity, Instant::now())
+        tracker.hook(
+            &hit.node_id,
+            hit.source,
+            hit.activity,
+            Instant::now(),
+            hit.message,
+        )
     };
     drop(tracker);
     if hit.session_ended {
