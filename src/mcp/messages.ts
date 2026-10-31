@@ -165,7 +165,7 @@ export const agentMessages = defineMessages(
     },
     review: {
       intro: "Revue de code de tes changements :",
-      removedLine: (file: string, line: number) => `${file} (ligne ${line} supprimée)`,
+      removedLine: (file: string, line: number) => `${file} (ligne ${line} supprimée, numérotée dans la version avant tes changements)`,
       outro: "Corrige ce qui doit l'être, puis dis-moi ce que tu as changé.",
     },
   },
@@ -327,7 +327,7 @@ export const agentMessages = defineMessages(
     },
     review: {
       intro: "Code review of your changes:",
-      removedLine: (file: string, line: number) => `${file} (line ${line} removed)`,
+      removedLine: (file: string, line: number) => `${file} (line ${line} removed, numbered in the version before your changes)`,
       outro: "Fix what needs fixing, then tell me what you changed.",
     },
   },
