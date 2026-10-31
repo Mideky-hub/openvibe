@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from "react";
 import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { useCanvas } from "@/canvas/canvasStore";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +22,7 @@ import { fleetMessages } from "./messages";
 import { addAgentToGroup, groupMembers, requestCloseGroup, ungroup } from "./groups";
 import { orchestrateGroup } from "./orchestrators";
 import { setRemoteControlAll } from "./remoteControl";
+import { SpecialityMenu } from "./SpecialityMenu";
 
 /**
  * The menu of a group: the `⌄` of its label on the canvas (spec habillage
@@ -30,6 +32,7 @@ export function GroupMenu({ groupId, trigger, answersRequests = false }: { group
   const t = useMessages(fleetMessages);
   const [open, setOpen] = useState(false);
   const agents = useAgents((s) => s.agents);
+  const speciality = useCanvas((s) => s.frames.find((f) => f.id === groupId)?.group?.speciality);
   const available = (id: string) => agents.some((agent) => agent.id === id && agent.available);
   // « Ajouter un agent… » of the palette opens the panel's copy of this menu.
   useUiRequest(
@@ -60,6 +63,7 @@ export function GroupMenu({ groupId, trigger, answersRequests = false }: { group
         <DropdownMenuItem onSelect={() => requestAnimationFrame(() => uiStore.getState().setRenamingGroup(groupId))}>
           {t.groupMenu.rename}
         </DropdownMenuItem>
+        <SpecialityMenu groupId={groupId} speciality={speciality} onDone={() => setOpen(false)} />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>{t.groupMenu.addAgent}</DropdownMenuSubTrigger>
           <DropdownMenuSubContent>

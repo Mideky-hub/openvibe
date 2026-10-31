@@ -11,6 +11,9 @@ it("maps the English tool names and arguments to the internal ones (spec premiè
     name: "proposer_plan",
     args: { nom: "Auth", tache: "T", sous_taches: [{ titre: "Login", consigne: "B", agent: "nouveau", budget_min: 20, niveau: "eleve" }] },
   });
+  expect(internalCall("propose_plan", { name: "A", task: "T", subtasks: [{ title: "L", brief: "B", agent: "new", budget_min: 1, group: "Front" }] }).args).toMatchObject({
+    sous_taches: [{ agent: "nouveau", groupe: "Front" }],
+  });
   expect(internalCall("reassign", { subtask: "Login", agent: "new" })).toEqual({ name: "reattribuer", args: { sous_tache: "Login", agent: "nouveau" } });
   expect(internalCall("read_output", { agent: "Isis", lines: 5 })).toEqual({ name: "lire_sortie", args: { agent: "Isis", lignes: 5 } });
   expect(internalCall("write", { agent: "Isis", text: "go" })).toEqual({ name: "ecrire", args: { agent: "Isis", texte: "go" } });

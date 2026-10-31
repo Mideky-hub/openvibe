@@ -4,9 +4,10 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import { showNode } from "@/canvas/arrive";
 import { canvasStore } from "@/canvas/canvasStore";
 import { pauseAgents } from "@/fleet/broadcast";
-import { closeGroup, launchGroup } from "@/fleet/groups";
+import { closeGroup, launchGroup, showGroups } from "@/fleet/groups";
+import { nextName } from "@/fleet/names";
 import { linkOrchestrator } from "@/fleet/orchestrators";
-import { addTerminal } from "@/fleet/terminals";
+import { addTerminal, removeNodes } from "@/fleet/terminals";
 import { missionAddAgent, missionCleanup, missionDiscard, missionMerge, missionPrepare, type Worktree } from "@/ipc/mission";
 import { langStore } from "@/i18n";
 import { ptySendText } from "@/ipc/pty";
@@ -29,9 +30,9 @@ vi.mock("@/ipc/pty", async (importOriginal) => ({
   ptyWrite: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("@/nodes/terminal/registry", () => ({ relaunchTerminal: vi.fn(), stopTerminal: vi.fn(), quietFor: vi.fn(() => 0), typedAgo: vi.fn(() => Infinity), freshText: vi.fn(() => ""), markForAutostart: vi.fn() }));
-vi.mock("@/fleet/groups", () => ({ launchGroup: vi.fn(), closeGroup: vi.fn() }));
+vi.mock("@/fleet/groups", () => ({ launchGroup: vi.fn(), closeGroup: vi.fn(), showGroups: vi.fn() }));
 vi.mock("@/fleet/orchestrators", () => ({ linkOrchestrator: vi.fn() }));
-vi.mock("@/fleet/terminals", () => ({ addTerminal: vi.fn(() => Promise.resolve("n9")) }));
+vi.mock("@/fleet/terminals", () => ({ addTerminal: vi.fn(() => Promise.resolve("n9")), removeNodes: vi.fn() }));
 vi.mock("@/fleet/broadcast", () => ({ pauseAgents: vi.fn(() => Promise.resolve(1)) }));
 vi.mock("@/canvas/arrive", () => ({ showNode: vi.fn() }));
 vi.mock("./ready", () => ({ whenReady: vi.fn(() => Promise.resolve(true)) }));
@@ -73,6 +74,7 @@ beforeEach(() => {
   vi.mocked(launchGroup).mockResolvedValue({ frameId: "f1", nodeIds: ["n1"] });
   for (const id of ["chef", "isis", "n1"]) terminalStatusStore.getState().set(id, { state: "running" });
   workspacesStore.setState({ activeId: "w1" });
+  canvasStore.setState({ frames: [], links: {} });
 });
 
 it("writes an agent's sub-task on one line, with its budget, branch and duties (spec §7.3)", () => {
@@ -249,6 +251,129 @@ describe("launchMission (spec §7.3)", () => {
     await launchMission("chef");
     await vi.waitFor(() => expect(notify).toHaveBeenCalledWith("chef", expect.stringContaining("n'a pas démarré")));
     expect(vi.mocked(ptySendText).mock.calls.some(([id]) => id === "n1")).toBe(false);
+  });
+});
+
+describe("a new agent in a chosen group (spec groupes spécialisés §4)", () => {
+  const front = { id: "g1", name: "Interface", x: 100, y: 100, width: 200, height: 100, memberIds: [], group: { role: "frontend" as const, pantheon: "norse", speciality: "Frontend" } };
+  const inFront = { ...plan[1], group: { id: "g1", name: "Interface" } };
+
+  beforeEach(() => {
+    canvasStore.setState({ frames: [front], links: { chef: { groupIds: ["g1"], nodeIds: [] } } });
+    terminalStatusStore.getState().set("n9", { state: "running" });
+  });
+
+  it("joins the group with a name of its pantheon, in its worktree, and gets its sub-task", async () => {
+    await setup({ router: true, plan: [{ ...inFront, level: "faible" }] });
+    await launchMission("chef");
+    const mission = missionNow();
+    const joined = mission.members[0];
+    expect(launchGroup).not.toHaveBeenCalled();
+    expect(joined).toMatchObject({ nodeId: "n9", name: nextName("norse", ["Isis"]), linked: false, group: "g1" });
+    expect(addTerminal).toHaveBeenCalledWith("w1", expect.objectContaining({ name: joined.name, cwd: joined.worktree, agent: "claude", model: "claude-haiku-5-5" }), { x: 200, y: 150 }, "g1");
+    expect(mission.frameId).toBeUndefined();
+    expect(showGroups).toHaveBeenCalledWith(["g1"]);
+    await vi.waitFor(() => expect(ptySendText).toHaveBeenCalledWith("n9", expect.stringContaining("API")));
+  });
+
+  it("leaves the others in the mission's group and frames both, each name unique", async () => {
+    await setup({ plan: [plan[0], plan[1], inFront, { ...inFront, title: "Style" }] });
+    vi.mocked(addTerminal).mockResolvedValueOnce("n9").mockResolvedValueOnce("n8");
+    terminalStatusStore.getState().set("n8", { state: "running" });
+    await launchMission("chef");
+    expect(launchGroup).toHaveBeenCalledWith(expect.objectContaining({ agents: ["claude"] }), expect.anything(), undefined, expect.anything());
+    expect(missionNow().members.map((m) => m.nodeId)).toEqual(["isis", "n1", "n9", "n8"]);
+    expect(new Set(missionNow().members.map((m) => m.name)).size).toBe(4);
+    expect(showGroups).toHaveBeenCalledWith(["g1", "f1"]);
+    expect(missionNow().frameId).toBe("f1");
+  });
+
+  it("frames nothing more when nobody joins a group, as before", async () => {
+    await setup();
+    await launchMission("chef");
+    expect(addTerminal).not.toHaveBeenCalled();
+    expect(showGroups).not.toHaveBeenCalled();
+  });
+
+  it("does not start when the group is no longer linked, before any git work", async () => {
+    await setup({ plan: [inFront] });
+    canvasStore.setState({ links: {} });
+    await launchMission("chef");
+    expect(missionNow()).toMatchObject({ state: "plan", error: "Le groupe Interface n'est plus relié à l'orchestrateur." });
+    expect(missionPrepare).not.toHaveBeenCalled();
+  });
+
+  it("does not start when the group goes during the git work, and takes the worktrees back", async () => {
+    await setup({ plan: [inFront] });
+    vi.mocked(missionPrepare).mockImplementationOnce(async () => {
+      canvasStore.setState({ frames: [] });
+      return tree("auth");
+    });
+    await launchMission("chef");
+    expect(missionNow()).toMatchObject({ state: "plan", error: "Le groupe Interface n'est plus relié à l'orchestrateur." });
+    expect(addTerminal).not.toHaveBeenCalled();
+    expect(missionDiscard).toHaveBeenCalled();
+  });
+
+  it("does not start when the group goes while the mission's group is made: no member without a terminal (final review)", async () => {
+    await setup({ plan: [plan[1], inFront] });
+    vi.mocked(launchGroup).mockImplementationOnce(async () => {
+      canvasStore.setState({ frames: [] });
+      return { frameId: "f1", nodeIds: ["n1"] };
+    });
+    await launchMission("chef");
+    expect(missionNow()).toMatchObject({ state: "plan", error: "Le groupe Interface n'est plus relié à l'orchestrateur.", members: [] });
+    expect(closeGroup).toHaveBeenCalledWith("f1");
+    expect(missionDiscard).toHaveBeenCalled();
+  });
+
+  it("takes back what it created when an agent cannot join, so no terminal sits in a removed worktree", async () => {
+    await setup({ plan: [plan[1], inFront, { ...inFront, title: "Style" }] });
+    vi.mocked(addTerminal).mockResolvedValueOnce("n9").mockResolvedValueOnce(null);
+    await launchMission("chef");
+    expect(missionNow().state).toBe("plan");
+    expect(closeGroup).toHaveBeenCalledWith("f1");
+    expect(removeNodes).toHaveBeenCalledWith(["n9"]);
+    expect(missionDiscard).toHaveBeenCalled();
+    expect(relaunchTerminal).not.toHaveBeenCalled();
+  });
+
+  it("closes it at the end, the group and its own agents staying", async () => {
+    await setup({ state: "en_cours", project: "C:/code/proj", members: [member("n9", "Thor", false, { group: "g1" })] });
+    endMission("chef", "Fini.");
+    expect(removeNodes).toHaveBeenCalledWith(["n9"]);
+    expect(closeGroup).not.toHaveBeenCalled();
+  });
+
+  it("closes both kinds at the end of a mixed team", async () => {
+    await setup({ state: "en_cours", project: "C:/code/proj", frameId: "f1", members: [member("n1", "Horus", false), member("n9", "Thor", false, { group: "g1" })] });
+    endMission("chef", "Fini.");
+    expect(closeGroup).toHaveBeenCalledWith("f1");
+    expect(removeNodes).toHaveBeenCalledWith(["n9"]);
+  });
+
+  it("only stops it when the mission ends away from its workspace", async () => {
+    await setup({ state: "en_cours", project: "C:/code/proj", members: [member("n9", "Thor", false, { group: "g1" })] });
+    workspacesStore.setState({ activeId: "w2" });
+    endMission("chef", "Fini.");
+    expect(removeNodes).not.toHaveBeenCalled();
+    expect(stopTerminal).toHaveBeenCalledWith("n9");
+  });
+
+  it("sends a new agent taking over its sub-task to the same group, else the mission's", async () => {
+    const running = { state: "en_cours" as const, project: "C:/code/proj", slug: "auth", plan: [{ ...inFront, title: "t" }], members: [member("n7", "Thor", false, { group: "g1" })] };
+    await setup(running);
+    await reassignTask("chef", "n7", "nouveau");
+    expect(addTerminal).toHaveBeenCalledWith("w1", expect.anything(), { x: 200, y: 150 }, "g1");
+    expect(missionNow().members.find((m) => m.nodeId === "n9")).toMatchObject({ group: "g1" });
+
+    nodesStore.setState({ nodes: {} });
+    await setup({ ...running, frameId: "m1" });
+    canvasStore.setState({ frames: [{ ...front, id: "m1" }] });
+    vi.mocked(addTerminal).mockClear();
+    await reassignTask("chef", "n7", "nouveau");
+    expect(addTerminal).toHaveBeenCalledWith("w1", expect.anything(), { x: 200, y: 150 }, "m1");
+    expect(missionNow().members.find((m) => m.nodeId === "n9")?.group).toBeUndefined();
   });
 });
 

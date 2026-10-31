@@ -9,7 +9,9 @@ import {
   groupOf,
   groupPantheons,
   insertIntoFrame,
+  MAX_SPECIALITY,
   nextGroupName,
+  withGroupSpeciality,
 } from "./groups";
 
 const element = (fields: Record<string, unknown>) =>
@@ -88,6 +90,21 @@ describe("group frame elements", () => {
     const created = createGroupFrame({ x: 1, y: 2, width: 3, height: 4 }, "Backend", { role: "backend", pantheon: "greek" });
     expect(created).toMatchObject({ type: "frame", name: "Backend", x: 1, y: 2, width: 3, height: 4, isDeleted: false, frameId: null });
     expect(groupInfoOf(created)).toEqual({ role: "backend", pantheon: "greek" });
+  });
+
+  it("reads a group's speciality, tidied; without one the group is as before", () => {
+    const withSpeciality = (speciality: unknown) => groupInfoOf(frame("g", { customData: { openvibe: { kind: "group", role: "backend", pantheon: "greek", speciality } } }));
+    expect(withSpeciality("  API\n et  bases ")).toEqual({ role: "backend", pantheon: "greek", speciality: "API et bases" });
+    expect(withSpeciality("x".repeat(60))?.speciality).toHaveLength(MAX_SPECIALITY);
+    for (const none of ["", "   ", 12, null, undefined]) expect(withSpeciality(none)).toEqual({ role: "backend", pantheon: "greek" });
+  });
+
+  it("creates a frame with its speciality, and sets or clears it keeping the rest of its data", () => {
+    const created = createGroupFrame({ x: 0, y: 0, width: 1, height: 1 }, "Backend", { role: "backend", pantheon: "greek", speciality: "API" });
+    expect(groupInfoOf(created)?.speciality).toBe("API");
+    const data = { other: 1, openvibe: { kind: "group", role: "backend", pantheon: "greek", speciality: "API" } };
+    expect(withGroupSpeciality(data, " Tests ")).toEqual({ other: 1, openvibe: { kind: "group", role: "backend", pantheon: "greek", speciality: "Tests" } });
+    expect(withGroupSpeciality(data, "  ")).toEqual({ other: 1, openvibe: { kind: "group", role: "backend", pantheon: "greek" } });
   });
 
   it("puts a new child right under its frame, which takes its grown size", () => {

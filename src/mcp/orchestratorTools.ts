@@ -5,7 +5,7 @@ import { ptySendText } from "@/ipc/pty";
 import { endMission, mergeMission, reassignTask } from "@/mission/launch";
 import { budgetOf, memberTime, NEW_AGENT, oneLine, proposedPlan, remainingGlobal, sameName, spentMin, type Member, type Mission } from "@/mission/mission";
 import { LEVELS, modelLabel } from "@/mission/router";
-import { agentState, linkedClaudeAgents, missionOf, orchestratorShown, setMission, updateMember } from "@/mission/store";
+import { agentGroup, agentState, linkedClaudeAgents, linkedGroups, missionOf, orchestratorShown, setMission, updateMember } from "@/mission/store";
 import { terminalText } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore, terminalOf } from "@/store/nodes";
@@ -39,6 +39,7 @@ export function orchestratorTools() {
                 title: { type: "string", maxLength: 60 },
                 brief: { type: "string" },
                 agent: { type: "string", description: d.planAgent },
+                group: { type: "string", description: d.planGroup },
                 budget_min: { type: "integer", minimum: 1 },
                 level: { type: "string", enum: ["low", "medium", "high", "extreme"], description: d.planLevel },
               },
@@ -118,6 +119,7 @@ function describeMission(orchestratorId: string, mission: Mission): ToolResult {
         title: s.title,
         brief: s.brief,
         agent: outAgent(s.agent),
+        group: s.group?.name ?? null,
         budget_min: s.budgetMin,
         level: s.level ? outLevel(s.level) : null,
         // Once an agent holds the sub-task, its own model counts: reassign may have given it to one that keeps its own.
@@ -126,8 +128,9 @@ function describeMission(orchestratorId: string, mission: Mission): ToolResult {
     linked_agents: orchestratorShown(orchestratorId)
       ? linkedClaudeAgents(orchestratorId)
           .filter((a) => !team.has(a.nodeId))
-          .map((a) => ({ name: a.name, state: outAgentState(agentState(a.nodeId)) }))
+          .map((a) => ({ name: a.name, state: outAgentState(agentState(a.nodeId)), ...agentGroup(a.nodeId) }))
       : null,
+    linked_groups: orchestratorShown(orchestratorId) ? linkedGroups(orchestratorId).map(({ name, speciality }) => ({ name, speciality })) : null,
     linked_agents_note: orchestratorShown(orchestratorId) ? null : t().orchestrator.hiddenAgents,
     left_min: remainingGlobal(mission) ?? null,
     elapsed_min: mission.state === "en_cours" && mission.startedAt !== undefined ? Math.floor((Date.now() - mission.startedAt) / 60_000) : null,
@@ -138,9 +141,10 @@ function describeMission(orchestratorId: string, mission: Mission): ToolResult {
 function proposePlan(orchestratorId: string, mission: Mission, args: Record<string, unknown>): ToolResult {
   if (mission.state === "lancement" || mission.state === "en_cours") return refused(t().orchestrator.running);
   if (mission.state === "terminee") return refused(t().orchestrator.finished);
-  const named = Array.isArray(args.sous_taches) && args.sous_taches.some((s) => !sameName(String((s as Record<string, unknown> | null)?.agent ?? ""), NEW_AGENT));
+  const onCanvas = (s: Record<string, unknown> | null) => !sameName(String(s?.agent ?? ""), NEW_AGENT) || Boolean(s?.groupe);
+  const named = Array.isArray(args.sous_taches) && args.sous_taches.some((s) => onCanvas(s as Record<string, unknown> | null));
   if (named && !orchestratorShown(orchestratorId)) return refused(t().orchestrator.hiddenWorkspace);
-  const result = proposedPlan(args, mission, linkedClaudeAgents(orchestratorId).map((a) => a.name));
+  const result = proposedPlan(args, mission, linkedClaudeAgents(orchestratorId).map((a) => a.name), linkedGroups(orchestratorId));
   if (typeof result === "string") return refused(result);
   setMission(orchestratorId, { state: "plan", ...result, error: undefined });
   return said(t().orchestrator.proposed(result.plan.length));
@@ -148,13 +152,16 @@ function proposePlan(orchestratorId: string, mission: Mission, args: Record<stri
 
 const timeText = (spent: number | undefined, budget: number) => (spent === undefined ? `? / ${budget} min` : `${Math.floor(spent)} / ${budget} min`);
 
-function describeTeam(mission: Mission): ToolResult {
+function describeTeam(orchestratorId: string, mission: Mission): ToolResult {
   if (!formed(mission)) return refused(t().orchestrator.notFormed);
   const nodes = nodesStore.getState().nodes;
   const now = Date.now();
+  // Groups live on the canvas: out of sight they are unknown, which null would not say.
+  const shown = orchestratorShown(orchestratorId);
   return json(
     mission.members.map((m) => ({
       name: m.name,
+      ...(shown ? agentGroup(m.nodeId) : {}),
       subtask: m.task,
       state: outAgentState(agentState(m.nodeId)),
       steps: terminalOf(nodes[m.nodeId])?.steps?.map((s) => `${s.title}: ${outStep(s.state)}`) ?? [],
@@ -293,7 +300,7 @@ export async function orchestratorTool(orchestratorId: string, name: string, arg
     case "proposer_plan":
       return proposePlan(orchestratorId, mission, args);
     case "equipe":
-      return describeTeam(mission);
+      return describeTeam(orchestratorId, mission);
     case "lire_sortie":
       return readOutput(mission, args);
     case "ecrire":
