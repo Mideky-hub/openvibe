@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { onAction, sendNotification, type ActionPerformed } from "@tauri-apps/plugin-notification";
+import { nativeNotificationsStore } from "@/app/nativeNotifications";
 import { goToAgent } from "@/commands/goToRun";
 import { langStore } from "@/i18n";
 import { agentActivityStore } from "@/store/agentActivity";
@@ -34,6 +35,7 @@ async function click(nodeId: unknown, actionId = "tap") {
 beforeEach(() => {
   vi.clearAllMocks();
   win.isFocused.mockResolvedValue(false);
+  nativeNotificationsStore.setState({ enabled: true });
   vi.mocked(onAction).mockResolvedValue({ unregister } as never);
   projectsStore.setState({ view: "project" });
   workspacesStore.setState({ workspaces: [{ id: "w1", projectId: "p1", name: "Workspace 1", position: 0, pantheon: null }] });
@@ -71,6 +73,15 @@ describe("the Windows notification (spec notification §8)", () => {
     apply("isis", "waiting");
     await settled();
     expect(sendNotification).not.toHaveBeenCalled();
+  });
+
+  it("stays silent when the setting is off, and a click still comes back (spec notification §11)", async () => {
+    nativeNotificationsStore.setState({ enabled: false });
+    apply("isis", "waiting");
+    await settled();
+    expect(sendNotification).not.toHaveBeenCalled();
+    await click("isis");
+    expect(goToAgent).toHaveBeenCalledWith(expect.objectContaining({ id: "isis" }));
   });
 
   it("tells once per wait, not for every change around it", async () => {

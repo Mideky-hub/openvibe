@@ -20,6 +20,7 @@ import { saveBeforeClose } from "./close";
 import { forgetWorkspaces } from "./forget";
 import { loadLanguage } from "@/i18n/settings";
 import { loadThemeSettings } from "./theme";
+import { loadNativeNotifications } from "./nativeNotifications";
 import { loadUpdateSettings, startUpdateChecks } from "./updates";
 import { syncWindowTitle } from "./windowTitle";
 
@@ -35,6 +36,7 @@ export function boot(): Promise<void> {
     await loadLanguage();
     await loadThemeSettings();
     await loadUpdateSettings();
+    await loadNativeNotifications();
     await loadAgentsPanel();
     await onPtyExit(({ nodeId, exitCode }) => {
       forgetLivePty(nodeId);

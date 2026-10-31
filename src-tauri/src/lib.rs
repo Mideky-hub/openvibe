@@ -23,11 +23,29 @@ use pty::PtyManager;
 /// Spec §5.6: changed scrollbacks are written to SQLite every 10 s.
 const SCROLLBACK_FLUSH_INTERVAL: Duration = Duration::from_secs(10);
 
+/// A second launch comes back to the running window. It may be a click on a
+/// notification already in the Action Center: Windows starts the app again,
+/// without saying which notification.
+fn focus_main_window(app: &AppHandle) {
+    log::info!("second launch: back to the running window");
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    if let Err(error) = window.unminimize().and_then(|()| window.set_focus()) {
+        log::warn!("the running window did not come back: {error}");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     logging::install_panic_hook();
     let app = tauri::Builder::default()
-        // First: the other plugins and the setup can already write to the log.
+        // Before everything: a second launch must exit before it touches the
+        // log or the database, which two instances would corrupt.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            focus_main_window(app)
+        }))
+        // Next: the other plugins and the setup can already write to the log.
         .plugin(logging::plugin())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
