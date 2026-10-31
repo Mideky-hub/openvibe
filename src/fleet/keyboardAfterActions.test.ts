@@ -13,7 +13,8 @@ vi.mock("@/nodes/terminal/registry", () => ({ markForAutostart: vi.fn() }));
 vi.mock("@/canvas/keyboardFocus", () => ({ returnKeyboardToCanvas: vi.fn() }));
 
 beforeEach(() => {
-  mockIPC(() => undefined);
+  // The agent list is awaited before a group of four: it must answer a list.
+  mockIPC((cmd) => (cmd === "list_agents" || cmd === "list_shells" ? [] : undefined));
   vi.mocked(returnKeyboardToCanvas).mockClear();
   canvasStore.setState({
     api: {
@@ -32,6 +33,6 @@ it("gives Excalidraw its keyboard back after Dégrouper, Fermer le groupe and La
   expect(returnKeyboardToCanvas).toHaveBeenCalledTimes(1);
   closeGroup("g");
   expect(returnKeyboardToCanvas).toHaveBeenCalledTimes(2);
-  launchFour();
+  await launchFour();
   expect(returnKeyboardToCanvas).toHaveBeenCalledTimes(3);
 });
