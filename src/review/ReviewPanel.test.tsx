@@ -82,9 +82,9 @@ it("takes remarks on lines and sends them to the agent in one message", async ()
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await act(async () => field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
-  expect(reviewStore.getState().remarks).toEqual([{ file: "src/a.ts", line: 2, text: "Pourquoi 3 ?" }]);
+  expect(reviewStore.getState().remarks).toEqual([{ file: "src/a.ts", line: 2, lineText: "const y = 3;", text: "Pourquoi 3 ?" }]);
   await act(async () => button("Envoyer à Isis").click());
-  expect(sendToAgents).toHaveBeenCalledWith(["isis"], expect.stringContaining("- src/a.ts:2 — Pourquoi 3 ?"));
+  expect(sendToAgents).toHaveBeenCalledWith(["isis"], expect.stringContaining("- src/a.ts:2 `const y = 3;` — Pourquoi 3 ?"));
   await vi.waitFor(() => expect(reviewStore.getState().remarks).toEqual([]));
 });
 
@@ -133,4 +133,20 @@ it("shows the review in English", async () => {
   expect(button("Send to Isis")).toBeDefined();
   await act(async () => button("Send to Isis").click());
   expect(toast).toHaveBeenCalledWith("Review sent to Isis");
+});
+
+it("keeps the file read and the remark being typed through Refresh and a click on another line (backlog 27 oct)", async () => {
+  await vi.waitFor(() => expect(host.querySelectorAll("[data-diff-line]").length).toBe(4));
+  await act(async () => (host.querySelector('[data-diff-line="add"]') as HTMLElement).click());
+  const field = () => host.querySelector<HTMLInputElement>('[aria-label="Remarque sur cette ligne"]')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field(), "à moitié");
+    field().dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => (host.querySelector('[data-diff-line="ctx"]') as HTMLElement).click());
+  expect(field().value).toBe("à moitié");
+  await act(async () => button("Rafraîchir").click());
+  await vi.waitFor(() => expect(calls.filter((c) => c.cmd === "review_changes").length).toBe(2));
+  expect(host.querySelectorAll("[data-diff-line]").length).toBe(4);
+  expect(field().value).toBe("à moitié");
 });
