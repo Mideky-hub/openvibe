@@ -18,7 +18,7 @@ import { outReport } from "@/mcp/protocol";
 import { nodesStore, sessionOf, terminalOf } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { notify } from "./events";
-import { NEW_AGENT, NEW_MISSION, oneLine, sameName, type Member, type Mission, type SubTask } from "./mission";
+import { NEW_AGENT, NEW_MISSION, oneLine, pastTask, sameName, type Member, type Mission, type SubTask } from "./mission";
 import { whenReady } from "./ready";
 import { modelFor } from "./router";
 import { linkedClaudeAgents, linkedGroups, missionOf, orchestratorShown, setMission, updateMember } from "./store";
@@ -186,7 +186,7 @@ export async function launchMission(orchestratorId: string): Promise<void> {
   const session = sessionOf(record);
   if (!record || !mission || !session || mission.state !== "plan" || !mission.plan?.length) return;
   // The router was turned on after the plan: without levels, every agent would get Claude's default model (final review maj §3).
-  if (mission.router && mission.plan.some((task) => !task.level)) {
+  if (mission.router && [...mission.plan, ...(mission.queue ?? [])].some((task) => !task.level)) {
     const error = t().lines.levelsMissing;
     setMission(orchestratorId, { error });
     notify(orchestratorId, t().lines.proposeLevels(error));
@@ -227,19 +227,32 @@ export function endMission(orchestratorId: string, summary: string) {
   for (const member of mission.members) if (!member.linked) stopTerminal(member.nodeId);
 }
 
+/** The merges under way, by mission worktree: git merges one branch at a time there. */
+const merging = new Map<string, Promise<unknown>>();
+
+function oneMergeAtATime<T>(worktree: string, merge: () => Promise<T>): Promise<T> {
+  const turn = (merging.get(worktree) ?? Promise.resolve()).then(merge, merge);
+  merging.set(worktree, turn.catch(() => undefined));
+  return turn;
+}
+
 /** Merges one member's branch into the mission's: what to say of it, and whether its branch is in. */
-export async function mergeMember(orchestratorId: string, worktree: string, member: Member): Promise<{ line: string; merged: boolean; uncommitted: boolean }> {
+export function mergeMember(orchestratorId: string, worktree: string, member: Member): Promise<{ line: string; merged: boolean; uncommitted: boolean }> {
   const m = t().merge;
-  try {
-    const { merge, uncommitted } = await missionMerge(worktree, member.worktree, member.branch);
-    const note = uncommitted ? m.uncommitted : "";
-    if (merge.kind === "conflict") return { line: m.conflict(member.name, merge.files.join(", "), note), merged: false, uncommitted };
-    const said = merge.kind === "merged" ? m.merged : member.merged ? m.already : m.empty;
-    updateMember(orchestratorId, member.nodeId, { merged: true });
-    return { line: m.line(member.name, said, note), merged: true, uncommitted };
-  } catch (error) {
-    return { line: m.failed(member.name, errorText(error)), merged: false, uncommitted: false };
-  }
+  return oneMergeAtATime(worktree, async () => {
+    try {
+      const { merge, uncommitted } = await missionMerge(worktree, member.worktree, member.branch);
+      const note = uncommitted ? m.uncommitted : "";
+      if (merge.kind === "conflict") return { line: m.conflict(member.name, merge.files.join(", "), note), merged: false, uncommitted };
+      const said = merge.kind === "merged" ? m.merged : member.merged ? m.already : m.empty;
+      // It may have taken another task meanwhile: that one is not merged.
+      const now = missionOf(nodesStore.getState().nodes[orchestratorId])?.members.find((other) => other.nodeId === member.nodeId);
+      if (now?.task === member.task && now.report?.at === member.report?.at) updateMember(orchestratorId, member.nodeId, { merged: true });
+      return { line: m.line(member.name, said, note), merged: true, uncommitted };
+    } catch (error) {
+      return { line: m.failed(member.name, errorText(error)), merged: false, uncommitted: false };
+    }
+  });
 }
 
 /** `merge` (spec §7.6): the branches of the agents done since the last merge. */
@@ -361,6 +374,7 @@ export async function reassignTask(orchestratorId: string, fromNodeId: string, t
       sentAt: undefined,
       merged: undefined,
       done: finished ? [...(found.done ?? []), found.task] : found.done,
+      past: [...(found.past ?? []), pastTask(found, found.report)],
     };
   }
   const latest = missionOf(nodesStore.getState().nodes[orchestratorId]) ?? mission;

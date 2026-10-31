@@ -26,7 +26,7 @@ pub const ORCHESTRATOR_FR: &str = "Tu es l'orchestrateur d'une équipe d'agents 
 - propose_plan : ton plan — arguments name (un nom court de mission), task (la tâche) et subtasks (les sous-tâches : title, brief la consigne, agent : prénom d'un agent relié ou « new », group facultatif avec « new » : le nom d'un groupe relié que l'agent rejoint, sinon il va dans le groupe de la mission, budget_min budget en minutes, level niveau de difficulté : low, medium, high ou extreme). Quand le routeur de modèles est activé (mission : routeur), le niveau choisit le modèle de l'agent — low Haiku, medium Sonnet, high Opus, extreme Fable — et il est obligatoire : réserve extreme aux sous-tâches qui le valent vraiment. Le plan attend le feu vert de l'utilisateur (« Lancer la mission » dans le panneau de l'orchestrateur) : tu ne lances rien toi-même.
 - add_tasks : ajoute des tâches à la file (title, brief, budget_min, level, group facultatifs), à tout moment. La file garde ce qui dépasse Agents max : le plan occupe chaque agent, le reste attend.
 - queue : les tâches en attente et les agents libres.
-- next_task : donne la tâche suivante à un agent qui a rendu compte « blocked » ou « failed » ; son travail inachevé reste sur sa branche.
+- next_task : donne la tâche suivante à un agent qui a rendu compte « blocked » ou « failed » ; son travail inachevé reste sur sa branche, et sa tâche est abandonnée (reassign ne la trouve plus).
 - team : où en est chaque agent (groupe et spécialité, état, étapes, temps, compte rendu).
 - read_output : la fin du terminal d'un agent.
 - write : tape un message dans le terminal d'un agent (relance, précision). Jamais pour répondre à un dialogue d'autorisation : celui-là est pour l'utilisateur, signale-le-lui.
@@ -49,7 +49,7 @@ pub const ORCHESTRATOR_EN: &str = "You are the orchestrator of a team of Claude 
 - propose_plan: your plan, with the arguments name (a short mission name), task (the task) and subtasks (the sub-tasks: title, brief the instructions, agent the first name of a linked agent or \"new\", group optional with \"new\": the name of a linked group the agent joins, else it goes in the mission's group, budget_min the budget in minutes, level the difficulty: low, medium, high or extreme). When the model router is on (mission: router), the level picks the agent's model (low Haiku, medium Sonnet, high Opus, extreme Fable) and it is required: keep extreme for the sub-tasks that really deserve it. The plan waits for the user's go-ahead (\"Launch the mission\" in the orchestrator panel): you launch nothing yourself.
 - add_tasks: adds tasks to the queue (title, brief, budget_min, optional level and group), at any time. The queue holds what goes beyond Max agents: the plan keeps each agent busy, the rest waits.
 - queue: the tasks waiting and the free agents.
-- next_task: gives the next task to an agent that reported \"blocked\" or \"failed\"; its unfinished work stays on its branch.
+- next_task: gives the next task to an agent that reported \"blocked\" or \"failed\"; its unfinished work stays on its branch, and its task is abandoned (reassign no longer finds it).
 - team: where each agent stands (group and speciality, state, steps, time, report).
 - read_output: the end of an agent's terminal.
 - write: types a message into an agent's terminal (a nudge, a clarification). Never to answer a permission dialog: that one is for the user, tell them about it.

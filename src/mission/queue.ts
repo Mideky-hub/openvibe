@@ -4,7 +4,7 @@ import { nodesStore } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { notify } from "./events";
 import { assign, mergeMember, restartIn } from "./launch";
-import { oneLine, spentMin, windingDown, type Member, type Mission, type PastTask, type QueuedTask, type SubTask } from "./mission";
+import { oneLine, pastTask, windingDown, type Member, type Mission, type QueuedTask, type SubTask } from "./mission";
 import { modelFor } from "./router";
 import { agentState, isOrchestratorClosed, memberGroupId, missionOf, setMission } from "./store";
 
@@ -16,6 +16,8 @@ const TURN_POLL_MS = 1000;
 
 /** Members being moved on, each one once: two reports must not give two tasks. */
 const moving = new Set<string>();
+/** What the orchestrator last heard of its idle team, by mission: told once. */
+const idleTold = new Map<string, string>();
 
 const missionNow = (orchestratorId: string) => missionOf(nodesStore.getState().nodes[orchestratorId]);
 const memberNow = (orchestratorId: string, nodeId: string) => missionNow(orchestratorId)?.members.find((m) => m.nodeId === nodeId && !m.handedTo);
@@ -31,18 +33,6 @@ export function freeMembers(mission: Mission): Member[] {
   return mission.members.filter((m) => !m.handedTo && m.report?.status === "termine" && isRunning(m.nodeId));
 }
 
-function pastTask(member: Member, report: NonNullable<Member["report"]>): PastTask {
-  return {
-    task: member.task,
-    status: report.status,
-    summary: report.summary,
-    merged: member.merged === true,
-    spentMin: spentMin(member, report.at),
-    budgetMin: member.budgetMin,
-    branch: member.branch,
-  };
-}
-
 async function turnEnded(nodeId: string) {
   for (let waited = 0; waited < TURN_END_MS && agentState(nodeId) === "travaille"; waited += TURN_POLL_MS) {
     await new Promise((resolve) => setTimeout(resolve, TURN_POLL_MS));
@@ -50,9 +40,7 @@ async function turnEnded(nodeId: string) {
 }
 
 /** The member takes `task`: out of the queue and into the plan, where `reassign` and `mission` find it. */
-function take(orchestratorId: string, mission: Mission, member: Member, task: QueuedTask) {
-  const report = member.report;
-  if (!report) return;
+function take(orchestratorId: string, mission: Mission, member: Member, report: NonNullable<Member["report"]>, task: QueuedTask): string {
   const subTask: SubTask = { ...task, agent: member.name };
   const model = modelFor(mission, subTask);
   const finished = report.status === "termine";
@@ -82,34 +70,41 @@ function take(orchestratorId: string, mission: Mission, member: Member, task: Qu
   return t().lines.taken(member.name, task.title, queue.length);
 }
 
+/** The mission and member as they stand, if the member can still move on from this report. */
+function stillMovable(orchestratorId: string, nodeId: string, report: NonNullable<Member["report"]>) {
+  const mission = missionNow(orchestratorId);
+  const member = memberNow(orchestratorId, nodeId);
+  if (!mission || !member || mission.state !== "en_cours" || windingDown(mission, Date.now()) || !isRunning(nodeId)) return null;
+  if (member.report?.at !== report.at || member.report.status !== report.status) return null;
+  const task = nextFor(mission, member);
+  return task ? { mission, member, task } : null;
+}
+
 /**
  * Moves a member that reported on to the queue's next task: its work merged
  * first when it is done, as for `reassign` (final review H3). What to say, if
- * anything; the mission is read again after each wait, it may have moved on.
+ * anything. Each wait may change everything: all is read again after it.
  */
-async function moveOn(orchestratorId: string, nodeId: string, mergeFirst: boolean): Promise<string | undefined> {
-  const before = missionNow(orchestratorId);
-  const member = memberNow(orchestratorId, nodeId);
-  if (!before || !member?.report || before.state !== "en_cours" || windingDown(before, Date.now()) || !isRunning(nodeId)) return undefined;
-  if (!nextFor(before, member)) return undefined;
+async function moveOn(orchestratorId: string, nodeId: string): Promise<string | undefined> {
+  const report = memberNow(orchestratorId, nodeId)?.report;
+  if (!report || !stillMovable(orchestratorId, nodeId, report)) return undefined;
   await turnEnded(nodeId);
-  if (mergeFirst && before.worktree) {
-    const { line, merged, uncommitted } = await mergeMember(orchestratorId, before.worktree, member);
+  const ready = stillMovable(orchestratorId, nodeId, report);
+  if (!ready) return undefined;
+  if (report.status === "termine" && ready.mission.worktree) {
+    const { line, merged, uncommitted } = await mergeMember(orchestratorId, ready.mission.worktree, ready.member);
     if (!merged || uncommitted) notify(orchestratorId, line);
     if (!merged) return undefined;
   }
-  const mission = missionNow(orchestratorId);
-  const latest = memberNow(orchestratorId, nodeId);
-  const task = mission && latest && nextFor(mission, latest);
-  if (!mission || !latest?.report || !task || mission.state !== "en_cours") return undefined;
-  return take(orchestratorId, mission, latest, task);
+  const merged = stillMovable(orchestratorId, nodeId, report);
+  return merged ? take(orchestratorId, merged.mission, merged.member, report, merged.task) : undefined;
 }
 
-async function moveOnce(orchestratorId: string, nodeId: string, mergeFirst: boolean): Promise<string | undefined> {
+async function moveOnce(orchestratorId: string, nodeId: string): Promise<string | undefined> {
   if (moving.has(nodeId)) return undefined;
   moving.add(nodeId);
   try {
-    return await moveOn(orchestratorId, nodeId, mergeFirst);
+    return await moveOn(orchestratorId, nodeId);
   } finally {
     moving.delete(nodeId);
   }
@@ -121,33 +116,42 @@ export async function pumpQueue(orchestratorId: string): Promise<void> {
   if (!mission?.queue?.length) return;
   await Promise.all(
     freeMembers(mission).map(async (member) => {
-      const said = await moveOnce(orchestratorId, member.nodeId, true);
+      const said = await moveOnce(orchestratorId, member.nodeId);
       if (said) notify(orchestratorId, said);
     }),
   );
 }
 
-/** Nobody is left working: the orchestrator hears why nothing moves any more. */
+/** Nobody is left working: the orchestrator hears once why nothing moves any more. */
 function tellIfIdle(orchestratorId: string) {
   const mission = missionNow(orchestratorId);
-  if (!mission?.queue || mission.members.some((m) => !m.handedTo && !m.report)) return;
-  const waiting = mission.queue.length;
-  notify(orchestratorId, waiting === 0 ? t().lines.queueEmpty : t().lines.queueStuck(waiting));
+  if (mission?.state !== "en_cours" || !mission.queue) return;
+  const team = mission.members.filter((m) => !m.handedTo);
+  if (team.some((m) => !m.report || moving.has(m.nodeId))) return;
+  const line = mission.queue.length === 0 ? t().lines.queueEmpty : t().lines.queueStuck(mission.queue.length);
+  const key = `${orchestratorId}:${mission.startedAt}`;
+  if (idleTold.get(key) === line) return;
+  idleTold.set(key, line);
+  notify(orchestratorId, line);
 }
 
 /** An agent reported: « done » moves it on, the rest is the orchestrator's to decide (spec mission de nuit §4.3). */
 export async function afterReport(orchestratorId: string, nodeId: string): Promise<void> {
   if (isOrchestratorClosed(orchestratorId)) return;
   if (memberNow(orchestratorId, nodeId)?.report?.status === "termine") {
-    const said = await moveOnce(orchestratorId, nodeId, true);
+    const said = await moveOnce(orchestratorId, nodeId);
     if (said) notify(orchestratorId, said);
   }
   tellIfIdle(orchestratorId);
 }
 
-/** `next_task`: an agent that reported takes the next task, what it did not finish staying on its branch. */
+/** `next_task`: an agent that reported takes the next task, what it did not finish staying on its branch and its task abandoned. */
 export async function giveNext(orchestratorId: string, member: Member): Promise<{ given: string } | { refused: string }> {
   if (!member.report) return { refused: t().reassign.notDone(member.name) };
-  const given = await moveOnce(orchestratorId, member.nodeId, member.report.status === "termine");
-  return given ? { given } : { refused: t().lines.nothingFor(member.name) };
+  const mission = missionNow(orchestratorId);
+  if (!isRunning(member.nodeId)) return { refused: t().orchestrator.stopped(member.name) };
+  if (mission && windingDown(mission, Date.now())) return { refused: t().lines.windingDown };
+  if (!mission || !nextFor(mission, member)) return { refused: t().lines.nothingFor(member.name) };
+  const given = await moveOnce(orchestratorId, member.nodeId);
+  return given ? { given } : { refused: t().lines.notMoved(member.name) };
 }

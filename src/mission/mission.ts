@@ -306,6 +306,19 @@ export function proposedPlan(
 
 const MINUTE = 60_000;
 
+/** What is kept of a task when its agent takes another (spec mission de nuit §6.2). */
+export function pastTask(member: Member, report: Report): PastTask {
+  return {
+    task: member.task,
+    status: report.status,
+    summary: report.summary,
+    merged: member.merged === true,
+    spentMin: spentMin(member, report.at),
+    budgetMin: member.budgetMin,
+    branch: member.branch,
+  };
+}
+
 /** A member's budget with its extensions. */
 export const budgetOf = (member: Member) => member.budgetMin + (member.extraMin ?? 0);
 

@@ -12,7 +12,7 @@ import { nodesStore, terminalOf } from "@/store/nodes";
 import { terminalStatusStore } from "@/store/terminalStatus";
 import { workspacesStore } from "@/store/workspaces";
 import { notify } from "./events";
-import { reassignTask } from "./launch";
+import { launchMission, mergeMember, reassignTask } from "./launch";
 import type { Member, Mission, QueuedTask } from "./mission";
 import { afterReport, giveNext, pumpQueue } from "./queue";
 import { missionOf } from "./store";
@@ -265,6 +265,126 @@ describe("who takes what", () => {
   });
 });
 
+describe("what the review of the queue found", () => {
+  const stuck = { summary: "Bloqué", status: "bloque" as const, at: 60_000 };
+
+  it("merges one branch at a time: two git merges in one worktree break each other", async () => {
+    await setup({ queue: [next, { ...next, title: "Docs" }], members: [member("isis", "Isis", { report: done }), member("horus", "Horus", { task: "Docs0", report: done })] });
+    let running = 0;
+    let most = 0;
+    vi.mocked(missionMerge).mockImplementation(async () => {
+      most = Math.max(most, ++running);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      running--;
+      return { merge: { kind: "merged" }, uncommitted: false };
+    });
+    await pumpQueue("chef");
+    expect(vi.mocked(missionMerge)).toHaveBeenCalledTimes(2);
+    expect(most).toBe(1);
+  });
+
+  it("goes on merging after a merge that failed", async () => {
+    await setup({ queue: [next, { ...next, title: "Docs" }], members: [member("isis", "Isis", { report: done }), member("horus", "Horus", { task: "Docs0", report: done })] });
+    vi.mocked(missionMerge).mockRejectedValueOnce(new Error("boom"));
+    await pumpQueue("chef");
+    expect(missionNow().members.map((m) => m.task)).toEqual(["Login", "API"]);
+  });
+
+  describe("while it waits for the end of a turn", () => {
+    const waitingTurn = async (mission: Partial<Mission>, meanwhile: () => void) => {
+      vi.useFakeTimers();
+      try {
+        await setup(mission);
+        agentActivityStore.setState({ activities: { isis: { activity: "working" } } as never });
+        const handed = afterReport("chef", "isis");
+        await vi.advanceTimersByTimeAsync(1000);
+        meanwhile();
+        agentActivityStore.setState({ activities: {} });
+        await vi.advanceTimersByTimeAsync(1100);
+        await handed;
+      } finally {
+        vi.useRealTimers();
+      }
+    };
+
+    it("merges nothing once the mission is finished", async () => {
+      await waitingTurn({}, () => nodesStore.getState().update("chef", { mission: { ...missionNow(), state: "terminee" } }));
+      expect(missionMerge).not.toHaveBeenCalled();
+      expect(lines()).toEqual([]);
+    });
+
+    it("does not move on an agent that reports « blocked » after all", async () => {
+      await waitingTurn({}, () => nodesStore.getState().update("chef", { mission: { ...missionNow(), members: [member("isis", "Isis", { report: { ...stuck, at: 700_000 } })] } }));
+      expect(missionMerge).not.toHaveBeenCalled();
+      expect(missionNow().members[0].task).toBe("Login");
+    });
+
+    it("revives no terminal stopped meanwhile", async () => {
+      await waitingTurn({}, () => terminalStatusStore.getState().set("isis", { state: "stopped" }));
+      expect(missionMerge).not.toHaveBeenCalled();
+      expect(relaunchTerminal).not.toHaveBeenCalled();
+    });
+
+    it("gives nothing once the night is winding down", async () => {
+      await waitingTurn({ overnight: true, budgetMin: 100, startedAt: Date.now() - 89 * 60_000 }, () => {
+        nodesStore.getState().update("chef", { mission: { ...missionNow(), startedAt: Date.now() - 95 * 60_000 } });
+      });
+      expect(relaunchTerminal).not.toHaveBeenCalled();
+    });
+  });
+
+  it("does not mark the new task merged when a merge ends after the agent moved on", async () => {
+    await setup({});
+    let release!: (report: { merge: { kind: "merged" }; uncommitted: boolean }) => void;
+    vi.mocked(missionMerge).mockReturnValueOnce(new Promise((resolve) => (release = resolve)));
+    const merging = mergeMember("chef", "C:/w/auth", missionNow().members[0]);
+    const moved = { ...missionNow().members[0], task: "API", report: undefined };
+    nodesStore.getState().update("chef", { mission: { ...missionNow(), members: [moved] } });
+    release({ merge: { kind: "merged" }, uncommitted: false });
+    await merging;
+    expect(missionNow().members[0].merged).toBeUndefined();
+  });
+
+  it("does not say the queue is stuck while an agent is still on its way to a task", async () => {
+    vi.useFakeTimers();
+    try {
+      await setup({ members: [member("isis", "Isis", { report: done }), member("horus", "Horus", { task: "Docs0", report: stuck })] });
+      agentActivityStore.setState({ activities: { isis: { activity: "working" } } as never });
+      const handed = afterReport("chef", "isis");
+      await afterReport("chef", "horus");
+      expect(lines()).toEqual([]);
+      agentActivityStore.setState({ activities: {} });
+      await vi.advanceTimersByTimeAsync(1100);
+      await handed;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("tells once that the queue is stuck, and says nothing after the mission's end", async () => {
+    await setup({ startedAt: 1, members: [member("isis", "Isis", { report: stuck })] });
+    await afterReport("chef", "isis");
+    await afterReport("chef", "isis");
+    expect(lines()).toHaveLength(1);
+    vi.mocked(notify).mockClear();
+    await nodesStore.getState().create("chef", { workspaceId: "w1", kind: "orchestrator", payload: { name: "Chef", session, mission: { ...missionNow(), startedAt: 2, state: "terminee" } } });
+    await afterReport("chef", "isis");
+    expect(lines()).toEqual([]);
+  });
+
+  it("says why next_task gave nothing", async () => {
+    await setup({ members: [member("isis", "Isis", { report: stuck })] });
+    terminalStatusStore.getState().set("isis", { state: "stopped" });
+    expect(await giveNext("chef", missionNow().members[0])).toEqual({ refused: "Isis est arrêté." });
+    terminalStatusStore.getState().set("isis", { state: "running" });
+    nodesStore.getState().update("chef", { mission: { ...missionNow(), overnight: true, budgetMin: 100, startedAt: Date.now() - 95 * 60_000 } });
+    expect(await giveNext("chef", missionNow().members[0])).toEqual({ refused: "La fin de nuit approche : la file ne donne plus de tâche." });
+    nodesStore.getState().update("chef", { mission: { ...missionNow(), overnight: undefined, members: [member("isis", "Isis", { report: done })] } });
+    vi.mocked(missionMerge).mockResolvedValueOnce({ merge: { kind: "conflict", files: ["a.ts"] }, uncommitted: false });
+    expect(await giveNext("chef", missionNow().members[0])).toEqual({ refused: "Isis ne prend rien pour l'instant : sa branche n'est pas fusionnée." });
+  });
+});
+
 describe("a task taken from the queue keeps every tool working (spec mission de nuit §4.4)", () => {
   it("can be reassigned like a sub-task of the plan", async () => {
     await setup({ members: [member("isis", "Isis", { report: done }), member("horus", "Horus", { task: "Docs", report: done, merged: true })], plan: [{ title: "Login", brief: "b", agent: "Isis", budgetMin: 20 }, { title: "Docs", brief: "b", agent: "Horus", budgetMin: 20 }], queue: [next] });
@@ -293,6 +413,18 @@ describe("what the orchestrator hears when nobody is left working", () => {
     await afterReport("chef", "isis");
     expect(lines()).toEqual([]);
   });
+});
+
+it("does not launch a queued task without a level with the router on: it would run on the default model", async () => {
+  await setup({ state: "plan", router: true, plan: [{ title: "Login", brief: "b", agent: "Isis", budgetMin: 20, level: "faible" }], queue: [next], members: [] });
+  await launchMission("chef");
+  expect(missionNow()).toMatchObject({ state: "plan", error: expect.stringContaining("niveau") });
+});
+
+it("keeps the task an agent finished when reassign gives it another one", async () => {
+  await setup({ members: [member("isis", "Isis", { task: "API" }), member("horus", "Horus", { task: "Login", report: done, merged: true })], plan: [{ title: "Login", brief: "b", agent: "Horus", budgetMin: 20 }, { title: "API", brief: "b", agent: "Isis", budgetMin: 30 }], queue: [] });
+  await reassignTask("chef", "isis", "Horus");
+  expect(missionNow().members.find((m) => m.name === "Horus")?.past).toEqual([{ task: "Login", status: "termine", summary: "Login fait", merged: true, spentMin: 10, budgetMin: 20, branch: "openvibe/auth-horus" }]);
 });
 
 it("speaks English when the interface does", async () => {
