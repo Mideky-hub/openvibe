@@ -368,7 +368,7 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::TcpStream;
     use std::sync::{Arc, Mutex, mpsc};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use super::*;
 
@@ -459,6 +459,7 @@ mod tests {
         hits: Mutex<mpsc::Sender<HookHit>>,
         subagents: Mutex<Vec<(String, bool)>>,
         statuses: Mutex<Vec<(String, serde_json::Value)>>,
+        tokens: mcp::Tokens,
     }
 
     impl TestSink {
@@ -467,6 +468,7 @@ mod tests {
                 hits: Mutex::new(hits),
                 subagents: Mutex::new(Vec::new()),
                 statuses: Mutex::new(Vec::new()),
+                tokens: mcp::Tokens::default(),
             }
         }
     }
@@ -482,7 +484,9 @@ mod tests {
                 .push((node_id.to_string(), started));
         }
         fn mcp_node(&self, token: &str) -> Option<String> {
-            token.strip_prefix("tok-").map(str::to_string)
+            self.tokens
+                .node(token)
+                .or_else(|| token.strip_prefix("tok-").map(str::to_string))
         }
         fn status(&self, node_id: &str, status: serde_json::Value) {
             assert_ne!(node_id, "boom", "a sink that panics");
@@ -497,6 +501,10 @@ mod tests {
             method: &str,
             params: serde_json::Value,
         ) -> Result<serde_json::Value, String> {
+            if node_id == "pending" {
+                // OpenVibe's answer takes its time: the call stays open.
+                std::thread::sleep(Duration::from_millis(1500));
+            }
             assert_ne!(node_id, "boom", "a sink that panics");
             if node_id == "slow" {
                 return Err("OpenVibe ne répond pas".into());
@@ -790,6 +798,76 @@ mod tests {
         );
         let json: serde_json::Value = serde_json::from_str(&body).unwrap();
         assert_eq!(json["error"]["message"], "OpenVibe ne répond pas");
+    }
+
+    #[test]
+    fn a_status_line_posting_too_much_gets_413() {
+        let (tx, _rx) = mpsc::channel();
+        let sink = Arc::new(TestSink::new(tx));
+        let server = start(Arc::clone(&sink)).unwrap();
+        let path = server
+            .status_url("n1")
+            .trim_start_matches(&format!("http://127.0.0.1:{}", server.port))
+            .to_string();
+        let huge = vec![b' '; MAX_BODY + 1];
+        assert_eq!(send(server.port, "POST", &path, &huge), 413);
+        assert!(sink.statuses.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_hook_is_served_while_an_mcp_call_waits_for_its_answer() {
+        let (tx, rx) = mpsc::channel();
+        let sink = Arc::new(TestSink::new(tx));
+        let server = start(Arc::clone(&sink)).unwrap();
+        let port = server.port;
+        let call = std::thread::spawn(move || {
+            exchange(
+                port,
+                "POST",
+                "/mcp",
+                &[("Authorization", "Bearer tok-pending")],
+                br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+            )
+            .0
+        });
+        std::thread::sleep(Duration::from_millis(200));
+        let started = Instant::now();
+        let path = format!("/hook/claude/n1?t={}", server.token);
+        assert_eq!(
+            send(
+                server.port,
+                "POST",
+                &path,
+                br#"{"hook_event_name":"UserPromptSubmit"}"#
+            ),
+            204
+        );
+        assert!(started.elapsed() < Duration::from_millis(1000));
+        assert!(rx.recv_timeout(Duration::from_secs(1)).is_ok());
+        assert_eq!(call.join().unwrap(), 200);
+    }
+
+    #[test]
+    fn a_revoked_mcp_token_gets_401() {
+        let (tx, _rx) = mpsc::channel();
+        let sink = Arc::new(TestSink::new(tx));
+        let server = start(Arc::clone(&sink)).unwrap();
+        let token = sink.tokens.issue("n1");
+        let auth = format!("Bearer {token}");
+        let call = |auth: &str| {
+            exchange(
+                server.port,
+                "POST",
+                "/mcp",
+                &[("Authorization", auth)],
+                br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+            )
+            .0
+        };
+        assert_eq!(call(&auth), 200);
+        // What `ended()` does when the process stops.
+        sink.tokens.revoke("n1");
+        assert_eq!(call(&auth), 401);
     }
 
     #[test]

@@ -633,7 +633,10 @@ mod windows_tests {
             cmd_plan(&["/k", "echo \x1b[?2004hpaste-mode-on"], None),
             sink.clone(),
         );
-        wait_until("mode switch", || sink.text().contains("paste-mode-on"));
+        // cmd echoes the command line (with the text but not the switch) before it runs it:
+        // the text appearing says nothing yet. Wait for the switch itself, then for its output.
+        wait_until("mode switch", || mgr.pastes_bracketed("i"));
+        wait_until("its output", || sink.text().contains("paste-mode-on"));
         assert!(mgr.pastes_bracketed("i"));
         mgr.kill("i");
         wait_exit(&exited);
