@@ -10,6 +10,7 @@ import { installMcp } from "@/mcp/router";
 import { installMissionClock } from "@/mission/clock";
 import { installMissionEvents } from "@/mission/events";
 import { setLivePtys } from "@/nodes/terminal/registry";
+import { installWaitingAlerts } from "@/shell/waitingAlert";
 import { agentActivityStore } from "@/store/agentActivity";
 import { subagentsStore } from "@/store/subagents";
 import { terminalStatusStore } from "@/store/terminalStatus";
@@ -49,6 +50,7 @@ export function boot(): Promise<void> {
     await installUsage();
     installMissionEvents();
     installMissionClock();
+    installWaitingAlerts();
     setLivePtys(await ptyList());
     await getCurrentWindow().onCloseRequested(saveBeforeClose);
     setForgetWorkspaces(forgetWorkspaces);

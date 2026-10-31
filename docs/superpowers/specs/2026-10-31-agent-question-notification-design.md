@@ -66,7 +66,15 @@ Piste hors périmètre : le champ `message` du hook `Notification` serait plus s
 
 ## 8. Notification Windows
 
-Optionnelle, et seulement avec le plugin officiel `tauri-plugin-notification`. La décision et sa raison figurent dans le compte rendu de la mission.
+Ajoutée avec le plugin officiel `tauri-plugin-notification` : un agent bloqué se voit mal quand la fenêtre est derrière une autre.
+
+- **Quand** : un agent se met à attendre et la fenêtre n'a pas le focus. Une seule notification par attente ; un rechargement de l'interface ne répète pas les attentes déjà connues.
+- **Texte** : titre « OpenVibe », corps « <nom> a une question », dans la langue de l'interface.
+- **Clic** : la fenêtre revient au premier plan et, si l'agent attend encore et qu'un projet est ouvert, on arrive sur lui comme au §5. Sinon, seule la fenêtre revient.
+- **Permission** : rien à demander, le plugin l'accorde toujours sur ordinateur.
+- **Échec** : journalisé. La notification dans la fenêtre (§4) reste la référence.
+- **Limite** : Windows ne signale le clic que tant que la notification est à l'écran, pas une fois passée dans le centre de notifications. Ce clic-là n'a aucun effet : il faut revenir à la fenêtre, où la notification du §4 attend.
+- **Pas de réglage** pour la couper : à ajouter si elle gêne à l'usage.
 
 ## 9. Tests
 
