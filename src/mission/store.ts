@@ -1,4 +1,5 @@
 import { canvasStore } from "@/canvas/canvasStore";
+import { groupOf } from "@/canvas/groups";
 import { AGENTS } from "@/fleet/catalog";
 import { linkedAgents, NO_LINKS } from "@/fleet/wires";
 import { agentActivityStore } from "@/store/agentActivity";
@@ -67,6 +68,18 @@ export function linkedClaudeAgents(orchestratorId: string): { nodeId: string; na
     const payload = terminalOf(nodes[nodeId]);
     return payload?.agent === "claude" ? [{ nodeId, name: payload.name || AGENTS.claude.label }] : [];
   });
+}
+
+/** The groups wired to an orchestrator, with what each is for (spec groupes spécialisés §3). */
+export function linkedGroups(orchestratorId: string): { id: string; name: string; speciality: string | null }[] {
+  const { links, frames } = canvasStore.getState();
+  return linkedAgents(links[orchestratorId] ?? NO_LINKS, frames).groups.map((f) => ({ id: f.id, name: f.name, speciality: f.group?.speciality ?? null }));
+}
+
+/** An agent's group and speciality as the orchestrator reads them: null without one. */
+export function agentGroup(nodeId: string): { group: string | null; speciality: string | null } {
+  const group = groupOf(canvasStore.getState().frames, nodeId);
+  return { group: group?.name ?? null, speciality: group?.group.speciality ?? null };
 }
 
 export type AgentState = "travaille" | "attend" | "inactif" | "arrêté";

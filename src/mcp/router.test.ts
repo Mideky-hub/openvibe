@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { mockIPC } from "@tauri-apps/api/mocks";
+import { canvasStore } from "@/canvas/canvasStore";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { answer } from "./router";
 import { pauseAgents } from "@/fleet/broadcast";
@@ -114,6 +115,27 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
     });
   });
 
+  describe("the groups and their specialities (spec groupes spécialisés §3)", () => {
+    const front = { id: "g1", name: "Interface", x: 0, y: 0, width: 10, height: 10, memberIds: ["isis"], group: { role: "frontend" as const, pantheon: "egyptian", speciality: "Frontend" } };
+    const back = { ...front, id: "g2", name: "Serveur", memberIds: [], group: { role: "backend" as const, pantheon: "norse" } };
+
+    afterAll(() => canvasStore.setState({ frames: [], links: {} }));
+
+    it("says each linked agent's group and speciality, and every linked group", async () => {
+      canvasStore.setState({ frames: [front, back], links: { chef: { groupIds: ["g1", "g2"], nodeIds: [] } } });
+      const mission = JSON.parse(textOf(await call("chef", "mission", {})));
+      expect(mission.linked_agents).toEqual([expect.objectContaining({ name: "Isis", group: "Interface", speciality: "Frontend" })]);
+      expect(mission.linked_groups).toEqual([{ name: "Interface", speciality: "Frontend" }, { name: "Serveur", speciality: null }]);
+    });
+
+    it("keeps today's answers for an agent outside any group, with nulls added", async () => {
+      canvasStore.setState({ frames: [], links: {} });
+      const mission = JSON.parse(textOf(await call("chef", "mission", {})));
+      expect(mission.linked_agents).toEqual([expect.objectContaining({ name: "Isis", group: null, speciality: null })]);
+      expect(mission.linked_groups).toEqual([]);
+    });
+  });
+
   it("takes each sub-task's level and says whether the router is on (spec maj §3)", async () => {
     setMission("chef", { router: true });
     expect(textOf(await call("chef", "propose_plan", plan))).toContain("niveau");
@@ -157,6 +179,7 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
   it("says so when its workspace is not on screen, instead of finding no linked agent (final review H2)", async () => {
     await nodesStore.getState().create("loin", { workspaceId: "w9", kind: "orchestrator", payload: { name: "Loin" } });
     expect(JSON.parse(textOf(await call("loin", "mission", {}))).linked_agents).toBe("inconnus : l'espace de l'orchestrateur n'est pas affiché");
+    expect(JSON.parse(textOf(await call("loin", "mission", {}))).linked_groups).toBe("inconnus : l'espace de l'orchestrateur n'est pas affiché");
     expect(textOf(await call("loin", "propose_plan", plan))).toContain("n'est pas affiché");
     expect(textOf(await call("loin", "propose_plan", { ...plan, subtasks: [plan.subtasks[1]] }))).toContain("Plan proposé : 1 sous-tâche.");
   });
@@ -169,6 +192,14 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
         members: [{ nodeId: "isis", name: "Isis", task: "Login", budgetMin: 20, linked: true, branch: "openvibe/auth-isis", worktree: "C:/w/isis", sentAt: Date.now() }],
       }),
     );
+
+    it("says each member's group and speciality, to choose who takes a sub-task over (spec groupes spécialisés §3)", async () => {
+      const front = { id: "g1", name: "Interface", x: 0, y: 0, width: 10, height: 10, memberIds: ["isis"], group: { role: "frontend" as const, pantheon: "egyptian", speciality: "Frontend" } };
+      canvasStore.setState({ frames: [front] });
+      expect(JSON.parse(textOf(await call("chef", "team", {})))[0]).toMatchObject({ name: "Isis", group: "Interface", speciality: "Frontend" });
+      canvasStore.setState({ frames: [] });
+      expect(JSON.parse(textOf(await call("chef", "team", {})))[0]).toMatchObject({ group: null, speciality: null });
+    });
 
     it("reports the team and reads an agent's terminal", async () => {
       expect(JSON.parse(textOf(await call("chef", "team", {})))).toEqual([

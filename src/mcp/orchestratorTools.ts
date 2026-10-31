@@ -5,7 +5,7 @@ import { ptySendText } from "@/ipc/pty";
 import { endMission, mergeMission, reassignTask } from "@/mission/launch";
 import { budgetOf, memberTime, NEW_AGENT, oneLine, proposedPlan, remainingGlobal, sameName, spentMin, type Member, type Mission } from "@/mission/mission";
 import { LEVELS, modelLabel } from "@/mission/router";
-import { agentState, linkedClaudeAgents, missionOf, orchestratorShown, setMission, updateMember } from "@/mission/store";
+import { agentGroup, agentState, linkedClaudeAgents, linkedGroups, missionOf, orchestratorShown, setMission, updateMember } from "@/mission/store";
 import { terminalText } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore, terminalOf } from "@/store/nodes";
@@ -119,8 +119,9 @@ function describeMission(orchestratorId: string, mission: Mission): ToolResult {
     linked_agents: orchestratorShown(orchestratorId)
       ? linkedClaudeAgents(orchestratorId)
           .filter((a) => !team.has(a.nodeId))
-          .map((a) => ({ name: a.name, state: outAgentState(agentState(a.nodeId)) }))
+          .map((a) => ({ name: a.name, state: outAgentState(agentState(a.nodeId)), ...agentGroup(a.nodeId) }))
       : t().orchestrator.hiddenAgents,
+    linked_groups: orchestratorShown(orchestratorId) ? linkedGroups(orchestratorId).map(({ name, speciality }) => ({ name, speciality })) : t().orchestrator.hiddenAgents,
     left_min: remainingGlobal(mission) ?? null,
     elapsed_min: mission.state === "en_cours" && mission.startedAt !== undefined ? Math.floor((Date.now() - mission.startedAt) / 60_000) : null,
     error: mission.error ?? null,
@@ -147,6 +148,7 @@ function describeTeam(mission: Mission): ToolResult {
   return json(
     mission.members.map((m) => ({
       name: m.name,
+      ...agentGroup(m.nodeId),
       subtask: m.task,
       state: outAgentState(agentState(m.nodeId)),
       steps: terminalOf(nodes[m.nodeId])?.steps?.map((s) => `${s.title}: ${outStep(s.state)}`) ?? [],
