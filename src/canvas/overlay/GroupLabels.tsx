@@ -99,6 +99,11 @@ function NameField({ name, onDone }: { name: string; onDone: (name: string | nul
   const t = useMessages(canvasMessages);
   // Removing the focused field may fire one last blur: only the first ending counts.
   const done = useRef(false);
+  const field = useRef<HTMLInputElement>(null);
+  // `autoFocus` would scroll the label layer (overflow-hidden) when the label is still out of view.
+  useEffect(() => {
+    field.current?.focus({ preventScroll: true });
+  }, []);
   const finish = (value: string | null) => {
     if (done.current) return;
     done.current = true;
@@ -107,7 +112,7 @@ function NameField({ name, onDone }: { name: string; onDone: (name: string | nul
   };
   return (
     <input
-      autoFocus
+      ref={field}
       defaultValue={name}
       aria-label={t.groupNameLabel}
       size={Math.max(4, name.length + 1)}
