@@ -61,6 +61,12 @@ describe("the Windows notification (spec notification §8)", () => {
     expect(sendNotification).toHaveBeenCalledExactlyOnceWith({ title: "OpenVibe", body: "Isis a une question", extra: { nodeId: "isis" } });
   });
 
+  it("keeps the preview in the window: a toast can show on the lock screen (spec notification §7)", async () => {
+    agentActivityStore.getState().apply({ nodeId: "isis", activity: "waiting", since: 1, message: "Run rm on C:/secret?" });
+    await settled();
+    expect(sendNotification).toHaveBeenCalledExactlyOnceWith({ title: "OpenVibe", body: "Isis a une question", extra: { nodeId: "isis" } });
+  });
+
   it("speaks the interface's language", async () => {
     langStore.setState({ lang: "en" });
     apply("isis", "waiting");

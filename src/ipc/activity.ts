@@ -8,11 +8,15 @@ export interface ActivityEvent {
   nodeId: string;
   activity: Activity;
   since: number;
+  /** What a waiting agent says it waits for, cleaned by Rust; untrusted, plain text only (spec notification §7). */
+  message?: string;
 }
 
 export interface ActivitySnapshot {
   hooksAvailable: boolean;
   activities: ActivityEvent[];
+  /** The sessions running subagents when the page loaded. */
+  subagents: { nodeId: string; running: number }[];
 }
 
 export const agentActivitySnapshot = () => call<ActivitySnapshot>("agent_activity_snapshot");

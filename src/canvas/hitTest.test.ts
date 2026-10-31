@@ -22,3 +22,8 @@ it("skips deleted terminals and other node kinds", () => {
   const note = createNodeElement("note", { x: 10, y: 10 });
   expect(findTerminalAt([deleted, note], 10, 10)).toBeNull();
 });
+
+it("ignores a terminal that a folded group keeps hidden (locked)", () => {
+  const hidden = { ...at(0, 0), locked: true };
+  expect(findTerminalAt([hidden], 10, 10)).toBeNull();
+});

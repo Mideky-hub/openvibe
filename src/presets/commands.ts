@@ -59,7 +59,13 @@ export function presetCommands(presets: readonly TeamPreset[]): Command[] {
         available: inProject,
         run: async () => {
           await presetsStore.getState().remove(preset.id);
-          toast(text().toast.removed(preset.name));
+          // The delete line can rank first for a search of the name: it is taken back from the toast.
+          toast(text().toast.removed(preset.name), {
+            action: {
+              label: text().toast.undo,
+              onClick: () => void presetsStore.getState().save(preset).catch((error: unknown) => toast.error(text().toast.failed(String(error)))),
+            },
+          });
         },
       },
       () => text().remove(preset.name),
