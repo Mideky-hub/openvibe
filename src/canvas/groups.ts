@@ -17,6 +17,8 @@ export interface GroupInfo {
   pantheon: string;
   /** What the group is for, told to its orchestrator (spec groupes spécialisés §2). */
   speciality?: string;
+  /** Folded onto its label: its terminals are not shown, nothing stops (spec replier un groupe). */
+  folded?: boolean;
 }
 
 export const MAX_SPECIALITY = 40;
@@ -39,7 +41,7 @@ export function groupInfoOf(element: ExcalidrawElement): GroupInfo | null {
   if (element.type !== "frame" || data?.kind !== "group") return null;
   if (!isRoleId(data.role) || typeof data.pantheon !== "string") return null;
   const speciality = readSpeciality(data.speciality);
-  return { role: data.role, pantheon: data.pantheon, ...(speciality ? { speciality } : {}) };
+  return { role: data.role, pantheon: data.pantheon, ...(speciality ? { speciality } : {}), ...(data.folded === true ? { folded: true } : {}) };
 }
 
 /** A group frame's `customData` with `speciality`, or without one when it is blank. */
@@ -47,6 +49,17 @@ export function withGroupSpeciality(customData: ExcalidrawElement["customData"],
   const { speciality: _previous, ...openvibe } = (customData?.openvibe ?? {}) as Record<string, unknown>;
   const next = readSpeciality(speciality);
   return { ...customData, openvibe: next ? { ...openvibe, speciality: next } : openvibe };
+}
+
+/** A group frame's `customData` folded, or unfolded without a trace. */
+export function withGroupFolded(customData: ExcalidrawElement["customData"], folded: boolean): Record<string, unknown> {
+  const { folded: _previous, ...openvibe } = (customData?.openvibe ?? {}) as Record<string, unknown>;
+  return { ...customData, openvibe: folded ? { ...openvibe, folded: true } : openvibe };
+}
+
+/** The terminals that folded groups keep off the screen. */
+export function hiddenNodeIds(frames: readonly SceneFrame[]): Set<string> {
+  return new Set(frames.filter((f) => f.group?.folded).flatMap((f) => f.memberIds));
 }
 
 /** The frames of the scene and their terminals, derived on every change (spec §11.1). */
