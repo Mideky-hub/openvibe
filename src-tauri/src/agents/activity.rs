@@ -44,7 +44,12 @@ struct Node {
     /// reports the answer to a permission prompt (a refusal fires neither
     /// `Stop` nor `PermissionDenied`), so the output decides until the next hook.
     answered: Option<Instant>,
+    /// The last keystroke: the echo that follows it is not work.
+    last_key: Option<Instant>,
 }
+
+/// Output this soon after a keystroke is the terminal echoing it back.
+pub const ECHO_WINDOW: Duration = Duration::from_millis(200);
 
 /// The activity of every running terminal.
 #[derive(Default)]
@@ -63,6 +68,7 @@ impl Tracker {
                 last_output: None,
                 hooked: false,
                 answered: None,
+                last_key: None,
             },
         );
         change(node_id, Activity::Idle, now)
@@ -72,6 +78,17 @@ impl Tracker {
     /// activity changes, not for every chunk read.
     pub fn output(&mut self, node_id: &str, now: Instant) -> Option<Change> {
         let node = self.nodes.get_mut(node_id)?;
+        // The echo of a keystroke (and the redraw it causes) is not work: it
+        // counts neither as activity nor as keeping a working terminal busy.
+        // A hooked agent's output after an answer is real: only plain
+        // terminals (Shell, Codex, Gemini...) are filtered.
+        if !node.hooked
+            && node
+                .last_key
+                .is_some_and(|key| now.saturating_duration_since(key) < ECHO_WINDOW)
+        {
+            return None;
+        }
         node.last_output = Some(now);
         if node.hooked && node.answered.is_none() {
             return None;
@@ -85,7 +102,11 @@ impl Tracker {
     /// Enter sends something (typing there just echoes).
     pub fn input(&mut self, node_id: &str, data: &[u8], now: Instant) -> Option<Change> {
         let node = self.nodes.get_mut(node_id)?;
-        if !node.hooked || !is_keystroke(data) {
+        if !is_keystroke(data) {
+            return None;
+        }
+        node.last_key = Some(now);
+        if !node.hooked {
             return None;
         }
         let answers = match node.activity {
@@ -256,6 +277,20 @@ mod tests {
             (idle[0].node_id.as_str(), idle[0].activity),
             ("a", Activity::Idle)
         );
+    }
+
+    #[test]
+    fn the_echo_of_a_keystroke_is_not_work() {
+        let t0 = Instant::now();
+        let mut tracker = started(t0);
+        tracker.input("a", b"l", t0 + ms(10));
+        // The shell echoes the key, then redraws: nothing lights up.
+        assert_eq!(tracker.output("a", t0 + ms(20)), None);
+        assert_eq!(tracker.output("a", t0 + ms(150)), None);
+        assert!(tracker.tick(t0 + ms(3000)).is_empty());
+        // Output that follows no keystroke still counts.
+        let working = tracker.output("a", t0 + ms(400)).unwrap();
+        assert_eq!(working.activity, Activity::Working);
     }
 
     #[test]
