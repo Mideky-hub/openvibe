@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { FileDiff, RotateCw, X } from "lucide-react";
 import { toast } from "sonner";
-import { sendToAgents } from "@/fleet/broadcast";
+import { sendToAgents, startingText } from "@/fleet/broadcast";
 import { AGENTS } from "@/fleet/catalog";
 import { reviewChanges, reviewDefaultBase, reviewFileDiff, reviewFiles, reviewReadFile, type ChangedFile, type FileText } from "@/ipc/review";
 import { cn } from "@/lib/utils";
@@ -403,11 +403,12 @@ function Remarks({ nodeId, name }: { nodeId: string; name: string }) {
   const remarks = useReview((s) => s.remarks);
   if (remarks.length === 0) return null;
   const send = async () => {
-    const { sent, skipped, waiting } = await sendToAgents([nodeId], reviewMessage(remarks));
+    const { sent, skipped, waiting, starting } = await sendToAgents([nodeId], reviewMessage(remarks));
     if (sent > 0) {
       reviewStore.getState().clear();
       toast(messages(reviewMessages).sent(name));
     } else if (waiting.length > 0) toast.warning(messages(reviewMessages).waiting(name));
+    else if (starting.length > 0) toast.warning(startingText(starting) ?? "");
     else if (skipped.length > 0) toast.warning(messages(reviewMessages).stopped(name));
   };
   return (
