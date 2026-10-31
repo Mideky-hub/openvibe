@@ -250,16 +250,20 @@ async function remote(orchestratorId: string, mission: Mission, args: Record<str
   const team = teamOf(orchestratorId, mission);
   const chosen: { nodeId: string; name: string }[] = [];
   const unknown: string[] = [];
+  const ambiguous: string[] = [];
   for (const name of names) {
     if (sameName(name, "moi")) chosen.push({ nodeId: orchestratorId, name: o.you });
     else if (sameName(name, "tous")) chosen.push(...team);
     else {
-      const found = team.find((t) => sameName(t.name, name));
-      if (found) chosen.push(found);
+      const found = team.filter((t) => sameName(t.name, name));
+      // Two agents of the same name: the first would be picked silently.
+      if (found.length > 1) ambiguous.push(name);
+      else if (found.length === 1) chosen.push(found[0]);
       else unknown.push(name);
     }
   }
   if (unknown.length > 0) return refused(o.remoteUnknown(unknown.join(", ")));
+  if (ambiguous.length > 0) return refused(o.remoteAmbiguous(ambiguous.join(", ")));
   const targets = chosen.filter((t, i) => chosen.findIndex((other) => other.nodeId === t.nodeId) === i);
   if (targets.length === 0) return refused(o.remoteNone);
   const results = await Promise.all(targets.map(async (t) => ({ ...t, running: isRunning(t.nodeId), result: await setRemoteControl(t.nodeId, on) })));

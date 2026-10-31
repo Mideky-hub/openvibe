@@ -5,6 +5,7 @@ import { freshText, quietFor, typedAgo } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore } from "@/store/nodes";
 import { isRunning, terminalStatusStore } from "@/store/terminalStatus";
+import { remoteBusy } from "@/fleet/remoteControl";
 import { whenReady } from "./ready";
 import { memberOf } from "./store";
 
@@ -28,6 +29,11 @@ function free(orchestratorId: string): boolean {
 function flush(orchestratorId: string) {
   const queue = queues.get(orchestratorId);
   if (!queue?.length || !free(orchestratorId)) return;
+  // A line typed while the Remote Control menu is open would land in the menu.
+  if (remoteBusy(orchestratorId)) {
+    setTimeout(() => flush(orchestratorId), 1000);
+    return;
+  }
   const sinceKey = typedAgo(orchestratorId);
   if (sinceKey < TYPING_PAUSE_MS) {
     // Looked at again when the pause is over.

@@ -4,6 +4,7 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import { langStore } from "@/i18n";
 import { ptySendText } from "@/ipc/pty";
 import { typedAgo } from "@/nodes/terminal/registry";
+import { remoteBusy } from "@/fleet/remoteControl";
 import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore } from "@/store/nodes";
 import { terminalStatusStore } from "@/store/terminalStatus";
@@ -13,6 +14,7 @@ import type { Member } from "./mission";
 
 vi.mock("@/ipc/pty", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/ipc/pty")>()), ptySendText: vi.fn(() => Promise.resolve()) }));
 vi.mock("@/nodes/terminal/registry", () => ({ freshText: vi.fn(() => ""), quietFor: vi.fn(() => 0), typedAgo: vi.fn(() => Infinity) }));
+vi.mock("@/fleet/remoteControl", () => ({ remoteBusy: vi.fn(() => false) }));
 vi.mock("./ready", () => ({ whenReady: vi.fn(() => Promise.resolve(true)) }));
 
 /** Lets the started orchestrator's readiness settle. */
@@ -45,6 +47,16 @@ beforeEach(async () => {
 });
 
 describe("events to the orchestrator (spec orchestrateur §7.5)", () => {
+  it("holds a line while a Remote Control flow is typing in the orchestrator (backlog 27 oct)", async () => {
+    vi.useFakeTimers();
+    vi.mocked(remoteBusy).mockReturnValueOnce(true).mockReturnValue(false);
+    notify("chef", "Isis a rendu compte");
+    expect(sent()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sent()).toEqual(["chef: [OpenVibe] Isis a rendu compte"]);
+    vi.useRealTimers();
+  });
+
   it("waits for the user to stop typing before it types a line (backlog H2)", async () => {
     vi.useFakeTimers();
     vi.mocked(typedAgo).mockReturnValueOnce(1000).mockReturnValue(Infinity);
