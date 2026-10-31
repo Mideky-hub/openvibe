@@ -53,8 +53,14 @@ pub async fn pty_spawn(
     // second one's token would replace the live session's (backlog B2).
     let _claim = pty.claim_start(&node_id)?;
     let mut spec = spec;
+    // The profile's folder, else OpenVibe's environment (spec comptes §4): where
+    // this terminal's Claude keeps its conversations and settings.
+    let profile_dir = match spec.claude.as_ref().and_then(|c| c.config_dir.as_deref()) {
+        Some(dir) => Some(crate::accounts::checked_dir(dir)?),
+        None => None,
+    };
     if let Some(claude) = spec.claude.as_mut() {
-        let config = claude_settings::claude_config_dir();
+        let config = claude_settings::config_dir_for(profile_dir.as_deref());
         let cwd = std::path::Path::new(&spec.cwd);
         let mode =
             transcripts::launch_mode(claude.mode, &claude.session_id, cwd, config.as_deref());
@@ -70,6 +76,7 @@ pub async fn pty_spawn(
         spec.agent,
         role,
         std::path::Path::new(&spec.cwd),
+        profile_dir.as_deref(),
     );
     if spec.agent == Agent::Claude
         && role == Role::Orchestrator
