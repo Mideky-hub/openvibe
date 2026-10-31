@@ -24,6 +24,12 @@ export function remoteLabel(link: RemoteLink | undefined, wanted: boolean, runni
   return t.label;
 }
 
+/** The actions of the menu: while the state is an error, Remote Control may still be on, so cutting stays offered next to retrying. */
+export function remoteActions(link: RemoteLink | undefined, wanted: boolean): ("turnOn" | "turnOff" | "retry")[] {
+  if (link?.state === "error") return ["turnOff", "retry"];
+  return [wanted ? "turnOff" : "turnOn"];
+}
+
 function run(nodeId: string, on: boolean) {
   void setRemoteControl(nodeId, on).then((result) => {
     if (result && "error" in result) toast.error(messages(fleetMessages).remote.error(result.error));
@@ -54,14 +60,12 @@ export function RemoteButton({ nodeId, wanted, running }: { nodeId: string; want
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {wanted ? (
-          <>
-            <DropdownMenuItem onSelect={() => run(nodeId, false)}>{t.turnOff}</DropdownMenuItem>
-            {link?.state === "error" && <DropdownMenuItem onSelect={() => run(nodeId, true)}>{t.retry}</DropdownMenuItem>}
-          </>
-        ) : (
-          <DropdownMenuItem onSelect={() => run(nodeId, true)}>{t.turnOn}</DropdownMenuItem>
-        )}
+        {remoteActions(link, wanted).map((action) => (
+          // Retrying repeats what failed: a cut that failed is cut again.
+          <DropdownMenuItem key={action} onSelect={() => run(nodeId, action === "turnOn" || (action === "retry" && wanted))}>
+            {t[action]}
+          </DropdownMenuItem>
+        ))}
         {url && (
           <>
             <DropdownMenuSeparator />

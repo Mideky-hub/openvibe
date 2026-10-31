@@ -19,6 +19,7 @@ const find = (id: string) => AGENT_COMMANDS.find((c) => c.id === id)!;
 beforeEach(() => {
   mockIPC(() => undefined);
   agentsStore.setState({
+    loaded: true,
     agents: [
       { id: "claude", available: true },
       { id: "codex", available: false },

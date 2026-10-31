@@ -29,6 +29,7 @@ beforeEach(() => {
     updateScene: ({ elements }: { elements?: typeof scene }) => {
       if (elements) scene = elements;
     },
+    getAppState: () => ({ width: 1400, height: 800 }),
     scrollToContent: vi.fn(),
   };
   canvasStore.setState({ api: api as unknown as ExcalidrawImperativeAPI });
@@ -49,6 +50,16 @@ it("staffs a mission's group with the names, folders and pantheon it is given, a
     ["Horus", "C:/w/auth-horus"],
   ]);
   expect(frame?.customData?.openvibe).toMatchObject({ kind: "group", pantheon: "egyptian" });
+});
+
+it("gives each agent of a staffed group the model the router chose, and none otherwise (backlog 27 oct)", async () => {
+  const made = await launchGroup(
+    { name: "Mission Auth", role: "general", agents: ["claude", "claude"] },
+    { cwd: "C:/code", shell: "default", title: "", command: "" },
+    { x: 0, y: 0 },
+    { pantheon: "egyptian", names: ["Isis", "Horus"], cwds: ["C:/a", "C:/b"], models: ["opus", undefined] },
+  );
+  expect(made!.nodeIds.map((id) => terminalOf(nodesStore.getState().nodes[id])?.model)).toEqual(["opus", undefined]);
 });
 
 it("closes a group with the wires that led to it (final review H2)", () => {

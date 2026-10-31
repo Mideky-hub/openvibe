@@ -215,6 +215,11 @@ function locked<T>(nodeId: string, flow: () => Promise<T>): Promise<T> {
   return run;
 }
 
+/** Whether a Remote Control flow is typing in this session: nothing else may be written meanwhile. */
+export function remoteBusy(nodeId: string): boolean {
+  return flows.has(nodeId);
+}
+
 /** Sessions to bring to their wanted state at the end of their turn. */
 const pending = new Set<string>();
 
@@ -268,9 +273,12 @@ export async function setRemoteControlAll(nodeIds: readonly string[], on: boolea
   }
   const settled = await Promise.allSettled(ids.map((id) => setRemoteControl(id, on)));
   const results: (RemoteResult | null)[] = settled.map((s) => (s.status === "fulfilled" ? s.value : { error: String(s.reason) }));
-  const done = ids.filter((_, i) => { const r = results[i]; return r !== null && "on" in r; });
+  // A stopped session only remembers it for its next start: the tool says so.
+  const stopped = ids.filter((id, i) => { const r = results[i]; return r !== null && "on" in r && !isRunning(id); });
+  const done = ids.filter((id, i) => { const r = results[i]; return r !== null && "on" in r && isRunning(id); });
   const later = ids.filter((_, i) => { const r = results[i]; return r !== null && "later" in r; });
   if (done.length > 0) toast(messages(fleetMessages).remote.done(on, done.map(nameOf).join(", ")));
+  if (stopped.length > 0) toast(messages(fleetMessages).remote.nextStartFor(stopped.map(nameOf).join(", ")));
   if (later.length > 0) toast(messages(fleetMessages).remote.later(later.map(nameOf).join(", ")));
   ids.forEach((id, i) => {
     const result = results[i];
@@ -286,11 +294,18 @@ async function watchStart(nodeId: string) {
   if (seen?.kind === "active") remoteStore.getState().set(nodeId, { state: "on", url: seen.url });
   else if (seen?.kind === "error") remoteStore.getState().set(nodeId, { state: "error", error: seen.message });
   else if (seen?.kind === "consent") remoteStore.getState().set(nodeId, { state: "error", error: consentError() });
-  else remoteStore.getState().set(nodeId, { state: "on" });
+  // No link within the time: the phone cannot be followed, which is an error, not an active session.
+  else remoteStore.getState().set(nodeId, { state: "error", error: messages(fleetMessages).remote.notConfirmed });
 }
 
 // A session that stops loses its link; one that starts with Remote Control gets it.
 terminalStatusStore.subscribe((state, previous) => {
+  // A node removed from the canvas loses its status: its link would stay for good.
+  for (const nodeId of Object.keys(previous.statuses)) {
+    if (state.statuses[nodeId]) continue;
+    pending.delete(nodeId);
+    if (remoteStore.getState().links[nodeId]) remoteStore.getState().set(nodeId, null);
+  }
   for (const [nodeId, status] of Object.entries(state.statuses)) {
     const before = previous.statuses[nodeId]?.state;
     if (status.state === before) continue;
@@ -310,3 +325,4 @@ agentActivityStore.subscribe((state, previous) => {
     if (activity === "idle" && activity !== previous.activities[nodeId]?.activity) void locked(nodeId, () => apply(nodeId));
   }
 });
+

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { langStore } from "@/i18n";
-import { co2Grams, currentLimit, limitTone, mergeLimits, readStatus, totals, formatUsd, type Limits, type SessionUsage } from "./usage";
+import { co2Grams, currentLimit, limitTone, liveCacheSessions, mergeLimits, readStatus, totals, formatUsd, type Limits, type SessionUsage } from "./usage";
 
 /** A status line's JSON as Claude Code 2.1.304 sent it in OpenVibe, after one answer. */
 const STATUS = {
@@ -138,4 +138,20 @@ it("names a session without a model in the interface's language", () => {
   } finally {
     langStore.setState({ lang: "fr" });
   }
+});
+
+describe("the prompt cache section (backlog 27 oct)", () => {
+  const cached = (sessionId: string, nodeId: string, at: number) =>
+    ({ sessionId, nodeId, at, cache: { warm: true, hitRatio: 0.5, expiresAt: null, ttl: "5m" } }) as unknown as SessionUsage;
+
+  it("keeps the latest session of each node still on the canvas, not the closed agents' or the earlier runs'", () => {
+    const list = [cached("s1", "athena", 1), cached("s2", "athena", 3), cached("s3", "gone", 2), { ...cached("s4", "hermes", 2), cache: null } as SessionUsage];
+    expect(liveCacheSessions(list, new Set(["athena", "hermes"])).map((s) => s.sessionId)).toEqual(["s2"]);
+  });
+});
+
+it("reads a model's own limit alone, without the session or week windows (backlog 27 oct)", () => {
+  const { limits } = readStatus({ session_id: "s", rate_limits: { seven_day_fable: { used_percentage: 40, resets_at: 1 } } }, "n", 0);
+  expect(limits?.fiveHour).toBeUndefined();
+  expect(limits?.models.map((m) => [m.label, m.limit.usedPercent])).toEqual([["Fable", 40]]);
 });

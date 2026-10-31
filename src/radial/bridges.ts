@@ -68,7 +68,8 @@ export async function readClipboardText(): Promise<string | null> {
   const data = await readClipboard();
   if (!data) return null;
   const text = data.getData("text/plain");
-  if (text === "") toast(messages(radialMessages).clipboardEmpty);
+  // The clipboard holds something, an image say: not "empty".
+  if (text === "") toast(messages(radialMessages).clipboardNoText);
   return text === "" ? null : text;
 }
 
@@ -76,6 +77,11 @@ export async function readClipboardText(): Promise<string | null> {
 export async function pasteOnCanvasAt(client: Point) {
   const data = await readClipboard();
   if (!data) return;
+  // Excalidraw does not paste over an active node (its body takes the pointer): say so.
+  if (document.elementFromPoint(client.x, client.y)?.closest("[data-terminal], [data-orchestrator]")) {
+    toast(messages(radialMessages).pasteBlocked);
+    return;
+  }
   focusCanvas();
   document.dispatchEvent(new PointerEvent("pointermove", { clientX: client.x, clientY: client.y, bubbles: true }));
   document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));

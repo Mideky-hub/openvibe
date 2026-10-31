@@ -15,8 +15,15 @@ type RequestOf<K extends UiRequest["kind"]> = Extract<UiRequest, { kind: K }>;
 
 const requestStore = createStore<{ request: UiRequest | null }>()(() => ({ request: null }));
 
+/** How long a request waits for its component: the panel it opens mounts well within it. */
+const EXPIRY_MS = 2000;
+let expiry: ReturnType<typeof setTimeout> | undefined;
+
+/** An unanswered request expires: it must not fire at some later mount. */
 export function requestUi(request: UiRequest) {
+  clearTimeout(expiry);
   requestStore.setState({ request });
+  expiry = setTimeout(() => requestStore.setState({ request: null }), EXPIRY_MS);
 }
 
 export function pendingUiRequest(): UiRequest | null {

@@ -56,3 +56,16 @@ it("keeps nothing of the habillage shell (spec identité §5.11)", () => {
 it("stacks the title bar and the tabs: 72 px of canvas under them (spec identité §7)", () => {
   expect([TITLE_BAR_HEIGHT, TABS_HEIGHT, TOP_ROW_HEIGHT]).toEqual([38, 34, 72]);
 });
+
+it("out-ranks sonner's own injected style, which comes later in a release build", () => {
+  expect(index).toMatch(/\[data-sonner-toaster\] \[data-sonner-toast\]\[data-styled="true"\] \{[^}]*var\(--ov-shadow\)/);
+});
+
+it("starts the placement and link layers under the bars, and truncates a long branch name", () => {
+  for (const file of ["fleet/LinkMode.tsx", "fleet/PlacementGhost.tsx"]) {
+    const text = readSource(file);
+    expect(text, file).not.toMatch(/fixed inset-0 z-40/);
+    expect(text, file).toContain("top: TOP_ROW_HEIGHT");
+  }
+  expect(readSource("shell/GitChip.tsx")).toMatch(/max-w-\[150px\] truncate/);
+});

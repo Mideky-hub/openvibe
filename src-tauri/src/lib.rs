@@ -9,6 +9,7 @@ mod mission;
 mod process;
 mod pty;
 mod review;
+mod studio;
 mod sync;
 
 use std::time::Duration;
@@ -112,6 +113,10 @@ pub fn run() {
             commands::review::review_files,
             commands::review::review_read_file,
             commands::review::review_default_base,
+            commands::studio::studio_files,
+            commands::studio::studio_read,
+            commands::studio::studio_version,
+            commands::studio::studio_write,
             commands::mission::mission_prepare,
             commands::mission::mission_add_agent,
             commands::mission::mission_merge,

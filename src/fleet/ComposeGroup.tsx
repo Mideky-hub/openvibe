@@ -7,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { returnKeyboardToCanvas } from "@/canvas/keyboardFocus";
 import { useUiRequest } from "@/commands/uiRequests";
 import { messages, useMessages } from "@/i18n";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -14,7 +15,7 @@ import type { AgentId } from "@/ipc/pty";
 import { cn } from "@/lib/utils";
 import { agentsStore, useAgents } from "./agentsStore";
 import { agentInk, AGENTS, AGENTS_WITHOUT_OPTIONS, defaultAgent } from "./catalog";
-import { agentsOf, DEFAULT_GROUP_SIZE, MAX_GROUP_SIZE, nameAfterRoleChange, resizeSlots, type Slot } from "./composer";
+import { agentsOf, DEFAULT_GROUP_SIZE, MAX_GROUP_SIZE, resizeSlots, type Slot } from "./composer";
 import { fleetMessages } from "./messages";
 import { launchGroup } from "./groups";
 import { ROLE_ORDER, ROLES, type RoleId } from "./roles";
@@ -72,7 +73,9 @@ export function ComposeGroup({
   const t = useMessages(fleetMessages).compose;
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<RoleId>("general");
-  const [name, setName] = useState(ROLES.general.label);
+  // What the user typed; until then the name is the role's, in the language of the moment.
+  const [typedName, setTypedName] = useState<string | null>(null);
+  const name = typedName ?? ROLES[role].label;
   const [slots, setSlots] = useState<Slot[]>(resizeSlots([], DEFAULT_GROUP_SIZE));
   useUiRequest(
     "composeGroup",
@@ -90,18 +93,20 @@ export function ComposeGroup({
   useEffect(() => {
     if (!open) return;
     setRole("general");
-    setName(ROLES.general.label);
+    setTypedName(null);
     setSlots(resizeSlots([], DEFAULT_GROUP_SIZE));
     void agentsStore.getState().load();
   }, [open]);
 
   const pickRole = (next: RoleId) => {
-    setName((current) => nameAfterRoleChange(current, role, next));
+    // An emptied field follows the role again (spec §11.2).
+    setTypedName((current) => (current === null || current.trim() === "" ? null : current));
     setRole(next);
   };
 
   const launch = () => {
     setOpen(false);
+    returnKeyboardToCanvas();
     void launchGroup({ name, role, agents: agentsOf(slots, fallback) }).catch((error: unknown) =>
       toast.error(messages(fleetMessages).launchFailed(String(error))),
     );
@@ -117,7 +122,11 @@ export function ComposeGroup({
           <input
             autoFocus
             value={name}
-            onChange={(e) => setName(e.currentTarget.value)}
+            onChange={(e) => setTypedName(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              // Enter launches the group, unless it ends an IME composition.
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) launch();
+            }}
             onFocus={(e) => e.currentTarget.select()}
             aria-label={t.groupName}
             className="min-w-0 flex-1 bg-transparent text-[13px] font-medium text-ov-text outline-none"

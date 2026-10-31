@@ -79,11 +79,25 @@ export async function attachSession(nodeId: string, term: TermSink, state: Sessi
   return attached;
 }
 
-/** Shows the last saved output of a stopped terminal (spec §6.5). */
-export async function restoreSession(nodeId: string, term: TermSink) {
+/**
+ * Shows the last saved output of a stopped terminal (spec §6.5). Like a
+ * replay, it holds the input back until written: a long screen may still be
+ * parsing when the terminal is relaunched, and xterm's answers to its old
+ * queries must not reach the new process.
+ */
+export async function restoreSession(nodeId: string, term: TermSink, state?: SessionState) {
   setStatus(nodeId, { state: "stopped" });
   const bytes = await getScrollback(nodeId);
-  if (bytes.length > 0) term.write(bytes);
+  if (bytes.length === 0) return;
+  if (state) state.replaying = true;
+  term.write(bytes, () => {
+    if (state) state.replaying = false;
+  });
+}
+
+/** Re-attaches to a live process; when it is gone, the terminal shows its saved screen instead. */
+export async function reattachSession(nodeId: string, term: TermSink, state: SessionState) {
+  if (!(await attachSession(nodeId, term, state))) await restoreSession(nodeId, term, state);
 }
 
 /**

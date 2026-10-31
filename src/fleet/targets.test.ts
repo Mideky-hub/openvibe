@@ -197,3 +197,13 @@ describe("selectionTargets", () => {
     expect(selectionTargets(["c", "g1", "f", "x"], [backend, plain], ["a", "b", "c"])).toEqual(["c", "a", "b"]);
   });
 });
+
+import { matchOptions as matchOptionsFront, mentionParts as mentionPartsFront, targetOptions as targetOptionsFront } from "./targets";
+
+it("tries a name containing a slash whole before splitting it (backlog 27 oct)", () => {
+  const frames = [{ id: "g", name: "Front/Back", group: {}, memberIds: ["a", "b"] }] as never;
+  const opts = targetOptionsFront([{ id: "a", name: "Front", groupName: null }], frames);
+  expect(mentionPartsFront("front/ba", opts)).toEqual({ typed: [], query: "front/ba" });
+  expect(matchOptionsFront(opts, "front/ba")[0].label).toBe("@front/back");
+  expect(mentionPartsFront("athena/ze", opts)).toEqual({ typed: ["athena"], query: "ze" });
+});

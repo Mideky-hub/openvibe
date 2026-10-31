@@ -25,7 +25,12 @@ export function arrivalPending(workspaceId: string): boolean {
 
 /** Reaches the pending item of `workspaceId`, now on screen; says so when it is gone (spec fenêtre §9). */
 export function completeArrival(workspaceId: string) {
-  if (!pending || pending.workspaceId !== workspaceId) return;
+  if (!pending) return;
+  // Another workspace came first: the user went elsewhere, the arrival is abandoned.
+  if (pending.workspaceId !== workspaceId) {
+    pending = null;
+    return;
+  }
   const target = pending;
   pending = null;
   if (!reach(target.kind, target.id)) toast.error(messages(commandsMessages).goTo.gone(target.label));

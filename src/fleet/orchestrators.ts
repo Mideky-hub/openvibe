@@ -2,7 +2,7 @@ import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
 import { toast } from "sonner";
 import { canvasStore } from "@/canvas/canvasStore";
 import { isGroup } from "@/canvas/groups";
-import { createNodeElement } from "@/canvas/nodeElement";
+import { createNodeElement, NODE_SIZE } from "@/canvas/nodeElement";
 import { allowRemoval } from "@/canvas/removalGuard";
 import { orchestratorSession } from "@/nodes/terminal/launch";
 import { markForAutostart } from "@/nodes/terminal/registry";
@@ -13,7 +13,7 @@ import { isRunning } from "@/store/terminalStatus";
 import { uiStore } from "@/store/ui";
 import { workspacesStore } from "@/store/workspaces";
 import { claudeInstalled } from "./agentsStore";
-import { orchestratorSpot } from "./groupLayout";
+import { clearSpot, orchestratorSpot } from "./groupLayout";
 import { defaultLaunchOptions } from "./launchAgent";
 import { fleetMessages } from "./messages";
 import type { Point } from "./terminals";
@@ -41,7 +41,15 @@ export async function orchestrateGroup(groupId: string) {
   const workspaceId = workspacesStore.getState().activeId;
   const group = canvasStore.getState().frames.find((f) => f.id === groupId);
   if (!api || !workspaceId || !group || !isGroup(group) || (await refusedWithoutClaude())) return;
-  const element = createNodeElement("orchestrator", orchestratorSpot(group));
+  // A second orchestrator of the same group must not land on the first: moved past what it would cover.
+  const { width, height } = NODE_SIZE.orchestrator;
+  const spot = orchestratorSpot(group);
+  const obstacles = api
+    .getSceneElements()
+    .filter((e) => e.type !== "arrow")
+    .map(({ x, y, width, height }) => ({ x, y, width, height }));
+  const clear = clearSpot({ x: spot.x - width / 2, y: spot.y - height / 2, width, height }, obstacles);
+  const element = createNodeElement("orchestrator", { x: clear.x + width / 2, y: clear.y + height / 2 });
   await createOrchestrator(element.id, workspaceId);
   api.updateScene({
     elements: withWire([...api.getSceneElementsIncludingDeleted(), element], element.id, groupId),

@@ -9,6 +9,7 @@ import { GoToRow } from "./GoToRow";
 import { goTo } from "./goToRun";
 import { commandsMessages } from "./messages";
 import { closePalette, modeOf, setPaletteQuery, stripPrefix, usePalette } from "./paletteState";
+import { agentsStore, useAgents } from "@/fleet/agentsStore";
 import { rememberFunction, useRecentFunctions } from "./recent";
 import { COMMANDS } from "./registry";
 import { useGoToData } from "./useGoToData";
@@ -33,6 +34,11 @@ function PaletteBody() {
   const mode = modeOf(query);
   const search = stripPrefix(query);
   const goToData = useGoToData();
+  // « Lancer … » greys the agents not found: look again when the functions open, and follow the answer.
+  useAgents((s) => s.agents);
+  useEffect(() => {
+    if (mode === "functions") void agentsStore.getState().load().catch(() => undefined);
+  }, [mode]);
   const recent = useRecentFunctions();
   const goToList = mode === "goTo" ? goToSections(goToData.items, search) : [];
   const functionList = mode === "functions" && context ? functionSections(COMMANDS, context, search, recent) : [];
@@ -60,6 +66,8 @@ function PaletteBody() {
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.preventDefault();
+              // Placement and link modes end on Escape at the window: not this one.
+              e.stopPropagation();
               closePalette();
             }
             // The keyboard never leaves an open palette.
@@ -121,7 +129,9 @@ function PaletteBody() {
                 </Command.Group>
               ))}
             {mode === "goTo" && goToData.loading && <div className="px-2.5 py-1.5 text-[11.5px] text-ov-text-3">{t.loading}</div>}
-            <Command.Empty className="px-2.5 py-3 text-[12.5px] text-ov-text-3">{t.empty}</Command.Empty>
+            {!(mode === "goTo" && goToData.loading) && (
+              <Command.Empty className="px-2.5 py-3 text-[12.5px] text-ov-text-3">{t.empty}</Command.Empty>
+            )}
           </Command.List>
           <footer className="border-t border-ov-line px-3.5 py-1.5 text-[11px] text-ov-text-2">{t.footer}</footer>
         </Command>

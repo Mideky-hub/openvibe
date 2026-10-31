@@ -198,7 +198,7 @@
 }
 
 /* Toasts, in the bottom-right corner (spec identité §5.8). */
-[data-sonner-toast][data-styled="true"] {
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
   background: var(--ov-glass-strong);
   backdrop-filter: var(--ov-blur);
   -webkit-backdrop-filter: var(--ov-blur);

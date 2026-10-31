@@ -6,6 +6,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 import { useMessages } from "@/i18n";
 import { projectsStore, useProjects } from "@/store/projects";
 import { shellMessages } from "./messages";
@@ -34,7 +35,10 @@ export function ProjectPicker() {
           <DropdownMenuItem
             key={project.id}
             disabled={project.missing}
-            onSelect={() => void projectsStore.getState().open(project.id)}
+            onSelect={() => {
+              if (project.id === activeId) return;
+              void projectsStore.getState().open(project.id).catch((error: unknown) => toast.error(t.openFailed(String(error))));
+            }}
           >
             <Folder />
             <span className="flex min-w-0 flex-col">

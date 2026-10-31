@@ -10,11 +10,13 @@ import { RadialMenu } from "@/radial/RadialMenu";
 import { ReviewPanel } from "@/review/ReviewPanel";
 import { PlacementGhost } from "@/fleet/PlacementGhost";
 import { useWorkspaces } from "@/store/workspaces";
+import { Studio } from "@/studio/Studio";
 import { ActivityRail } from "./ActivityRail";
 import { AgentCounts } from "./AgentCounts";
 import { CommandBar, CommandHint } from "./CommandBar";
 import { CrashNotice } from "./CrashNotice";
 import { GitChip } from "./GitChip";
+import { ModeExit } from "./ModeExit";
 import { ProjectDialogs } from "./ProjectDialogs";
 import { ProjectPicker } from "./ProjectPicker";
 import { SearchField } from "./SearchField";
@@ -84,11 +86,15 @@ export function ProjectView() {
           <div className="absolute bottom-[14px] right-3 z-30">
             <ZoomControl />
           </div>
+          <ModeExit />
           <PlacementGhost />
           <LinkMode />
           <RadialMenu />
           <ErrorBoundary scope="review" fallback={panelCrash}>
             <ReviewPanel />
+          </ErrorBoundary>
+          <ErrorBoundary scope="studio" fallback={panelCrash}>
+            <Studio />
           </ErrorBoundary>
         </>
       ) : (

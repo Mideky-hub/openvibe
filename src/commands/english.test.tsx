@@ -31,7 +31,7 @@ const lines = (query: string, ctx = busy) => functionSections(COMMANDS, ctx, que
 beforeEach(() => {
   langStore.setState({ lang: "en" });
   recentStore.setState({ ids: [] });
-  agentsStore.setState({ agents: [{ id: "claude", available: true }] } as never);
+  agentsStore.setState({ agents: [{ id: "claude", available: true }], loaded: true, load: () => Promise.resolve() } as never);
 });
 afterEach(() => {
   langStore.setState({ lang: "fr" });
