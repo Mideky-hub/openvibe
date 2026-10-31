@@ -8,12 +8,13 @@ Un groupe de quatre à huit agents prend la moitié du canvas. Quand l'utilisate
 
 ## 2. Comportement
 
-- **Replier** : le chevron placé à gauche de l'étiquette du groupe (ou « Replier le groupe » dans le menu ⋯ du groupe, et la palette) replie le groupe. Les terminaux du groupe disparaissent de l'écran ; le cadre ne dessine plus son fond ; seule l'étiquette reste, à sa place.
+- **Replier** : le chevron placé à gauche de l'étiquette du groupe replie le groupe (première version : pas d'entrée dans le menu ⋯ ni dans la palette). Les terminaux du groupe disparaissent de l'écran ; le cadre ne dessine plus son fond ; seule l'étiquette reste, à sa place.
 - **L'étiquette repliée** garde son nom, sa spécialité et ses compteurs (« 4 · 2 en cours · 1 attend ») : on voit encore qui travaille et qui attend. Un agent qui passe à « attend » fait passer le compteur en ambre, comme dépliée.
-- **Déplier** : un clic sur le chevron (il devient ▸), ou « Déplier le groupe » du menu. Les terminaux reviennent tels qu'ils étaient (même place, même écran, même historique).
+- **Déplier** : un clic sur le chevron (il devient ▸). Les terminaux reviennent tels qu'ils étaient (même place, même écran, même historique).
 - **Rien ne s'arrête.** Replier ne ferme, ne met en pause et ne touche aucun processus. Les terminaux ne sont plus affichés, pas arrêtés : leur sortie continue d'être lue et gardée.
-- **Aller vers un agent replié le déplie.** Le panneau Agents (clic sur une ligne), « Aller à », Ctrl+Tab et la barre de consigne qui cible un agent du groupe dépliant d'abord le groupe, puis agissent.
-- **Fermer le groupe, le dégrouper, lui ajouter un agent** déplient d'abord le groupe : on agit sur ce qu'on voit.
+- **Aller vers un agent replié le déplie.** Tout ce qui amène à un agent (clic sur sa ligne du panneau Agents, « Aller à », Ctrl+Tab, palette) déplie d'abord le groupe, puis arrive sur l'agent.
+- **Fermer le groupe, le dégrouper, lui ajouter un agent** ne déplient pas encore le groupe (suite possible) : le menu ⋯ d'un groupe replié reste utilisable depuis son étiquette.
+- **Limite connue.** Un agent d'un groupe replié avant d'avoir démarré ne démarre qu'au dépliage (Excalidraw ne monte un nœud qu'une fois affiché, spec groupes spécialisés §4).
 - **Zone de clic.** Les cases laissées vides par un groupe replié ne sont ni sélectionnables ni déplaçables au lasso : un groupe replié se sélectionne par son étiquette.
 
 ## 3. Sauvegarde

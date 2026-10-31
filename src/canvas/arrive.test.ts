@@ -186,3 +186,22 @@ describe("revealNode (plan B1)", () => {
     expect(revealNode("nope")).toBe(false);
   });
 });
+
+describe("arriving at a terminal of a folded group (spec replier un groupe §2)", () => {
+  it("unfolds the group first, then arrives", async () => {
+    const setGroupFolded = vi.fn();
+    vi.doMock("@/fleet/groups", () => ({ setGroupFolded }));
+    const updateScene = vi.fn();
+    canvasStore.setState({
+      frames: [{ id: "g", name: "G", x: 0, y: 0, width: 1, height: 1, group: { role: "general", pantheon: "greek", folded: true }, memberIds: ["isis"] }] as never,
+      api: {
+        getSceneElements: () => [isis],
+        getAppState: () => ({ scrollX: 0, scrollY: 0, zoom: { value: 1 }, ...viewport }),
+        updateScene,
+      } as unknown as ExcalidrawImperativeAPI,
+    });
+    expect(arrive("isis")).toBe(true);
+    await vi.waitFor(() => expect(setGroupFolded).toHaveBeenCalledWith("g", false));
+    canvasStore.setState({ frames: [] });
+  });
+});
