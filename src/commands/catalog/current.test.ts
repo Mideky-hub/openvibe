@@ -19,7 +19,7 @@ import { reviewStore } from "@/review/reviewStore";
 import { CURRENT } from "./current";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
-vi.mock("@/canvas/arrive", () => ({ showNode: vi.fn(() => true), arrive: vi.fn() }));
+vi.mock("@/canvas/arrive", () => ({ showNode: vi.fn(() => true), arrive: vi.fn(), arrivingNode: vi.fn(() => null) }));
 vi.mock("@/canvas/canvasFocus", () => ({ focusGroup: vi.fn(() => true), releaseToCanvas: vi.fn() }));
 vi.mock("@/fleet/broadcast", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/fleet/broadcast")>()),

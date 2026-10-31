@@ -15,7 +15,7 @@ import { paletteStore } from "./paletteState";
 import { COMMANDS, commandContext } from "./registry";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
-vi.mock("@/canvas/arrive", () => ({ arrive: vi.fn() }));
+vi.mock("@/canvas/arrive", () => ({ arrive: vi.fn(), arrivingNode: vi.fn(() => null) }));
 vi.mock("@/canvas/keyboardFocus", () => ({ terminalWithKeyboard: vi.fn(() => null), lastTerminalOf: vi.fn(() => null) }));
 
 const home: CommandContext = { project: false, workspaceId: null, terminalCount: 0, terminalId: null };

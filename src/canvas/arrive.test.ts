@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { focusTerminal } from "@/nodes/terminal/registry";
 import { arrivalStore } from "./arrivalSignal";
-import { arrivalView, arrive, needsMove, showNode } from "./arrive";
+import { arrivalView, arrive, arrivingNode, needsMove, showNode } from "./arrive";
 import { canvasStore } from "./canvasStore";
 
 vi.mock("@/nodes/terminal/registry", () => ({ focusTerminal: vi.fn() }));
@@ -108,6 +108,18 @@ describe("arrive", () => {
     frames.shift()!(0);
     expect(focusTerminal).toHaveBeenCalledWith("chef");
     expect(arrivalStore.getState()).toEqual(before);
+  });
+
+  it("lets only the latest arrival keep trying, and names the one still arriving", () => {
+    withScene(at100);
+    arrive("isis");
+    arrive("chef");
+    expect(arrivingNode()).toBe("chef");
+    while (frames.length > 0) frames.shift()!(0);
+    // The first loop stopped at its first frame; the second ran its ten.
+    expect(vi.mocked(focusTerminal).mock.calls.filter(([id]) => id === "isis")).toHaveLength(0);
+    expect(vi.mocked(focusTerminal).mock.calls.filter(([id]) => id === "chef")).toHaveLength(10);
+    expect(arrivingNode()).toBeNull();
   });
 
   it("does nothing for a terminal that is not on the canvas", () => {
