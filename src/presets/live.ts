@@ -1,4 +1,5 @@
 import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
+import { ZONE_OFFSETS } from "@/canvas/canvasFocus";
 import { canvasStore } from "@/canvas/canvasStore";
 import { withGroupSpeciality } from "@/canvas/groups";
 import { nodeKindOf } from "@/canvas/nodeElement";
@@ -46,5 +47,12 @@ export async function liveDeployDeps(): Promise<DeployDeps> {
     orchestrate: orchestrateGroup,
     link: linkOrchestrator,
     rename: renameOrchestrator,
+    fit: (ids) => {
+      const scene = canvasStore.getState().api;
+      const targets = scene?.getSceneElements().filter((e) => ids.includes(e.id) || (e.frameId !== null && ids.includes(e.frameId)));
+      if (scene && targets && targets.length > 0) {
+        scene.scrollToContent(targets, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true, canvasOffsets: ZONE_OFFSETS });
+      }
+    },
   };
 }
