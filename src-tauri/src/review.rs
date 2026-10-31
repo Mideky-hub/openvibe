@@ -51,7 +51,7 @@ pub struct FileText {
     pub truncated: bool,
 }
 
-fn command(dir: &Path, args: &[&str]) -> Command {
+pub(crate) fn command(dir: &Path, args: &[&str]) -> Command {
     let mut command = Command::new("git");
     command
         .arg("--no-optional-locks")
@@ -123,7 +123,7 @@ fn diff_output(dir: &Path, args: &[&str], codes: &[i32]) -> Result<String, Strin
 
 /// A path from the repository's root, as the interface gives it: never
 /// absolute, never with `..`, so it cannot name a file outside the repository.
-fn relative(path: &str) -> Result<&Path, String> {
+pub(crate) fn relative(path: &str) -> Result<&Path, String> {
     let rel = Path::new(path);
     if path.is_empty()
         || rel.is_absolute()

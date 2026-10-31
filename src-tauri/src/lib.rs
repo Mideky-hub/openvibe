@@ -8,6 +8,7 @@ mod logging;
 mod mission;
 mod process;
 mod pty;
+mod repo;
 mod review;
 mod studio;
 mod sync;
@@ -108,6 +109,11 @@ pub fn run() {
             commands::project::delete_project,
             commands::workspace::set_workspace_pantheon,
             commands::git::git_status,
+            commands::repo::repo_state,
+            commands::repo::repo_history,
+            commands::repo::repo_commit,
+            commands::repo::repo_discard,
+            commands::repo::repo_push,
             commands::review::review_changes,
             commands::review::review_file_diff,
             commands::review::review_files,

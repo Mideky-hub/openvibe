@@ -4,6 +4,7 @@ pub mod git;
 pub mod mission;
 pub mod project;
 pub mod pty;
+pub mod repo;
 pub mod review;
 pub mod studio;
 #[cfg(all(test, windows))]
