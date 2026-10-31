@@ -191,7 +191,9 @@ pub fn clear(dir: &Path) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().is_some_and(|ext| ext == "json") {
+        // `curl.cfg` holds the previous run's token: gone with the server.
+        let stale_token = path.file_name().is_some_and(|name| name == "curl.cfg");
+        if stale_token || path.extension().is_some_and(|ext| ext == "json") {
             let _ = std::fs::remove_file(path);
         }
     }
@@ -431,6 +433,17 @@ mod tests {
             "{script}"
         );
         assert!(!script.contains('\r'), "bash needs LF line ends");
+    }
+
+    #[test]
+    fn clearing_removes_a_dead_token_s_curl_config_too() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = write_curl_config(dir.path(), "old-token").unwrap();
+        let script = dir.path().join("statusline.sh");
+        std::fs::write(&script, "#!/bin/sh\n").unwrap();
+        clear(dir.path());
+        assert!(!config.exists(), "the dead token stayed on disk");
+        assert!(script.exists(), "the script holds no token");
     }
 
     #[test]
