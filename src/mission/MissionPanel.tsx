@@ -99,7 +99,7 @@ function Settings({ nodeId, mission }: { nodeId: string; mission: Mission }) {
         type="button"
         data-link-toggle
         onClick={() => uiStore.getState().setLinking(linking ? null : nodeId)}
-        className="rounded-full bg-ov-accent px-2.5 py-0.5 text-[11px] font-semibold text-white hover:brightness-110"
+        className="rounded-full bg-ov-accent px-2.5 py-0.5 text-[11px] font-semibold text-ov-on-accent hover:brightness-110"
       >
         {linking ? t.done : t.link}
       </button>
@@ -143,7 +143,7 @@ function Plan({ nodeId, mission }: { nodeId: string; mission: Mission }) {
           type="button"
           disabled={launching}
           onClick={() => void launchMission(nodeId)}
-          className="ml-auto rounded-full bg-ov-accent px-3 py-1 text-[11px] font-semibold text-white hover:brightness-110 disabled:opacity-60"
+          className="ml-auto rounded-full bg-ov-accent px-3 py-1 text-[11px] font-semibold text-ov-on-accent hover:brightness-110 disabled:opacity-60"
         >
           {launching ? t.launching : t.launch}
         </button>
