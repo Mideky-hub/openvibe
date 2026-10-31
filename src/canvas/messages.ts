@@ -8,6 +8,8 @@ export const canvasMessages = defineMessages(
     loading: "Chargement…",
     groupName: (n: number) => `Groupe ${n}`,
     groupNameLabel: "Nom du groupe",
+    foldGroup: "Replier le groupe",
+    unfoldGroup: "Déplier le groupe",
   },
   {
     saveFailed: (error: string) => `Could not save: ${error}`,
@@ -15,6 +17,8 @@ export const canvasMessages = defineMessages(
     loading: "Loading…",
     groupName: (n: number) => `Group ${n}`,
     groupNameLabel: "Group name",
+    foldGroup: "Fold the group",
+    unfoldGroup: "Unfold the group",
   },
 );
 
