@@ -13,6 +13,10 @@ export const shellMessages = defineMessages(
       active: "Agents actifs du projet",
       activeCount: (count: number) => plural("fr", count, "actif", "actifs"),
     },
+    waitingNotice: {
+      question: (name: string) => `${name} a une question`,
+      others: (count: number) => `+ ${plural("fr", count, "autre", "autres")}`,
+    },
     closeAgent: {
       fallbackName: "cet agent",
       several: (names: string[]) => `Ces agents tournent encore ; les fermer met fin à leur session : ${names.join(", ")}.`,
@@ -166,10 +170,11 @@ export const shellMessages = defineMessages(
       createFailed: "Création impossible",
     },
     removeWorkspace: {
-      confirm: (name: string, running: number) => {
+      confirm: (name: string, running: number, names: string[] = []) => {
+        const who = names.length > 0 ? ` (${names.join(", ")})` : "";
         const consequence =
           running > 0
-            ? `${plural("fr", running, "agent sera arrêté", "agents seront arrêtés")} et son contenu effacé.`
+            ? `${plural("fr", running, "agent sera arrêté", "agents seront arrêtés")}${who} et son contenu effacé.`
             : "Son contenu sera effacé.";
         return `Supprimer « ${name} » ? ${consequence}`;
       },
@@ -219,6 +224,10 @@ export const shellMessages = defineMessages(
       waiting: "Agents waiting for your answer",
       active: "Active agents in the project",
       activeCount: (count: number) => plural("en", count, "active", "active"),
+    },
+    waitingNotice: {
+      question: (name: string) => `${name} has a question`,
+      others: (count: number) => `+ ${plural("en", count, "more", "more")}`,
     },
     closeAgent: {
       fallbackName: "this agent",
@@ -373,10 +382,11 @@ export const shellMessages = defineMessages(
       createFailed: "Could not create",
     },
     removeWorkspace: {
-      confirm: (name: string, running: number) => {
+      confirm: (name: string, running: number, names: string[] = []) => {
+        const who = names.length > 0 ? ` (${names.join(", ")})` : "";
         const consequence =
           running > 0
-            ? `${plural("en", running, "agent will be stopped", "agents will be stopped")} and its contents erased.`
+            ? `${plural("en", running, "agent will be stopped", "agents will be stopped")}${who} and its contents erased.`
             : "Its contents will be erased.";
         return `Delete "${name}"? ${consequence}`;
       },

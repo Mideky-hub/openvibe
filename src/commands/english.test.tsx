@@ -41,6 +41,7 @@ afterEach(() => {
 describe("the palette's catalogs in English", () => {
   it("reads labels and sections in the current language", () => {
     expect(labelOf(find("terminal.next"), busy)).toBe("Next terminal");
+    expect(labelOf(find("agent.nextWaiting"), busy)).toBe("Go to the next waiting agent");
     expect(labelOf(find("agent.launch.claude"), busy)).toBe("Launch Claude");
     expect(labelOf(find("agent.launch.ollama"), busy)).toBe("Install Ollama…");
     expect(labelOf(find("tool.rectangle"), busy)).toBe("Rectangle");

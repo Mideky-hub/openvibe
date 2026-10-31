@@ -29,6 +29,7 @@ which = "8.0.6"
 uuid = { version = "1", features = ["v4"] }
 portable-pty = "0.9.0"
 tauri-plugin-dialog = "2"
+tauri-plugin-notification = "=2.8.0"
 rusqlite = { version = "0.40", features = ["bundled"] }
 tiny_http = "0.12"
 tauri-plugin-log = "2"
