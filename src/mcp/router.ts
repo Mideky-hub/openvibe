@@ -1,5 +1,6 @@
 import { messages } from "@/i18n";
 import { mcpReply, onMcpCall, type McpCall } from "@/ipc/mcp";
+import { notesTool, notesToolSpec } from "@/notes/agentTool";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { AGENT_ONLY, agentTools, declareSteps, markStep, refused, report } from "./agentTools";
 import { agentMessages } from "./messages";
@@ -12,11 +13,13 @@ const t = () => messages(agentMessages).router;
 export async function answer(call: McpCall): Promise<unknown> {
   const record = nodesStore.getState().nodes[call.nodeId];
   const orchestrator = record?.kind === "orchestrator";
-  if (call.method === "tools/list") return { tools: orchestrator ? orchestratorTools() : agentTools() };
+  if (call.method === "tools/list") return { tools: [...(orchestrator ? orchestratorTools() : agentTools()), notesToolSpec()] };
   const asked = String(call.params.name ?? "");
   const { name, args } = internalCall(asked, (call.params.arguments ?? {}) as Record<string, unknown>);
   // A conversation resumed from before the English names may still call a former one.
   if (!name) return refused(Object.prototype.hasOwnProperty.call(RENAMED, asked) ? t().renamed(RENAMED[asked]) : t().unknown(asked));
+  // Read-only and for all: the caller's project comes from the base, it may not be the one on screen.
+  if (name === "notes") return notesTool(call.nodeId, orchestrator, args);
   if (orchestrator) return AGENT_ONLY.has(name) ? refused(t().agentsOnly) : orchestratorTool(call.nodeId, name, args);
   if (!terminalOf(record)) return refused(t().gone);
   if (ORCHESTRATOR_ONLY.has(name)) return refused(t().orchestratorOnly);
