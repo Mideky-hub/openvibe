@@ -186,6 +186,17 @@ export function totals(sessions: readonly SessionUsage[]) {
   };
 }
 
+/** The prompt cache lists the sessions that can still be warm: a node still on the canvas, its latest session only. */
+export function liveCacheSessions(sessions: readonly SessionUsage[], nodeIds: ReadonlySet<string>): SessionUsage[] {
+  const latest = new Map<string, SessionUsage>();
+  for (const s of sessions) {
+    if (!s.cache || !nodeIds.has(s.nodeId)) continue;
+    const known = latest.get(s.nodeId);
+    if (!known || s.at >= known.at) latest.set(s.nodeId, s);
+  }
+  return [...latest.values()];
+}
+
 /** « 0,0074 $ », « 12,50 $ »; "$0.0074", "$12.50" in English. */
 export function formatUsd(usd: number, lang: Lang = langStore.getState().lang): string {
   const amount = formatDecimal(usd, usd < 0.1 ? 4 : 2, lang);

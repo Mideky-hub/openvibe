@@ -237,6 +237,8 @@ export async function cleanMission(orchestratorId: string): Promise<Cleanup | st
   if (mission?.state !== "terminee") return t().launch.notFinished;
   const next: Mission = { ...NEW_MISSION, maxAgents: mission.maxAgents };
   if (mission.budgetMin !== undefined) next.budgetMin = mission.budgetMin;
+  // The router is a setting like the budget: the next mission keeps it checked.
+  if (mission.router) next.router = true;
   try {
     return mission.project && mission.slug ? await missionCleanup(mission.project, mission.slug, mission.members.map((m) => m.name)) : { removed: [], kept: [] };
   } catch (error) {

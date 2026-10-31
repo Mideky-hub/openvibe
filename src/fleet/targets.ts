@@ -97,7 +97,9 @@ export function mentionAt(text: string, caret: number): { start: number; query: 
 }
 
 /** The names of a slashed mention ("thot/ze"): those already typed, and the one being completed. */
-export function mentionParts(query: string): { typed: string[]; query: string } {
+export function mentionParts(query: string, options: readonly TargetOption[] = []): { typed: string[]; query: string } {
+  // A name that contains a slash ("Front/Back") is tried whole before being split.
+  if (query.includes("/") && matchOptions(options, query).length > 0) return { typed: [], query };
   const names = query.split("/");
   const last = names.pop() ?? "";
   return { typed: names.filter(Boolean), query: last };
@@ -117,6 +119,11 @@ export function partTargets(names: readonly string[], options: readonly TargetOp
  */
 export function keptDismissal(dismissedAt: number | null, text: string, caret: number): number | null {
   return dismissedAt !== null && mentionAt(text, caret)?.start === dismissedAt ? dismissedAt : null;
+}
+
+/** The text of a slashed mention whose names are not all known: kept as typed, the last one completed. */
+export function completedMention(typed: readonly string[], option: TargetOption): string {
+  return `@${[...typed, option.label.slice(1)].join("/")}`;
 }
 
 /** `text` without the mention from `start` to `end`, and one space after it. */
