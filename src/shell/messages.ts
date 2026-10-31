@@ -6,7 +6,7 @@ export const shellMessages = defineMessages(
     loading: "Chargement…",
     percent: (n: number) => `${n} %`,
     failed: (what: string, error: string) => `${what} : ${error}`,
-    activityRail: { agents: "Agents", settings: "Réglages" },
+    activityRail: { agents: "Agents", codeStudio: "Studio Code", settings: "Réglages" },
     agentCounts: {
       working: "Agents en cours",
       waiting: "Agents qui attendent ta réponse",
@@ -208,7 +208,7 @@ export const shellMessages = defineMessages(
     loading: "Loading…",
     percent: (n: number) => `${n}%`,
     failed: (what: string, error: string) => `${what}: ${error}`,
-    activityRail: { agents: "Agents", settings: "Settings" },
+    activityRail: { agents: "Agents", codeStudio: "Code studio", settings: "Settings" },
     agentCounts: {
       working: "Agents working",
       waiting: "Agents waiting for your answer",

@@ -10,6 +10,7 @@ import { RadialMenu } from "@/radial/RadialMenu";
 import { ReviewPanel } from "@/review/ReviewPanel";
 import { PlacementGhost } from "@/fleet/PlacementGhost";
 import { useWorkspaces } from "@/store/workspaces";
+import { Studio } from "@/studio/Studio";
 import { ActivityRail } from "./ActivityRail";
 import { AgentCounts } from "./AgentCounts";
 import { CommandBar, CommandHint } from "./CommandBar";
@@ -87,6 +88,9 @@ export function ProjectView() {
           <RadialMenu />
           <ErrorBoundary scope="review" fallback={panelCrash}>
             <ReviewPanel />
+          </ErrorBoundary>
+          <ErrorBoundary scope="studio" fallback={panelCrash}>
+            <Studio />
           </ErrorBoundary>
         </>
       ) : (
