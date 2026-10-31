@@ -45,10 +45,12 @@ export function boot(): Promise<void> {
     });
     // Listened to before the snapshot: no change can fall between the two.
     await onAgentActivity((event) => agentActivityStore.getState().apply(event));
+    await onAgentSubagents(({ nodeId, running }) => subagentsStore.getState().set(nodeId, running));
     const activity = await agentActivitySnapshot();
     agentActivityStore.getState().load(activity.activities);
+    // What the sessions ran before this page loaded: the count is not lost on a reload.
+    for (const { nodeId, running } of activity.subagents ?? []) subagentsStore.getState().set(nodeId, running);
     if (!activity.hooksAvailable) toast.warning(messages(appMessages).hooksDown);
-    await onAgentSubagents(({ nodeId, running }) => subagentsStore.getState().set(nodeId, running));
     await installMcp();
     await installUsage();
     installMissionEvents();
