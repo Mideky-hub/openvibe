@@ -2,6 +2,7 @@ import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { toast } from "sonner";
 import { messages } from "@/i18n";
+import { revealNode } from "@/canvas/arrive";
 import { canvasStore } from "@/canvas/canvasStore";
 import { groupInfoOf, groupOf, insertIntoFrame } from "@/canvas/groups";
 import { allowRemoval } from "@/canvas/removalGuard";
@@ -46,6 +47,8 @@ export async function addTerminal(
     elements: frame ? joinGroup(elements, element, frame) : [...elements, element],
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
+  // Out of sight, Excalidraw would neither show it nor start its agent.
+  revealNode(element.id);
   return element.id;
 }
 
