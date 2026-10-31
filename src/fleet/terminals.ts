@@ -1,5 +1,7 @@
 import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import { toast } from "sonner";
+import { messages } from "@/i18n";
 import { canvasStore } from "@/canvas/canvasStore";
 import { groupInfoOf, groupOf, insertIntoFrame } from "@/canvas/groups";
 import { allowRemoval } from "@/canvas/removalGuard";
@@ -9,8 +11,10 @@ import type { TerminalPayload } from "@/nodes/types";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { uiStore } from "@/store/ui";
+import { claudeInstalled } from "./agentsStore";
 import { cloneTerminalPayload } from "./clone";
 import { arrangeInFrame, freeCell } from "./groupLayout";
+import { fleetMessages } from "./messages";
 import { nameForNewAgent } from "./naming";
 
 export interface Point {
@@ -74,10 +78,17 @@ export async function duplicateTerminal(workspaceId: string, nodeId: string) {
 export async function adoptCopies(workspaceId: string, copies: readonly { id: string; sourceId: string }[]) {
   const api = canvasStore.getState().api;
   if (!api) return;
+  const refused = new Set<string>();
   for (const { id, sourceId } of copies) {
     const source = nodesStore.getState().nodes[sourceId];
     if (!source) continue;
     if (source.kind === "orchestrator") {
+      // An orchestrator runs Claude Code: without it, the copy is taken back (spec première version §7.2).
+      if (!(await claudeInstalled())) {
+        toast.error(messages(fleetMessages).noClaude);
+        refused.add(id);
+        continue;
+      }
       // A copied orchestrator keeps its name; its session, created when shown, and its wires are its own.
       await nodesStore.getState().create(id, { workspaceId, kind: "orchestrator", payload: { name: source.payload.name } });
       continue;
@@ -88,7 +99,8 @@ export async function adoptCopies(workspaceId: string, copies: readonly { id: st
     const name = await nameForNewAgent(workspaceId, group?.group?.pantheon);
     await nodesStore.getState().create(id, { workspaceId, kind: "terminal", payload: cloneTerminalPayload(source.payload, name) });
   }
-  const ids = new Set(copies.map((copy) => copy.id));
+  if (refused.size) removeNodes([...refused]);
+  const ids = new Set(copies.map((copy) => copy.id).filter((id) => !refused.has(id)));
   const linked = api
     .getSceneElementsIncludingDeleted()
     .map((e) => (ids.has(e.id) ? newElementWith(e, { link: `openvibe://${nodeKindOf(e) ?? "terminal"}/${e.id}` }) : e));

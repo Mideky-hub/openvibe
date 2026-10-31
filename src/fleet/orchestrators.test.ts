@@ -65,6 +65,16 @@ it("gives a copied orchestrator a session of its own, created when shown", async
   expect(nodesStore.getState().nodes.copie.payload).toEqual({ name: "Chef" });
 });
 
+it("takes back a copie-refuseed orchestrator when Claude Code is not installed", async () => {
+  agentsStore.setState({ agents: [{ id: "claude", available: false }], shells: [], loaded: true });
+  await nodesStore.getState().create("chef", { workspaceId: "w1", kind: "orchestrator", payload: { name: "Chef" } });
+  scene = [{ id: "copie-refusee", type: "embeddable", customData: { kind: "orchestrator" }, frameId: null }];
+  await adoptCopies("w1", [{ id: "copie-refusee", sourceId: "chef" }]);
+  expect(nodesStore.getState().nodes.copie-refusee).toBeUndefined();
+  expect(scene[0].isDeleted).toBe(true);
+  expect(toast.error).toHaveBeenCalled();
+});
+
 it("asks before closing a working orchestrator, with its wires; a stopped one goes at once (spec première version §5.4)", () => {
   const wire = { id: "fil", type: "arrow", startBinding: { elementId: "chef" }, endBinding: { elementId: "isis" } };
   scene = [{ id: "chef", type: "embeddable" }, wire as (typeof scene)[number], { id: "isis", type: "embeddable" }];
