@@ -6,11 +6,16 @@ import { nodesStore } from "@/store/nodes";
 import { workspacesStore } from "@/store/workspaces";
 import { nextName, nextPantheon } from "./names";
 
-/** Names already carried by the terminals of a workspace. */
+/**
+ * Names already carried by the terminals of a workspace. A closed terminal's
+ * node stays in memory for Ctrl+Z but is off the canvas: its name is free again.
+ */
 export function namesInWorkspace(workspaceId: string): string[] {
-  return Object.values(nodesStore.getState().nodes)
-    .filter((node) => node.workspaceId === workspaceId && node.kind === "terminal" && node.payload.name)
-    .map((node) => node.payload.name);
+  const scene = canvasStore.getState().api?.getSceneElements();
+  const onCanvas = scene ? new Set(scene.map((e) => e.id)) : null;
+  return Object.entries(nodesStore.getState().nodes)
+    .filter(([id, node]) => node.workspaceId === workspaceId && node.kind === "terminal" && node.payload.name && (!onCanvas || onCanvas.has(id)))
+    .map(([, node]) => node.payload.name);
 }
 
 /** The pantheon of the agents outside groups; it avoids those of the groups on screen. */
