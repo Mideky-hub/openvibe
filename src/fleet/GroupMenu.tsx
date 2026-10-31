@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useUiRequest } from "@/commands/uiRequests";
 import { messages, useMessages } from "@/i18n";
+import { GroupNotesItem } from "@/notes/GroupNotesItem";
 import { uiStore } from "@/store/ui";
 import { useAgents } from "./agentsStore";
 import { pauseAll, resumeAll } from "./broadcast";
@@ -92,6 +93,7 @@ export function GroupMenu({ groupId, trigger, answersRequests = false }: { group
         <DropdownMenuItem onSelect={() => void resumeAll(groupMembers(groupId))}>{t.groupMenu.resumeAll}</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void setRemoteControlAll(groupMembers(groupId), true)}>{t.remote.turnOn}</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void setRemoteControlAll(groupMembers(groupId), false)}>{t.remote.turnOff}</DropdownMenuItem>
+        <GroupNotesItem groupId={groupId} />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => ungroup(groupId)}>{t.groupMenu.ungroup}</DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={() => requestCloseGroup(groupId)}>
