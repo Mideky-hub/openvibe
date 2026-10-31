@@ -29,6 +29,7 @@ beforeEach(() => {
     updateScene: ({ elements }: { elements?: typeof scene }) => {
       if (elements) scene = elements;
     },
+    getAppState: () => ({ width: 1400, height: 800 }),
     scrollToContent: vi.fn(),
   };
   canvasStore.setState({ api: api as unknown as ExcalidrawImperativeAPI });
