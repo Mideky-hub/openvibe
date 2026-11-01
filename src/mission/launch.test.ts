@@ -463,8 +463,14 @@ describe("a mission fed by tickets (review)", () => {
   });
 
   it("tells an agent working on a Kanban card too: GitHub may have written it", () => {
-    expect(withTicketNote(NEW_MISSION, "x", { card: "c1" })).toContain(data);
-    expect(withTicketNote(NEW_MISSION, "x", {})).toBe("x");
+    expect(withTicketNote("chef", NEW_MISSION, "x", { card: "c1" })).toContain(data);
+    expect(withTicketNote("chef", NEW_MISSION, "x", {})).toBe("x");
+  });
+
+  it("tells it too when a linked board fed the plan and the task names no card", async () => {
+    await nodesStore.getState().create("k1", { workspaceId: "w1", kind: "kanban", payload: { columns: [], cards: {}, orchestrator: { nodeId: "chef", columnId: "c" } } });
+    expect(withTicketNote("chef", NEW_MISSION, "x", {})).toContain(data);
+    nodesStore.getState().update("k1", { orchestrator: undefined });
   });
 
   it("says nothing of it in a mission without tickets", async () => {

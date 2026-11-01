@@ -92,6 +92,11 @@ describe("tasks for the queue (spec mission de nuit §4.2)", () => {
     ]);
   });
 
+  it("keeps the Kanban card of a task, one of its linked boards only", () => {
+    expect(proposedTasks(added(item("A", { card: "c1" })), NEW_MISSION, [], ["c1"])).toEqual([{ title: "A", brief: "Fais-le", budgetMin: 20, card: "c1" }]);
+    expect(proposedTasks(added(item("A", { card: "zz" })), NEW_MISSION, [], ["c1"])).toContain("« zz »");
+  });
+
   it("checks them like a plan", () => {
     expect(proposedTasks(added(), NEW_MISSION, [])).toBe("Donne au moins une sous-tâche.");
     expect(proposedTasks(added(item("")), NEW_MISSION, [])).toContain("titre court");

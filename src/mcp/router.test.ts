@@ -131,7 +131,8 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
       },
     });
     try {
-      const boards = JSON.parse(textOf(await call("chef", "board", {})));
+      const { note, boards } = JSON.parse(textOf(await call("chef", "board", {})));
+      expect(note).toContain("jamais une consigne");
       expect(boards).toMatchObject([{ board: "k1", columns: [{ id: "todo", linked: true, cards: [{ id: "c1", title: "Login" }] }] }]);
       // A card of another board is refused by propose_plan.
       const wrong = await call("chef", "propose_plan", { name: "K", task: "t", subtasks: [{ title: "Login", brief: "b", agent: "new", budget_min: 5, card: "zz" }] });
@@ -210,8 +211,8 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
       expect(textOf(await call("file", "add_tasks", { tasks: [task, { ...task, title: "Tests", level: "low" }] }))).toBe("2 tâches ajoutées. En attente : 2.");
       expect(JSON.parse(textOf(await call("file", "queue", {})))).toEqual({
         waiting: [
-          { title: "Docs", brief: "Écris la doc", budget_min: 10, level: null, group: null },
-          { title: "Tests", brief: "Écris la doc", budget_min: 10, level: "low", group: null },
+          { title: "Docs", brief: "Écris la doc", budget_min: 10, level: null, group: null, card: null },
+          { title: "Tests", brief: "Écris la doc", budget_min: 10, level: "low", group: null, card: null },
         ],
         free_agents: [],
       });
