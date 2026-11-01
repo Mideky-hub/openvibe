@@ -37,12 +37,12 @@ pub async fn repo_commit(
 
 /// After the window's confirmation; refused if the file changed since (spec fenêtre git §2).
 #[tauri::command]
-pub async fn repo_discard(path: String, file: ChangedFile) -> AppResult<()> {
-    blocking(move || repo::discard(Path::new(&path), &file)).await
+pub async fn repo_discard(path: String, file: ChangedFile, stamp: String) -> AppResult<()> {
+    blocking(move || repo::discard(Path::new(&path), &file, &stamp)).await
 }
 
 /// The window's Push button, and nothing else (spec fenêtre git §2.3).
 #[tauri::command]
-pub async fn repo_push(path: String) -> AppResult<()> {
-    blocking(move || repo::push(Path::new(&path))).await
+pub async fn repo_push(path: String, branch: String, target: String) -> AppResult<()> {
+    blocking(move || repo::push(Path::new(&path), &branch, &target)).await
 }

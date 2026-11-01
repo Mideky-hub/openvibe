@@ -25,7 +25,7 @@ const file = (path: string, status: ChangedFile["status"] = "modified", counts: 
   removed: counts?.[1] ?? null,
 });
 
-const base: RepoState = { branch: "main", upstream: "origin/main", ahead: 2, behind: 0, pushTo: "origin/main", noPush: null, files: [], truncated: false };
+const base: RepoState = { branch: "main", upstream: "origin/main", ahead: 2, behind: 0, pushTo: "origin/main", noPush: null, files: [], stamps: { "src/a.ts": "s1", "b.txt": "s2" }, truncated: false };
 
 let repo: RepoState;
 let history: LogEntry[];
@@ -129,6 +129,32 @@ describe("the changes (spec fenêtre git §3.1)", () => {
     expect(document.body.textContent).toContain("Liste coupée : seuls les 2 premiers changements");
   });
 
+  it("keeps the message and the choices when a refresh fails, and says why", async () => {
+    await render();
+    await act(async () => check("Inclure b.txt").click());
+    await typeMessage("fix: something");
+    fail.repo_state = "index.lock";
+    await act(async () => labelled("Actualiser").click());
+    expect(document.body.querySelector("[role='alert']")!.textContent).toContain("index.lock");
+    expect((labelled("Message du commit") as HTMLTextAreaElement).value).toBe("fix: something");
+    expect(check("Inclure b.txt").checked).toBe(false);
+  });
+
+  it("never lets an older answer overwrite a newer one", async () => {
+    const answers: ((state: RepoState) => void)[] = [];
+    await render();
+    mockIPC((cmd) => {
+      if (cmd === "repo_state") return new Promise((resolve) => answers.push(resolve));
+      if (cmd === "review_file_diff") return "";
+    });
+    await act(async () => labelled("Actualiser").click());
+    await act(async () => labelled("Actualiser").click());
+    await act(async () => answers[1]({ ...repo, files: [file("newer.ts")] }));
+    await act(async () => answers[0]({ ...repo, files: [file("older.ts")] }));
+    expect(document.body.querySelector("[data-git-file='newer.ts']")).not.toBeNull();
+    expect(document.body.querySelector("[data-git-file='older.ts']")).toBeNull();
+  });
+
   it("says when nothing changed", async () => {
     repo.files = [];
     await render();
@@ -216,8 +242,20 @@ describe("discarding (spec fenêtre git §3.3)", () => {
     await ask("src/a.ts");
     calls = [];
     await act(async () => button("Abandonner ce fichier")!.click());
-    expect(called("repo_discard")[0].args).toEqual({ path: "C:/code/api", file: repo.files[0] });
+    expect(called("repo_discard")[0].args).toEqual({ path: "C:/code/api", file: repo.files[0], stamp: "s1" });
     expect(called("repo_state").length).toBe(1);
+  });
+
+  it("drops the question when the file leaves the list, so it cannot come back", async () => {
+    await render();
+    await ask("src/a.ts");
+    const kept = repo.files;
+    repo = { ...repo, files: [] };
+    await act(async () => labelled("Actualiser").click());
+    repo = { ...repo, files: kept };
+    await act(async () => labelled("Actualiser").click());
+    expect(document.body.querySelector("[role='dialog']")).toBeNull();
+    expect(called("repo_discard")).toEqual([]);
   });
 
   it("says an untracked file will be deleted", async () => {
@@ -264,7 +302,7 @@ describe("pushing (spec fenêtre git §3.5)", () => {
     expect(called("repo_push")).toEqual([]);
     calls = [];
     await act(async () => button("Pousser 2 → origin/main")!.click());
-    expect(called("repo_push")).toEqual([{ cmd: "repo_push", args: { path: "C:/code/api" } }]);
+    expect(called("repo_push")).toEqual([{ cmd: "repo_push", args: { path: "C:/code/api", branch: "main", target: "origin/main" } }]);
     expect(called("repo_state").length).toBe(1);
     expect(toast).toHaveBeenCalledWith("Poussé vers origin/main");
   });
@@ -287,6 +325,7 @@ describe("pushing (spec fenêtre git §3.5)", () => {
     ["manyRemotes", "Plusieurs dépôts distants, aucun origin : pousse depuis un terminal"],
     ["detached", "HEAD détachée : aucune branche à pousser"],
     ["noCommit", "Aucun commit à pousser"],
+    ["mirror", "Ce dépôt distant est un miroir : pousse depuis un terminal"],
   ])("says why it cannot push: %s", async (noPush, why) => {
     repo = { ...repo, upstream: null, ahead: 0, pushTo: null, noPush };
     await render();
