@@ -48,8 +48,18 @@ const WORK_TOOLS: [&str; 7] = [
     "Agent",
 ];
 
-/// Never without its mission saying so: this text rule is the first of two barriers (see `NO_PUSH_ENV`).
-const MISSION_DENIES: [&str; 3] = ["Bash(git push *)", "Bash(git push)", "Bash(gh pr create *)"];
+/// What reaches the remote without `git push`, then `git push` itself. Text
+/// rules, not a sandbox: they read the command as written, and an agent that
+/// runs commands can word it otherwise (see `NO_PUSH_ENV`, also passed in review).
+const MISSION_DENIES: [&str; 7] = [
+    "Bash(git push *)",
+    "Bash(git push)",
+    "Bash(gh pr create *)",
+    "Bash(gh pr merge *)",
+    "Bash(gh api *)",
+    "Bash(gh issue comment *)",
+    "Bash(gh release create *)",
+];
 
 /// A mission's choice, in this session's settings only: the user's files stay as they are (spec mission de nuit §5.3).
 pub fn apply_permission(settings: &mut Value, permission: Option<Permission>) {
@@ -627,6 +637,29 @@ mod tests {
         let deny = settings["permissions"]["deny"].as_array().unwrap();
         assert!(deny.contains(&json!("Edit")));
         assert!(deny.contains(&json!("Bash(git push *)")));
+    }
+
+    #[test]
+    fn the_settings_file_denies_what_reaches_the_remote_through_gh() {
+        for command in [
+            "gh pr create",
+            "gh pr merge",
+            "gh api",
+            "gh issue comment",
+            "gh release create",
+        ] {
+            for permission in [Permission::Ask, Permission::Edits, Permission::Work] {
+                let dir = tempfile::tempdir().unwrap();
+                let path =
+                    write(dir.path(), "n1", URL, Role::Agent, None, Some(permission)).unwrap();
+                let read: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+                let deny = read["permissions"]["deny"].as_array().unwrap();
+                assert!(
+                    deny.contains(&json!(format!("Bash({command} *)"))),
+                    "{command}"
+                );
+            }
+        }
     }
 
     #[test]

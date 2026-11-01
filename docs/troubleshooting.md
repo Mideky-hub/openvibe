@@ -58,6 +58,14 @@ An orchestrator only starts with OpenVibe's own tools, served by a local server 
 
 A mission works on git branches, which need a first commit. In the project's folder: `git add -A`, then `git commit -m "First commit"`, and launch the mission again.
 
+## An overnight run did little, or did more than you wanted
+
+- **Agents stopped early.** Under *Fichiers*, the default, an agent stops at its first command until you are back: the morning report shows those tasks as not finished. *Fichiers et commandes* avoids that, but agents then run any command unasked, and the network and the accounts logged in on this PC are open to them. Choose it knowingly.
+- **Nothing started.** By default the plan waits for your go-ahead: click *Lancer la mission* before you leave, or tick *Lancer sans attendre mon feu vert*.
+- **No tickets.** GitHub issues are read with `gh`, which must be installed and logged in, and only issues with the label you gave are read. `BACKLOG.md` must be at the project's root. Kanban is not a source yet.
+- **The run stopped in the night.** The PC stays awake during the mission, but closing the lid or asking for sleep still puts it to sleep.
+- **An agent pushed, or acted on GitHub.** The push block is not a security boundary. `git push` and the `gh` commands that reach the remote are denied by rules on the command's text and by a git setting in the terminal: they stop accidents, and an agent running commands can get past them, as a review did with `-c remote.origin.pushurl` and `GIT_CONFIG_COUNT=0`. If that matters, stay with *Fichiers*, or use a repository and accounts you can afford to expose.
+
 ## A loop does not send
 
 A loop never writes to an agent that waits for you (a permission dialog included), is stopped or is still starting; such a turn is skipped and does not count. An agent that was closed is ignored, and a loop with no live target switches itself off. Every loop is off again after OpenVibe restarts: switch it on from the loops window (*Gérer les boucles…* in the function palette). The pill at the bottom left, or *Boucles : tout arrêter*, stops them all.

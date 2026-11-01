@@ -61,9 +61,9 @@ it("sets up the mission and gives the orchestrator its orders", async () => {
   await act(async () => type(field("Temps d'absence (heures)"), "6.5"));
   await act(async () => type(field("Nombre d'agents"), "5"));
   await act(async () => button("Préparer la nuit").click());
-  expect(missionNow()).toMatchObject({ overnight: true, budgetMin: 390, maxAgents: 5, autoLaunch: true, tickets: { kind: "github", label: "overnight" } });
+  expect(missionNow()).toMatchObject({ overnight: true, budgetMin: 390, maxAgents: 5, tickets: { kind: "github", label: "overnight" } });
   expect(vi.mocked(notify).mock.calls[0][1]).toBe(
-    "Mission de nuit : l'utilisateur s'absente 390 min. Appelle tickets, garde ce qui tient dans ce temps avec 5 agents, mets le surplus dans la file avec add_tasks, puis appelle propose_plan : le plan se lance sans attendre de feu vert.",
+    "Mission de nuit : l'utilisateur s'absente 390 min. Appelle tickets, garde ce qui tient dans ce temps avec 5 agents, mets le surplus dans la file avec add_tasks, puis appelle propose_plan : le plan attend son feu vert.",
   );
 });
 
@@ -76,12 +76,20 @@ it("reads BACKLOG.md when chosen, without asking for a label", async () => {
   expect(missionNow().tickets).toEqual({ kind: "backlog" });
 });
 
-it("leaves the go-ahead to the user when asked to", async () => {
+it("waits for the user's go-ahead by default; starting alone is their explicit choice (review)", async () => {
   await show();
-  await act(async () => field("Lancer sans attendre mon feu vert").click());
+  expect(field("Lancer sans attendre mon feu vert").checked).toBe(false);
   await act(async () => button("Préparer la nuit").click());
   expect(missionNow().autoLaunch).toBeUndefined();
   expect(vi.mocked(notify).mock.calls[0][1]).toContain("le plan attend son feu vert");
+});
+
+it("starts alone when the user ticks it", async () => {
+  await show();
+  await act(async () => field("Lancer sans attendre mon feu vert").click());
+  await act(async () => button("Préparer la nuit").click());
+  expect(missionNow().autoLaunch).toBe(true);
+  expect(vi.mocked(notify).mock.calls[0][1]).toContain("le plan se lance sans attendre de feu vert");
 });
 
 it("will not start without a time, too many agents, or a label: a repository's issues need one", async () => {
@@ -98,13 +106,36 @@ it("will not start without a time, too many agents, or a label: a repository's i
   expect(button("Préparer la nuit").disabled).toBe(false);
 });
 
-it("defaults to files and commands, and always says that git push stays forbidden", async () => {
+it("defaults to files: commands stay an explicit choice (review)", async () => {
   await show();
-  expect(field("Fichiers et commandes").checked).toBe(true);
-  expect(document.body.textContent).toContain("git push reste interdit");
-  await act(async () => field("Fichiers").click());
+  expect(field("Fichiers").checked).toBe(true);
+  expect(field("Fichiers et commandes").checked).toBe(false);
   await act(async () => button("Préparer la nuit").click());
   expect(missionNow().permission).toBe("edits");
+});
+
+it("says plainly what files and commands opens to the agents", async () => {
+  await show();
+  expect(document.body.textContent).toContain("Les agents lancent n'importe quelle commande sans demander : le réseau et les comptes connectés sur ce PC leur sont ouverts.");
+  expect(document.body.textContent).not.toContain("le reste est refusé");
+  await act(async () => field("Fichiers et commandes").click());
+  await act(async () => button("Préparer la nuit").click());
+  expect(missionNow().permission).toBe("work");
+});
+
+it("says the push block is no security boundary, with how it was passed (review)", async () => {
+  await show();
+  const text = document.body.textContent;
+  expect(text).toContain("Ce blocage n'est pas une frontière de sécurité");
+  expect(text).toContain("-c remote.origin.pushurl");
+  expect(text).toContain("GIT_CONFIG_COUNT=0");
+  expect(text).not.toContain("git push reste interdit dans tous les cas");
+  expect(text).toContain("Tes réglages ne sont pas modifiés.");
+});
+
+it("says what files costs a night: an agent stops at its first command", async () => {
+  await show();
+  expect(document.body.textContent).toContain("un agent s'arrête à sa première commande, jusqu'à ton retour.");
 });
 
 it("will not start outside a repository, and needs gh only for GitHub", async () => {
@@ -131,8 +162,12 @@ it("speaks English", async () => {
   langStore.setState({ lang: "en" });
   await show();
   expect(document.body.textContent).toContain("Overnight run");
+  expect(document.body.textContent).toContain("Agents run any command unasked: the network and the accounts logged in on this PC are open to them.");
+  expect(document.body.textContent).toContain("an agent stops at its first command, until you are back.");
+  expect(document.body.textContent).toContain("This block is not a security boundary");
+  expect(document.body.textContent).not.toContain("stays forbidden in every case");
   await act(async () => button("Prepare the night").click());
   expect(vi.mocked(notify).mock.calls[0][1]).toBe(
-    "Overnight run: the user is away for 480 min. Call tickets, keep what fits in that time with 4 agents, put the rest in the queue with add_tasks, then call propose_plan: the plan starts without waiting for a go-ahead.",
+    "Overnight run: the user is away for 480 min. Call tickets, keep what fits in that time with 4 agents, put the rest in the queue with add_tasks, then call propose_plan: the plan waits for their go-ahead.",
   );
 });
