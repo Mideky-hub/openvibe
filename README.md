@@ -46,14 +46,22 @@ If you know Symvibe, OpenVibe covers the same ground (driving a fleet of CLI age
 
 - **Real terminals on a canvas.** Every agent is a real PTY (ConPTY on Windows) drawn with xterm.js. You can pan, zoom, draw around the agents and annotate their work. The canvas is [Excalidraw](https://github.com/excalidraw/excalidraw), so shapes, arrows, text and images all work.
 - **Teams.** Launch four agents at once, or compose a group with a role (Frontend, Backend, Testers, Reviewers…). Each group takes its names from a pantheon: Athéna, Hermès, Apollon…
+  - Give a group a **speciality** (one line, from its menu): a linked orchestrator reads it to hand each sub-task to the right group.
+  - **Fold** a group onto its label with the chevron: its terminals leave the screen, nothing stops, and the label keeps its counters. Going to one of its agents unfolds it; a group can't be folded while its agents are still starting.
+  - Save the team on screen as a **preset** (*Enregistrer l'équipe comme preset…* in the function palette) and deploy it in any project with *Déployer l'équipe*. A preset keeps the shape only: groups, roles, specialities, agents and links, never instructions or history.
 - **Live states.** OpenVibe shows whether each agent is starting, ready, running, waiting for you, stopped or done, both on the canvas and in the Agents panel. For Claude Code the state comes from its hooks; for other agents, from their output.
 - **One instruction box for everyone.** Address `@tous` (everyone), a group, an agent, or several at once (`@athena/hermes`). A line starting with `/` goes to the agents' CLI as a command, and OpenVibe suggests Claude Code's commands. The history keeps your last 50 instructions per project.
 - **An orchestrator that manages.** Give it a goal. It proposes a plan, gives each agent a sub-task on its own git branch and worktree, watches the time budget and merges the results into a mission branch. Details are [below](#the-orchestrator).
 - **Change review.** See what an agent changed, either uncommitted or since its base, browse the repository read-only, and click a line to leave a remark. All remarks go back to the agent in one message.
+- **Hear about questions.** When an agent waits for you, a notice stays at the bottom left of the window until it stops waiting, and a Windows notification appears if the window is not in focus (switch it off in the settings menu). A click takes you to the agent, and a palette command goes to the next one that waits.
 - **Remote Control.** Turn on Claude Code's Remote Control for one agent, a group or the whole team, and follow them from your phone.
 - **Usage at a glance.** The title bar shows your Claude subscription's session and weekly limits. Click it for cost, durations, tokens per model, prompt cache state and an estimate of CO₂.
+- **Tokens over 30 days.** From the usage detail, a chart of the tokens you used each day, and their share by agent and by model. OpenVibe reads the logs Claude Code already keeps on your disk, counters only, never the conversations; nothing is sent anywhere. Codex is not read yet.
+- **Code studio.** Fix a file by hand without leaving OpenVibe: open the studio from the right rail or the function palette, pick a file of the project, edit it with syntax colours in both themes and save with `Ctrl+S`. If an agent wrote the file meanwhile, the save is refused and you choose: reload, or overwrite what you saw.
+- **Notes.** Notes are Markdown files in `.openvibe/notes/` of the project, so an agent can read them without OpenVibe. Link them with `[[name]]`, search them, see their backlinks and their graph, and attach notes to a group. A read-only tool lets agents list and read them.
+- **Install an agent from the app.** For an agent that is not found, *Installer* shows the official command in full, then runs it in a visible terminal on the canvas that you can interrupt. Ollama models install the same way. Nothing is fetched or run in the background.
 - **Icon libraries.** About 600 icons from the Excalidraw community (system design, AWS, Azure, GCP), bundled with the app, for sketching architecture next to the agents that build it.
-- **Projects and workspaces.** One project per folder, several workspace tabs per project. OpenVibe saves everything locally and, after a restart, offers to resume your Claude conversations.
+- **Projects and workspaces.** One project per folder, several workspace tabs per project; drag the tabs to reorder them (or `Alt+←` / `Alt+→` on a tab, or its menu), and the order is remembered. OpenVibe saves everything locally and, after a restart, offers to resume your Claude conversations.
 - **Keyboard first.** Use the palettes, jump between terminals, or right-press anywhere for the radial menu. Light and dark themes follow Windows.
 
 ## A tour
@@ -188,7 +196,8 @@ The installer is written to `src-tauri/target/release/bundle/nsis/`. It installs
   - Each Claude Code session gets an extra `--settings` file. It declares hooks that report the session's state, a status line that reports usage, and an MCP server for the mission tools.
   - Every request needs a token drawn when the app starts, or a token for the session itself.
   - OpenVibe reads your own `~/.claude/settings.json` but never modifies it, and your own status line keeps showing in the terminals.
-- **Storage:** projects, canvases, terminal scrollback and settings live in a local SQLite database under `%APPDATA%\dev.openvibe.app\`.
+- **Storage:** projects, canvases, terminal scrollback and settings live in a local SQLite database under `%APPDATA%\dev.openvibe.app\`. Notes are plain files in the project's `.openvibe/notes/`; team presets are a setting of the database.
+- **Token counts:** read-only and bounded. OpenVibe scans the `.jsonl` logs under Claude Code's folder (`~/.claude/projects`, or `$CLAUDE_CONFIG_DIR`) for the last 30 days, keeps dates, models and counters, and drops the rest unread.
 
 See [SECURITY.md](SECURITY.md) for the security model in more detail.
 

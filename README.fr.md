@@ -46,14 +46,22 @@ Si vous connaissez Symvibe : OpenVibe couvre le même terrain (piloter une flott
 
 - **De vrais terminaux sur un canvas.** Chaque agent est un vrai PTY (ConPTY sous Windows) affiché par xterm.js. Vous pouvez déplacer la vue, zoomer, dessiner autour des agents et annoter leur travail. Le canvas est [Excalidraw](https://github.com/excalidraw/excalidraw) : formes, flèches, texte et images fonctionnent.
 - **Des équipes.** Lancez quatre agents d'un coup, ou composez un groupe avec un rôle (Frontend, Backend, Testeurs, Relecteurs…). Chaque groupe tire les prénoms de ses agents d'un panthéon : Athéna, Hermès, Apollon…
+  - Donnez à un groupe une **spécialité** (une ligne, depuis son menu) : un orchestrateur relié la lit pour confier chaque sous-tâche au bon groupe.
+  - **Repliez** un groupe sur son étiquette avec le chevron : ses terminaux quittent l'écran, rien ne s'arrête, et l'étiquette garde ses compteurs. Aller vers l'un de ses agents le déplie ; on ne peut pas replier un groupe dont les agents démarrent encore.
+  - Enregistrez l'équipe affichée comme **preset** (*Enregistrer l'équipe comme preset…* dans la palette de fonctions) et déployez-la dans n'importe quel projet avec *Déployer l'équipe*. Un preset ne garde que la forme : groupes, rôles, spécialités, agents et liaisons, jamais les consignes ni l'historique.
 - **Des états en direct.** OpenVibe montre si chaque agent démarre, est prêt, travaille, attend votre réponse, est arrêté ou a terminé, sur le canvas comme dans le panneau Agents. Pour Claude Code, l'état vient de ses hooks ; pour les autres agents, de leur sortie.
 - **Une seule barre de consigne pour tous.** Ciblez `@tous`, un groupe, un agent ou plusieurs à la fois (`@athena/hermes`). Une ligne qui commence par `/` part comme commande vers la CLI des agents, et OpenVibe propose les commandes de Claude Code. L'historique garde vos 50 dernières consignes par projet.
 - **Un orchestrateur qui manage.** Donnez-lui un objectif. Il propose un plan, confie à chaque agent une sous-tâche sur sa propre branche git et son propre worktree, surveille le budget de temps et fusionne les résultats dans une branche de mission. Le détail est [plus bas](#lorchestrateur).
 - **La revue des changements.** Voyez ce qu'un agent a changé, non commité ou depuis sa base, parcourez le dépôt en lecture seule, et cliquez une ligne pour laisser une remarque. Toutes les remarques repartent à l'agent en un seul message.
+- **Savoir quand un agent a une question.** Quand un agent attend votre réponse, un avis reste affiché en bas à gauche de la fenêtre tant qu'il attend, et une notification Windows apparaît si la fenêtre n'a pas le focus (à couper dans le menu des réglages). Un clic vous amène à l'agent, et une commande de la palette va au suivant qui attend.
 - **Remote Control.** Activez le Remote Control de Claude Code pour un agent, un groupe ou toute l'équipe, et suivez-les depuis votre téléphone.
 - **L'usage d'un coup d'œil.** La barre de titre affiche les limites de session et de semaine de votre abonnement Claude. Un clic donne le coût, les durées, les tokens par modèle, l'état du cache de prompt et une estimation du CO₂.
+- **Les tokens sur 30 jours.** Depuis le détail de l'usage, un graphe des tokens consommés chaque jour, et leur part par agent et par modèle. OpenVibe lit les journaux que Claude Code garde déjà sur votre disque, les compteurs seulement, jamais les conversations ; rien n'est envoyé. Codex n'est pas encore lu.
+- **Le studio de code.** Corrigez un fichier à la main sans quitter OpenVibe : ouvrez le studio depuis le rail droit ou la palette de fonctions, choisissez un fichier du projet, éditez-le avec la coloration syntaxique dans les deux thèmes et enregistrez avec `Ctrl+S`. Si un agent a écrit le fichier entre-temps, l'enregistrement est refusé et vous choisissez : recharger, ou écraser ce que vous aviez vu.
+- **Les notes.** Les notes sont des fichiers Markdown dans `.openvibe/notes/` du projet : un agent peut les lire sans OpenVibe. Reliez-les avec `[[nom]]`, cherchez-les, voyez leurs rétroliens et leur graphe, et attachez des notes à un groupe. Un outil en lecture seule permet aux agents de les lister et de les lire.
+- **Installer un agent depuis l'application.** Pour un agent introuvable, *Installer* affiche la commande officielle en entier, puis la lance dans un terminal visible du canvas que vous pouvez interrompre. Les modèles Ollama s'installent de la même façon. Rien n'est téléchargé ni exécuté en arrière-plan.
 - **Des bibliothèques d'icônes.** Environ 600 icônes de la communauté Excalidraw (conception système, AWS, Azure, GCP), embarquées dans l'application, pour dessiner l'architecture à côté des agents qui la construisent.
-- **Projets et workspaces.** Un projet par dossier, plusieurs onglets de workspace par projet. OpenVibe enregistre tout en local et, au redémarrage, propose de reprendre vos conversations Claude.
+- **Projets et workspaces.** Un projet par dossier, plusieurs onglets de workspace par projet ; glissez les onglets pour les réordonner (ou `Alt+←` / `Alt+→` sur un onglet, ou son menu), l'ordre est retenu. OpenVibe enregistre tout en local et, au redémarrage, propose de reprendre vos conversations Claude.
 - **Le clavier d'abord.** Utilisez les palettes, passez d'un terminal à l'autre, ou faites un appui droit n'importe où pour le menu radial. Les thèmes clair et sombre suivent Windows.
 
 ## Visite guidée
@@ -188,7 +196,8 @@ L'installateur est écrit dans `src-tauri/target/release/bundle/nsis/`. Il s'ins
   - Chaque session Claude Code reçoit un fichier `--settings` supplémentaire. Il déclare des hooks qui signalent l'état de la session, une ligne d'état qui transmet l'usage, et un serveur MCP pour les outils de mission.
   - Chaque requête doit porter un jeton tiré au démarrage de l'application, ou un jeton propre à la session.
   - OpenVibe lit votre `~/.claude/settings.json` sans jamais le modifier, et votre propre ligne d'état reste affichée dans les terminaux.
-- **Stockage :** projets, canvas, historique des terminaux et réglages sont dans une base SQLite locale, sous `%APPDATA%\dev.openvibe.app\`.
+- **Stockage :** projets, canvas, historique des terminaux et réglages sont dans une base SQLite locale, sous `%APPDATA%\dev.openvibe.app\`. Les notes sont de simples fichiers dans le `.openvibe/notes/` du projet ; les presets d'équipe sont un réglage de la base.
+- **Compteurs de tokens :** lecture seule et bornée. OpenVibe parcourt les journaux `.jsonl` du dossier de Claude Code (`~/.claude/projects`, ou `$CLAUDE_CONFIG_DIR`) sur les 30 derniers jours, garde les dates, les modèles et les compteurs, et laisse le reste sans le lire.
 
 Le modèle de sécurité est détaillé dans [SECURITY.md](SECURITY.md).
 

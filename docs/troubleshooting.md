@@ -18,9 +18,37 @@ OpenVibe launches the agent CLIs installed on your PC; it looks for them on Wind
 
 Claude Code is needed for the orchestrator, missions and the usage meter. Its official installer, in PowerShell: `irm https://claude.ai/install.ps1 | iex` (see [Claude Code's setup page](https://code.claude.com/docs/en/setup)).
 
+### Installing an agent from OpenVibe
+
+*Installer*, next to a missing agent, shows the official command and runs it in a visible terminal on the canvas of the open project (open a project first). Read the terminal if it fails: the installer's own message is there, and `Ctrl+C` stops it. Gemini CLI, OpenCode and Ollama's models need **npm**: if OpenVibe says it is missing, install [Node.js](https://nodejs.org/), which brings it, then click **Check again**. OpenVibe looks for the new agent for up to 30 minutes after the command starts, and says when it is installed.
+
+## No Windows notification when an agent has a question
+
+The notice at the bottom left of the window always shows while an agent waits. The Windows notification is only sent when OpenVibe's window is not in focus, only for the open project, and only if **Windows notifications** is on in the settings menu. If it is on and nothing appears, check Windows' notification settings for OpenVibe and that *Focus assist* (Do not disturb) is not hiding them.
+
 ## The usage meter stays empty
 
 The meter in the top bar reads Claude Code's usage through a small script run by `bash`. It needs **Git Bash**, which comes with [Git for Windows](https://git-scm.com/download/win). The Troubleshooting dialog says whether Git Bash is found. After installing Git, restart OpenVibe.
+
+## The Tokens view is empty, or says its reading was cut short
+
+The view reads the `.jsonl` logs that Claude Code keeps under `~/.claude/projects` (or under the folder named by `CLAUDE_CONFIG_DIR`), for the last 30 days, in UTC days. It stays empty if Claude Code has not run on this PC, if its folder is somewhere else, or if its history was cleared. For a very large history OpenVibe stops at fixed limits (number of files, bytes read, time) and says the figures are a minimum. Only Claude Code is read; Codex is not supported yet. The view never shows conversation text.
+
+## The code studio refuses to save
+
+OpenVibe never overwrites what an agent wrote meanwhile. If the file changed on the disk since you opened it, the studio says so and offers to **reload** (your edits are lost) or to **overwrite** with your version. If the file was deleted, it offers to recreate it. A project outside a git repository lists its files from the folder itself, up to a limit.
+
+## An agent has disappeared from a group
+
+The group is probably **folded**: only its label shows, with its counters, while its agents keep running. Click the chevron on the label, or *Déplier le groupe* in its menu. Going to one of its agents from the Agents panel or `Ctrl+P` unfolds it too. A group cannot be folded while its agents are still starting; wait a moment and try again.
+
+## A team preset deploys with a different agent
+
+A preset remembers the agent of each cell. If one is not installed on this PC, OpenVibe puts the default agent in its place and says so. Install the agent (see above) and save the preset again, or deploy it as it is.
+
+## Notes and git
+
+Notes are plain Markdown files in the project's `.openvibe/notes/`. OpenVibe does not touch the project's `.gitignore`: add `.openvibe/` to it to keep your notes out of git, or commit them to share them.
 
 ## "OpenVibe tools unavailable" on an orchestrator
 
