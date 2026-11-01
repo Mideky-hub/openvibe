@@ -70,7 +70,7 @@ Quand il rend compte **« blocked »** ou **« failed »**, il garde sa tâche e
 
 ### 5.1 Le dialogue « Mission de nuit » (tranche 4)
 
-Dans le panneau de la mission : temps d'absence, nombre d'agents, source des tickets, autorisations (§5.3), et « Lancer sans attendre mon feu vert », coché. Le dialogue règle la mission puis tape la consigne dans le terminal de l'orchestrateur.
+Dans le panneau de la mission : temps d'absence, nombre d'agents, source des tickets, autorisations (§5.3), et « Lancer sans attendre mon feu vert », décoché par défaut. Le dialogue règle la mission puis tape la consigne dans le terminal de l'orchestrateur.
 
 Sources :
 
@@ -96,17 +96,19 @@ Un agent sans surveillance reste bloqué sur un dialogue d'autorisation jusqu'au
 | Choix | Mode de Claude | Effet |
 |---|---|---|
 | Demander | (aucun) | Comme aujourd'hui : un dialogue arrête l'agent jusqu'à ce que quelqu'un réponde. |
-| Fichiers | `acceptEdits` | Claude modifie les fichiers sans demander ; une commande demande, et arrête l'agent. |
-| Fichiers et commandes | `dontAsk`, avec les outils de travail autorisés | Par défaut dans le dialogue. Fichiers, commandes et sous-agents sans demander ; ce qui n'est pas autorisé est **refusé au lieu de demander** : l'agent contourne, il ne reste pas bloqué. |
+| Fichiers | `acceptEdits` | Par défaut dans le dialogue. Claude modifie les fichiers sans demander ; **sa première commande arrête l'agent jusqu'au retour de l'utilisateur**. |
+| Fichiers et commandes | `dontAsk`, avec les outils de travail autorisés | Choix explicite. Les agents lancent n'importe quelle commande sans demander : **le réseau et les comptes connectés sur le PC leur sont ouverts**. Ce qui n'est pas autorisé est refusé au lieu de demander. |
+
+**Ce défaut suit l'avis de la relecture de la nuit, et il coûte une partie de ce qu'une nuit peut faire** : sous « Fichiers », un agent s'arrête à sa première commande (installer les dépendances, lancer les tests), si bien qu'une nuit produit moins et que beaucoup de tâches finiront « pas finies » au rapport. C'est voulu : ouvrir les commandes, le réseau et les comptes à des agents sans surveillance doit être un choix, pas un réglage hérité.
 
 **`bypassPermissions` n'est pas proposé.** Sa première utilisation ouvre un avertissement interactif, et l'accepter écrit dans `~/.claude/settings.json` : un dialogue qui bloque la nuit, et un réglage de l'utilisateur modifié. `--permission-mode` plutôt que `defaultMode` dans le fichier : la documentation de Claude Code confirme le drapeau pour une session, elle ne dit pas explicitement que `defaultMode` est lu depuis `--settings`.
 
-**`git push` est interdit dans tous les cas**, par deux barrières indépendantes :
+**`git push` est bloqué, sans garantie.** Le blocage n'est pas une frontière de sécurité, et le dialogue le dit. Il tient à deux barrières :
 
-1. une règle `Bash(git push *)` dans les réglages de la session ;
+1. des règles de refus dans les réglages de la session : `Bash(git push *)`, et les commandes `gh` qui atteignent le dépôt distant sans `git push` (`gh pr create`, `gh pr merge`, `gh api`, `gh issue comment`, `gh release create`) ;
 2. une configuration git passée par l'environnement du terminal (`url.<x>.pushInsteadOf`, préfixe vide), vérifiée sur un vrai dépôt : `git push` échoue, par le nom du dépôt distant comme par son URL ; `git fetch` marche. La documentation de Claude Code dit que ces règles portent sur le texte de la commande et ne sont pas une frontière de sécurité (`git -C . push` n'y correspond pas) : la seconde barrière agit dans git lui-même.
 
-Ni l'une ni l'autre n'est un bac à sable : un dépôt distant avec un `pushurl` explicite échappe à la seconde, et `git -C . push` à la première. Il faut les deux, et un agent qui voudrait vraiment contourner en trouverait le moyen. `gh pr create` est refusé par une règle de même nature.
+Ni l'une ni l'autre n'est un bac à sable. Une relecture a poussé malgré elles avec `-c remote.origin.pushurl` et `GIT_CONFIG_COUNT=0`, et `git -C . push` échappe aux règles de texte. Elles arrêtent un agent qui ne cherche pas à les contourner, pas un agent qui lance des commandes et cherche à passer : sous « Fichiers et commandes », il faut compter avec le fait qu'un push reste possible.
 
 Une session d'orchestrateur garde ses propres refus (spec orchestrateur §4.2). En phase 2, seul OpenVibe poussera, et ces barrières resteront en place pour les agents.
 
@@ -132,7 +134,7 @@ Dans le panneau, à la fin d'une mission de nuit : la durée, chaque tâche fait
 
 ## 7. Phase 2 — Des PR brouillons (non construite)
 
-- **Activée par mission**, décochée par défaut. Sans elle, rien de la phase 1 ne change et `git push` reste interdit.
+- **Activée par mission**, décochée par défaut. Sans elle, rien de la phase 1 ne change et `git push` reste bloqué.
 - **Une PR brouillon par tâche finie**, créée par OpenVibe, pas par l'agent : `git push origin <branche de l'agent>` puis `gh pr create --draft`. Seule cette branche part ; jamais la branche de la mission ni celle de l'utilisateur. Les barrières de §5.3 restent en place pour les agents : c'est OpenVibe qui pousse, hors de leur terminal.
 - La phase 1 garde une seule branche par agent, qui s'allonge de tâche en tâche : pour une PR par tâche, il faudra une branche par tâche, partie de celle de la mission. C'est le premier travail de la phase 2.
 
@@ -159,16 +161,17 @@ Sources : [Stacked pull requests generally available](https://github.blog/change
 |---|---|---|
 | Budget global | Temps réel, pour toutes les missions | Un seul sens ; c'est ce que l'horloge mesurait déjà. |
 | Budget par agent en mission de nuit | Une cible | Demandé ; personne n'est là pour un toast. |
-| Feu vert de nuit | Le dialogue vaut feu vert, si la case est cochée | L'utilisateur part : un plan qui attend son clic ne fait rien de la nuit. |
+| Feu vert de nuit | Le plan attend le feu vert ; le dialogue ne le vaut que si l'utilisateur coche la case, décochée par défaut | Décision après relecture : lancer seul doit être demandé. Coût : un plan qui attend son clic ne fait rien de la nuit, l'utilisateur doit lancer avant de partir ou cocher. |
+| Autorisations par défaut | « Fichiers » ; « Fichiers et commandes » reste un choix explicite | Décision prise sur l'avis de la relecture : les commandes ouvrent le réseau et les comptes du PC. Coût assumé : les agents s'arrêtent à leur première commande, une nuit fait moins (§5.3). |
 | Tâche suivante | Nouvelle conversation dans le même worktree | Pas de contexte qui déborde, pas de dépendances à réinstaller. |
 | Fusion avant la suite | Automatique sur « done », dans la branche de la mission | Même règle que `reassign`, et la branche de la mission n'est pas celle de l'utilisateur. |
 | Échec ou blocage | L'orchestrateur décide | Garde `reassign` ; une tâche échouée n'est pas abandonnée sans décision. |
 | Ordre de la file | Celui de l'orchestrateur, filtré par groupe | Il a lu les spécialités (spec groupes spécialisés) ; pas de second moteur de priorité. |
 | Issues GitHub | Seulement avec un label | Dépôt public : le texte d'un inconnu ne doit pas guider un agent sans surveillance. |
-| `git push` | Refusé par deux barrières | Une règle de texte seule se contourne. |
-| Mode sans surveillance | `dontAsk`, jamais `bypassPermissions` | Refuser sans attendre vaut mieux que bloquer la nuit, et le mode bypass écrit dans les réglages de l'utilisateur. |
+| `git push` et `gh` vers le dépôt distant | Bloqués par deux barrières, annoncées comme n'étant pas une frontière de sécurité | Une relecture les a contournées : promettre plus serait faux. Les règles restent utiles contre l'accident. |
+| « Fichiers et commandes » | `dontAsk`, jamais `bypassPermissions` | Quand l'utilisateur la choisit, refuser sans attendre vaut mieux que bloquer la nuit, et le mode bypass écrit dans les réglages de l'utilisateur. |
 | Kanban | Absent | N'existe pas sur cette branche. |
-| Lever l'interdiction de `git push` | Pas d'option en phase 1 | Rien en phase 1 n'en a besoin. |
+| Lever le blocage de `git push` | Pas d'option en phase 1 | Rien en phase 1 n'en a besoin. |
 
 ## 10. Hors périmètre de la phase 1
 
