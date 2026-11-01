@@ -58,6 +58,25 @@ Un orchestrateur ne démarre qu'avec les outils d'OpenVibe, servis par un serveu
 
 Une mission travaille sur des branches git, qui demandent un premier commit. Dans le dossier du projet : `git add -A`, puis `git commit -m "Premier commit"`, et relance la mission.
 
+## Une boucle n'envoie rien
+
+Une boucle n'écrit jamais à un agent qui attend ta réponse (boîte de permission comprise), qui est arrêté ou qui démarre encore ; ce tour est sauté et ne compte pas. Un agent fermé est ignoré, et une boucle sans cible vivante s'éteint. Toutes les boucles sont de nouveau éteintes après un redémarrage d'OpenVibe : rallume-les depuis la fenêtre des boucles (*Gérer les boucles…* dans la palette de fonctions). La pastille en bas à gauche, ou *Boucles : tout arrêter*, les arrête toutes.
+
+## Un agent Claude utilise le mauvais compte
+
+Un terminal garde le profil avec lequel il a démarré ; changer le profil actif dans *Comptes Claude…* n'agit que sur les agents lancés ensuite. Ferme et relance l'agent, ou lances-en un nouveau. Pour te connecter à un profil, utilise son bouton *Se connecter* : il ouvre un terminal Claude visible où tu t'identifies (ou tape `/login`). Un profil dont le dossier est invalide fait refuser le démarrage de l'agent, avec un message, plutôt que de se replier sur un autre compte. Si tu retires un profil, son dossier reste sur ton disque et ses anciens terminaux redémarrent avec le compte par défaut.
+
+## La fenêtre git ne valide pas, n'abandonne pas ou ne pousse pas
+
+- Pendant une fusion, un rebase, un cherry-pick ou un revert, valider et abandonner sont refusés : termine ou annule d'abord l'opération.
+- Abandonner refuse un fichier qui a changé depuis la lecture de la liste (un agent l'a peut-être écrit entre-temps) : actualise et regarde à nouveau.
+- *Pousser* est grisé, avec la raison, quand HEAD est détachée, qu'il n'y a pas de distant, ou que plusieurs distants existent sans qu'aucun s'appelle `origin`. Il ne force jamais. Git ne pose aucune question dans OpenVibe ; le gestionnaire d'identifiants de Windows peut ouvrir sa propre fenêtre après ton clic. Un push refusé affiche le message de git dans la fenêtre.
+- Un commit que git refuse (identité manquante, hook) affiche le message de git lui-même, et ton message de commit reste.
+
+## OpenVibe n'ouvre pas de seconde fenêtre
+
+OpenVibe ne tourne qu'une fois, exprès : deux copies se disputeraient la base de données et le journal. Le relancer ramène la fenêtre déjà ouverte au premier plan et la restaure si elle était réduite. Si tu ne la trouves pas, regarde la barre des tâches et les autres bureaux virtuels.
+
 ## Où sont les journaux et les données
 
 - Journaux : `%LOCALAPPDATA%\dev.openvibe.app\logs\openvibe.log`. Ils ne contiennent jamais de jeton, de texte de terminal ni de consigne. **Ouvrir le dossier des journaux** dans le dialogue Dépannage ou le menu des réglages.

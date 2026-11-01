@@ -58,6 +58,25 @@ An orchestrator only starts with OpenVibe's own tools, served by a local server 
 
 A mission works on git branches, which need a first commit. In the project's folder: `git add -A`, then `git commit -m "First commit"`, and launch the mission again.
 
+## A loop does not send
+
+A loop never writes to an agent that waits for you (a permission dialog included), is stopped or is still starting; such a turn is skipped and does not count. An agent that was closed is ignored, and a loop with no live target switches itself off. Every loop is off again after OpenVibe restarts: switch it on from the loops window (*Gérer les boucles…* in the function palette). The pill at the bottom left, or *Boucles : tout arrêter*, stops them all.
+
+## A Claude agent uses the wrong account
+
+A terminal keeps the profile it started with; changing the active one in *Comptes Claude…* only affects the agents you launch afterwards. Close and relaunch the agent, or launch a new one. To sign in to a profile, use its *Se connecter* button: it opens a visible Claude terminal where you log in (or type `/login`). A profile whose folder is invalid makes the agent refuse to start, with a message, rather than fall back to another account. If you remove a profile, its folder stays on your disk and its old terminals restart with the default account.
+
+## The git window will not commit, discard or push
+
+- During a merge, a rebase, a cherry-pick or a revert, committing and discarding are refused: finish or abort the operation first.
+- Discarding refuses a file that changed since the list was read (an agent may have written it meanwhile): refresh and look again.
+- *Pousser* is greyed, with the reason, when HEAD is detached, there is no remote, or several remotes exist and none is called `origin`. It never forces. Git does not prompt in OpenVibe; Windows' credential manager may open its own window after your click. A refused push shows git's message in the window.
+- A commit that git refuses (no identity, a hook) shows git's own message, and your commit message stays.
+
+## OpenVibe will not open a second window
+
+OpenVibe runs once, on purpose: two copies would fight over the database and the log. Launching it again brings the open window to the front and restores it if it was minimized. If you cannot find it, check the taskbar and other virtual desktops.
+
 ## Where the logs and data are
 
 - Logs: `%LOCALAPPDATA%\dev.openvibe.app\logs\openvibe.log`. They never hold a token, a terminal's text or an instruction. **Open the logs folder** in the Troubleshooting dialog or the settings menu.
