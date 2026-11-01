@@ -39,7 +39,7 @@ export async function answer(call: McpCall): Promise<unknown> {
 const SLOW_MS = 2000;
 
 /** What Rust can take as a reply: JSON. `undefined` or a cycle would make `mcp_reply` itself fail, and the call time out. */
-function replyable(result: unknown): unknown {
+export function replyable(result: unknown): unknown {
   try {
     if (result !== undefined && JSON.stringify(result) !== undefined) return result;
   } catch (error) {
