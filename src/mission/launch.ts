@@ -33,6 +33,11 @@ export function subTaskText(mission: string, task: SubTask, branch: string, hand
   return handover ? `${text} ${handover}` : text;
 }
 
+/** What an agent is told of a task that may come from a ticket: the orchestrator's note stops at the orchestrator (spec mission de nuit §5.1). */
+export function withTicketNote(mission: Mission, text: string): string {
+  return mission.tickets ? `${text} ${t().lines.ticketData}` : text;
+}
+
 /** What the next agent learns of the previous one (spec §7.2 reassign). */
 export function handoverText(from: Member): string {
   const l = t().lines;
@@ -218,7 +223,7 @@ export async function launchMission(orchestratorId: string): Promise<void> {
   const names = team.members.map((m) => `${m.name} (${m.task})`).join(", ");
   notify(orchestratorId, t().lines.goAhead(names, team.branch));
   const plan = mission.plan;
-  team.members.forEach((member, i) => void assign(orchestratorId, member, subTaskText(mission.name ?? "", plan[i], member.branch), restarts.get(member.nodeId)));
+  team.members.forEach((member, i) => void assign(orchestratorId, member, withTicketNote(mission, subTaskText(mission.name ?? "", plan[i], member.branch)), restarts.get(member.nodeId)));
 }
 
 /** `finish` (spec §7.7): created agents close, linked ones go back to the project. */
@@ -399,6 +404,6 @@ export async function reassignTask(orchestratorId: string, fromNodeId: string, t
   if (isRunning(from.nodeId)) {
     void ptySendText(from.nodeId, t().lines.handedAway(from.task, to.name)).catch(() => undefined);
   }
-  void assign(orchestratorId, to, subTaskText(mission.name ?? "", task, to.branch, handoverText(from)));
+  void assign(orchestratorId, to, withTicketNote(mission, subTaskText(mission.name ?? "", task, to.branch, handoverText(from))));
   return { name: to.name };
 }
