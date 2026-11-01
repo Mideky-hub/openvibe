@@ -141,9 +141,14 @@ pub fn claude_config_dir() -> Option<PathBuf> {
     Some(PathBuf::from(home).join(".claude"))
 }
 
-/// Claude's user settings: `settings.json` in its folder.
-pub fn user_settings_file() -> Option<PathBuf> {
-    Some(claude_config_dir()?.join("settings.json"))
+/// The folder one terminal's Claude uses: its profile's, else OpenVibe's environment's.
+pub fn config_dir_for(profile: Option<&Path>) -> Option<PathBuf> {
+    profile.map(Path::to_path_buf).or_else(claude_config_dir)
+}
+
+/// Claude's user settings for a terminal: `settings.json` in its profile's folder, else the usual one.
+pub fn settings_file_in(profile: Option<&Path>) -> Option<PathBuf> {
+    Some(config_dir_for(profile)?.join("settings.json"))
 }
 
 /// `<dir>/<nodeId>.json`, rewritten at each launch (port and token change
@@ -328,6 +333,21 @@ mod tests {
         );
         let line = status_line_json(&status(None));
         assert!(!line["command"].as_str().unwrap().contains("t="));
+    }
+
+    #[test]
+    fn a_terminal_reads_its_profile_s_folder_not_openvibe_s_environment() {
+        let profile = tempfile::tempdir().unwrap();
+        assert_eq!(
+            config_dir_for(Some(profile.path())),
+            Some(profile.path().to_path_buf())
+        );
+        assert_eq!(
+            settings_file_in(Some(profile.path())),
+            Some(profile.path().join("settings.json"))
+        );
+        // Without a profile, it is the usual folder (the environment's, else ~/.claude).
+        assert_eq!(config_dir_for(None), claude_config_dir());
     }
 
     #[test]

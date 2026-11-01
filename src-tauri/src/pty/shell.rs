@@ -80,6 +80,9 @@ pub struct ClaudeLaunch {
     /// The model the orchestrator's router chose (`--model`).
     #[serde(default)]
     pub model: Option<String>,
+    /// The profile's folder, for this terminal's `CLAUDE_CONFIG_DIR` (spec comptes §4).
+    #[serde(default)]
+    pub config_dir: Option<String>,
 }
 
 /// What the frontend asks for when it starts a terminal (spec §9).
@@ -545,6 +548,17 @@ pub fn build_plan(
     let shell = resolve_shell(spec.shell, locate)?;
     let initial_input =
         agent_command(spec, shell.syntax, hooks)?.map(|command| format!("{command}\r"));
+    // A profile's folder reaches this terminal only; an invalid one is refused,
+    // never replaced by another account's (spec comptes §4).
+    let profile_dir = match spec.claude.as_ref().and_then(|c| c.config_dir.as_deref()) {
+        Some(dir) => Some((
+            "CLAUDE_CONFIG_DIR".to_string(),
+            crate::accounts::checked_dir(dir)?
+                .to_string_lossy()
+                .into_owned(),
+        )),
+        None => None,
+    };
     Ok(SpawnPlan {
         program: shell.program,
         args: shell.args,
@@ -557,6 +571,7 @@ pub fn build_plan(
         ]
         .into_iter()
         .chain(refreshed_path())
+        .chain(profile_dir)
         .collect(),
         env_remove: removed_env(std::env::var_os("CLAUDECODE").is_some()),
         initial_input,
@@ -593,6 +608,7 @@ mod tests {
             role: Role::Agent,
             remote_control: None,
             model: None,
+            config_dir: None,
         })
     }
 
@@ -737,6 +753,7 @@ mod tests {
             role: Role::Agent,
             remote_control: None,
             model: None,
+            config_dir: None,
         });
         let err = agent_command(
             &spec(Agent::Claude, launch),
@@ -764,6 +781,7 @@ mod tests {
             role: Role::Agent,
             remote_control: None,
             model: None,
+            config_dir: None,
         })
     }
 
@@ -1012,6 +1030,28 @@ mod tests {
         )
         .unwrap();
         assert_eq!(plain.as_deref(), Some("codex"));
+    }
+
+    #[test]
+    fn a_profile_s_folder_becomes_this_terminal_s_claude_config_dir_only() {
+        let folder = tempfile::tempdir().unwrap();
+        let launch = |dir: Option<String>| {
+            let mut launch = claude(ClaudeMode::New, "");
+            launch.as_mut().unwrap().config_dir = dir;
+            spec(Agent::Claude, launch)
+        };
+        let plan = |s: &SpawnSpec| build_plan("n", s, &nothing_on_path, &AgentHooks::default());
+        let with = plan(&launch(Some(folder.path().to_string_lossy().into_owned()))).unwrap();
+        assert!(
+            with.env
+                .iter()
+                .any(|(k, v)| k == "CLAUDE_CONFIG_DIR" && v == &folder.path().to_string_lossy())
+        );
+        let without = plan(&launch(None)).unwrap();
+        assert!(without.env.iter().all(|(k, _)| k != "CLAUDE_CONFIG_DIR"));
+        // An invalid folder refuses the start rather than falling back to another account.
+        assert!(plan(&launch(Some("relative/dir".into()))).is_err());
+        assert!(plan(&launch(Some("C:/a/../b".into()))).is_err());
     }
 
     #[test]

@@ -1,3 +1,4 @@
+mod accounts;
 mod agents;
 mod commands;
 mod db;
@@ -100,6 +101,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::ping,
+            commands::accounts::accounts_list,
+            commands::accounts::account_add,
+            commands::accounts::account_remove,
+            commands::accounts::account_use,
             commands::app::open_log_dir,
             commands::app::open_data_dir,
             commands::app::diagnostics,

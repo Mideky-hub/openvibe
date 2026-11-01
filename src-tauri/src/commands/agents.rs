@@ -274,6 +274,7 @@ pub fn hooks_for(
     agent: Agent,
     role: Role,
     cwd: &std::path::Path,
+    config_dir: Option<&std::path::Path>,
 ) -> AgentHooks {
     let state = app.state::<AgentState>();
     let Some(server) = &state.hooks else {
@@ -293,7 +294,7 @@ pub fn hooks_for(
                     config,
                     user: claude_settings::status_line_for(
                         cwd,
-                        claude_settings::user_settings_file().as_deref(),
+                        claude_settings::settings_file_in(config_dir).as_deref(),
                     ),
                 });
             let settings = claude_settings::write(

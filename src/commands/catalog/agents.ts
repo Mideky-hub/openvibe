@@ -1,3 +1,4 @@
+import { openAccounts } from "@/accounts/store";
 import { setAgentsPanel } from "@/fleet/agentsPanelState";
 import { agentsStore } from "@/fleet/agentsStore";
 import { pauseAll, resumeAll, workspaceTerminalIds } from "@/fleet/broadcast";
@@ -63,6 +64,7 @@ export const AGENT_COMMANDS: readonly Command[] = [
     // The ＋ menu's catalog; from the radial menu, the agent starts at its point (spec menu radial §4.1).
     run: (ctx) => requestUi({ kind: "agentMenu", view: "agents", at: ctx.at }),
   }),
+  command("agent.accounts", { section, available: inProject, run: () => openAccounts() }),
   command("agent.console", { section, available: inProject, run: (ctx) => newConsole(ctx.at) }),
   command("agent.four", { section, available: inProject, run: (ctx) => launchFour(ctx.at) }),
   command("agent.orchestrator", { section, available: inProject, run: (ctx) => placeOrchestrator(ctx.at) }),
