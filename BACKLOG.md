@@ -211,6 +211,7 @@ Ce qui est reporté. La spec en cours est `docs/superpowers/specs/2026-10-24-ope
 - Code Studio : changer d'onglet refait l'éditeur, donc perd l'historique d'annulation et la position (comme en 1.1.0-beta.1).
 - Code Studio : seul l'onglet affiché est comparé au disque ; les autres le sont en revenant dessus, et à l'écriture de toute façon.
 - Code Studio : les onglets d'un projet retiré restent en mémoire jusqu'à la fermeture.
+- Test `the_status_script_keeps_the_trailing_newlines_and_does_not_wait_for_curl` : son seuil de 900 ms en temps réel saute sur une machine chargée (1,36 s vu sur 28 threads). À remplacer par une preuve qui ne dépend pas de l'horloge.
 - Notes : renommer et supprimer une note ne sont pas proposés.
 - Le glisser et la molette du graphe ne sont pas testés ; la remise à zéro du graphe n'a pas de test.
 
