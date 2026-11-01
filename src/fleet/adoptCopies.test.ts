@@ -58,3 +58,12 @@ it("gives a group copied whole a pantheon of its own and names its agents from i
   const egyptianNames = ["Isis", "Osiris", "Horus", "Anubis", "Ra", "Thot", "Seth", "Bastet"];
   expect(egyptianNames.some((n) => name === n || name.startsWith(`${n} `))).toBe(false);
 });
+
+it("unfolds a folded group copied whole: its copies would never mount, nor start (review)", async () => {
+  const folded = group("copy", "egyptian");
+  scene = [group("g1", "egyptian"), terminal("isis", "g1", "openvibe://terminal/isis"), { ...folded, customData: { openvibe: { ...(folded.customData!.openvibe as object), folded: true } } } as ExcalidrawElement, terminal("isis2", "copy", "openvibe://terminal/isis")];
+  canvasStore.setState({ frames: framesFromScene(scene) });
+  await adoptCopies("w1", [{ id: "isis2", sourceId: "isis" }]);
+  const copy = scene.find((e) => e.id === "copy")!;
+  expect((copy.customData!.openvibe as Record<string, unknown>).folded).toBeUndefined();
+});
