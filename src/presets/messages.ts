@@ -5,6 +5,7 @@ import type { DeployResult } from "./deploy";
 export const presetsMessages = defineMessages(
   {
     section: "Équipes",
+    notRead: "La liste des presets n'a pas pu être lue : rien n'a changé.",
     save: "Enregistrer l'équipe comme preset…",
     saveKeywords: ["équipe", "preset", "enregistrer", "sauvegarder", "topologie"],
     deploy: (name: string, agents: number) => `Déployer l'équipe : ${name} (${plural("fr", agents, "agent", "agents")})`,
@@ -35,6 +36,7 @@ export const presetsMessages = defineMessages(
   },
   {
     section: "Teams",
+    notRead: "The list of presets could not be read: nothing changed.",
     save: "Save the team as a preset…",
     saveKeywords: ["team", "preset", "save", "topology"],
     deploy: (name: string, agents: number) => `Deploy team: ${name} (${plural("en", agents, "agent", "agents")})`,
