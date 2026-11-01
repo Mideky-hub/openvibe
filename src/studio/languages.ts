@@ -5,16 +5,9 @@ import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { python } from "@codemirror/lang-python";
 import { rust } from "@codemirror/lang-rust";
+import { LanguageDescription } from "@codemirror/language";
 import type { Extension } from "@codemirror/state";
-
-/** The file's extension, lower case, without the dot; "" when it has none. */
-export function extensionOf(path: string): string {
-  const name = path.slice(path.lastIndexOf("/") + 1);
-  const dot = name.lastIndexOf(".");
-  return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
-}
-
-export const isMarkdown = (path: string) => ["md", "markdown", "mdx"].includes(extensionOf(path));
+import { extensionOf } from "./markdown";
 
 /** The highlighting for the file's extension; none for an unknown one. */
 export function languageFor(path: string): Extension {
@@ -51,4 +44,15 @@ export function languageFor(path: string): Extension {
     default:
       return [];
   }
+}
+
+/** The name CodeMirror knows the file by, whatever its folders are called (a `Dockerfile` has no extension). */
+const nameOf = (path: string) => path.slice(path.lastIndexOf("/") + 1);
+
+/** Any other language CodeMirror knows, loaded on demand; null when the file has its highlighting already, or is plain text. */
+export async function otherLanguageFor(path: string): Promise<Extension | null> {
+  const known = languageFor(path);
+  if (!Array.isArray(known) || known.length > 0) return null;
+  const { languages } = await import("@codemirror/language-data");
+  return (await LanguageDescription.matchFilename(languages, nameOf(path))?.load().catch(() => null)) ?? null;
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TreeEntry } from "@/ipc/studio";
 import { ancestors, baseName, buildTree, filterTree, toggle, visibleRows } from "./tree";
-import { extensionOf, isMarkdown } from "./languages";
+import { extensionOf, isMarkdown } from "./markdown";
 
 const ENTRIES = [
   { path: "src/b.ts", kind: "file" as const },

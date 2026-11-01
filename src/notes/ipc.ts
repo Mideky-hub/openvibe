@@ -1,5 +1,5 @@
 import { call } from "@/ipc/invoke";
-import type { OpenedFile, WriteOutcome } from "@/studio/ipc";
+import type { OpenedFile, WriteOutcome } from "@/ipc/studio";
 
 export interface Note {
   name: string;

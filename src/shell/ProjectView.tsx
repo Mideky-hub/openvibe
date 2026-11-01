@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Canvas } from "@/canvas/Canvas";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AgentsPanel } from "@/fleet/AgentsPanel";
@@ -10,7 +10,6 @@ import { Notes } from "@/notes/Notes";
 import { RadialMenu } from "@/radial/RadialMenu";
 import { GitWindow } from "@/git/GitWindow";
 import { ReviewPanel } from "@/review/ReviewPanel";
-import { CodeWorkspace } from "@/studio/CodeWorkspace";
 import { PlacementGhost } from "@/fleet/PlacementGhost";
 import { isCode, useWorkspaces } from "@/store/workspaces";
 import { ActivityRail } from "./ActivityRail";
@@ -30,6 +29,9 @@ import { WaitingNotice } from "./WaitingNotice";
 import { WorkspaceTabs } from "./WorkspaceTabs";
 import { shellMessages } from "./messages";
 import { ZoomControl } from "./ZoomControl";
+
+// CodeMirror and its languages load with the first opening, not with the application.
+const CodeWorkspace = lazy(() => import("@/studio/CodeWorkspace").then((m) => ({ default: m.CodeWorkspace })));
 
 /** A floating panel's error, where the panels open. */
 function panelCrash(error: Error, retry: () => void) {
@@ -69,7 +71,13 @@ export function ProjectView() {
               </div>
             )}
           >
-            {code ? <CodeWorkspace /> : <Canvas workspaceId={activeId} />}
+            {code ? (
+              <Suspense fallback={null}>
+                <CodeWorkspace />
+              </Suspense>
+            ) : (
+              <Canvas workspaceId={activeId} />
+            )}
           </ErrorBoundary>
           {!code && <ToolRail />}
           <ActivityRail />
@@ -101,9 +109,6 @@ export function ProjectView() {
           <ErrorBoundary scope="review" fallback={panelCrash}>
             <ReviewPanel />
             <GitWindow />
-          </ErrorBoundary>
-          <ErrorBoundary scope="studio" fallback={panelCrash}>
-            <Studio />
           </ErrorBoundary>
           <ErrorBoundary scope="notes" fallback={panelCrash}>
             <Notes />

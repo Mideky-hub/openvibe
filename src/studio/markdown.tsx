@@ -1,5 +1,14 @@
 import type { ReactNode } from "react";
 
+/** The file's extension, lower case, without the dot; "" when it has none. */
+export function extensionOf(path: string): string {
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+}
+
+export const isMarkdown = (path: string) => ["md", "markdown", "mdx"].includes(extensionOf(path));
+
 /**
  * Small, safe Markdown renderer producing React elements.
  * Never uses innerHTML: raw HTML in the source is shown as literal text.

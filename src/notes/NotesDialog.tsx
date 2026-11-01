@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { BookOpen, Plus, RotateCw, X } from "lucide-react";
 import { useStore } from "zustand";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { useTheme } from "@/app/theme";
 import { useMessages } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { AccentButton, IconButton } from "@/shell/buttons";
@@ -39,6 +40,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 /** The project's notes (spec notes): one open at a time, under the code studio's guards. */
 export default function NotesDialog({ projectId }: { projectId: string }) {
   const t = useMessages(notesMessages);
+  const theme = useTheme();
   const session = useMemo(
     () =>
       createFileSession(
@@ -264,7 +266,7 @@ export default function NotesDialog({ projectId }: { projectId: string }) {
             {/* Always there once a note is open: the views come and go, the undo history stays. */}
             {file && !loading && !refused && (
               <div className={cn("min-h-0 flex-1 flex-col", shown === "edit" ? "flex" : "hidden")}>
-                <CodeEditor ref={editor} path={`${file}.md`} text={draft} revision={state.revision} onChange={state.edit} />
+                <CodeEditor ref={editor} path={`${file}.md`} text={draft} revision={state.revision} theme={theme} onChange={state.edit} onSave={() => void state.save()} />
               </div>
             )}
             {file && !loading && !refused && tab !== "graph" && (
