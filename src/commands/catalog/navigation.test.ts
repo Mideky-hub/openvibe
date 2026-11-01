@@ -11,7 +11,6 @@ import { closeWindow, minimizeWindow, toggleMaximizeWindow, windowStore } from "
 import { removeWorkspace } from "@/shell/workspaceActions";
 import { projectsStore } from "@/store/projects";
 import { closeNotes, notesStore } from "@/notes/notesStore";
-import { closeStudio, studioStore } from "@/studio/studioStore";
 import { workspacesStore } from "@/store/workspaces";
 import { labelOf, type Command, type CommandContext } from "../command";
 import { goToNextWaiting } from "../goToRun";
@@ -69,7 +68,6 @@ describe("Navigation (spec fenêtre §7.3)", () => {
       "Zoom 100 %",
       "Écrire une consigne",
       "Masquer le panneau Agents",
-      "Studio Code",
       "Notes",
       "Accueil",
       "Fermer le projet",
@@ -111,20 +109,6 @@ describe("Navigation (spec fenêtre §7.3)", () => {
 
   it("offers nothing but « Aller à… » outside a project", () => {
     expect(NAVIGATION.filter((c) => c.available(home)).map((c) => c.id)).toEqual(["palette.goTo", "palette.functions"]);
-  });
-});
-
-describe("Studio Code (spec studio code §6)", () => {
-  it("opens from the palette, in a project only", () => {
-    const studio = find(NAVIGATION, "studio.code");
-    expect(labelOf(studio, busy)).toBe("Studio Code");
-    expect(studio.keywords).toContain("éditeur");
-    expect(studio.available(home)).toBe(false);
-    expect(studio.available(busy)).toBe(true);
-    closeStudio();
-    void studio.run(busy);
-    expect(studioStore.getState().open).toBe(true);
-    closeStudio();
   });
 });
 

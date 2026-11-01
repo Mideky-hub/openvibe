@@ -63,7 +63,6 @@ export const catalogMessages = defineMessages(
       "canvas.zoom100": e("Zoom 100 %", "zoom", "taille", "réelle"),
       "commandBar.focus": e("Écrire une consigne", "consigne", "commande", "barre"),
       "agentsPanel.toggle": e("Panneau Agents", "agents", "panneau", "flotte"),
-      "studio.code": e("Studio Code", "éditeur", "fichier", "code", "modifier", "ide"),
       "notes.open": e("Notes", "mémoire", "markdown", "wiki", "graphe", "documentation"),
       "project.home": e("Accueil", "projets", "accueil"),
       "project.close": e("Fermer le projet", "fermer", "projet"),
@@ -71,7 +70,7 @@ export const catalogMessages = defineMessages(
       "editor.goToLine": e("Aller à la ligne…", "ligne", "colonne", "code", "éditeur"),
 
       "workspace.new": e("Nouveau workspace", "onglet", "nouveau", "workspace"),
-      "workspace.code": e("Code Studio", "code", "ide", "éditeur", "fichiers", "workspace"),
+      "workspace.code": e("Code Studio", "code", "ide", "éditeur", "fichier", "fichiers", "modifier", "workspace"),
       "workspace.rename": e("Renommer le workspace", "onglet", "nom", "workspace"),
       "workspace.delete": e("Supprimer le workspace", "onglet", "supprimer", "workspace"),
 
@@ -194,7 +193,6 @@ export const catalogMessages = defineMessages(
       "canvas.zoom100": e("Zoom 100%", "zoom", "size", "actual"),
       "commandBar.focus": e("Write an instruction", "instruction", "prompt", "command", "bar"),
       "agentsPanel.toggle": e("Agents panel", "agents", "panel", "fleet"),
-      "studio.code": e("Code studio", "editor", "file", "code", "edit", "ide"),
       "notes.open": e("Notes", "memory", "markdown", "wiki", "graph", "documentation"),
       "project.home": e("Home", "projects", "home"),
       "project.close": e("Close the project", "close", "project"),
@@ -202,7 +200,7 @@ export const catalogMessages = defineMessages(
       "editor.goToLine": e("Go to line…", "line", "column", "code", "editor"),
 
       "workspace.new": e("New workspace", "tab", "new", "workspace"),
-      "workspace.code": e("Code Studio", "code", "ide", "editor", "files", "workspace"),
+      "workspace.code": e("Code Studio", "code", "ide", "editor", "file", "files", "edit", "workspace"),
       "workspace.rename": e("Rename workspace", "tab", "name", "workspace"),
       "workspace.delete": e("Delete the workspace", "tab", "delete", "remove", "workspace"),
 

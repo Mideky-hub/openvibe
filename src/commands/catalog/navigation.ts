@@ -46,7 +46,6 @@ export const NAVIGATION: readonly Command[] = [
     available: inProject,
     run: () => setAgentsPanel(!agentsPanelStore.getState().open),
   }),
-  command("studio.code", { section: nav, available: inProject, run: () => openStudio() }),
   command("notes.open", { section: nav, available: inProject, run: () => openNotes() }),
   command("project.home", { section: nav, available: inProject, run: () => projectsStore.getState().goHome() }),
   command("project.close", { section: nav, available: inProject, run: () => projectsStore.getState().close() }),
