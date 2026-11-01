@@ -106,7 +106,7 @@ The orchestrator is a Claude Code session that acts as a team manager. Link one 
 2. **You launch the mission.** OpenVibe creates the mission branch `openvibe/<mission>`, plus a branch and a worktree for each agent next to your repository. It then gives every agent its sub-task.
 3. **The agents report.** Each Claude agent declares its steps, which appear as a timeline under its terminal, and reports back when done. Agents can hand parts of their work to their own sub-agents.
 4. **The orchestrator keeps time.** It is told when a sub-task reaches its budget. At twice the budget you get a notification and a red bar. Nobody is stopped automatically: the orchestrator can extend, interrupt or reassign.
-5. **It merges.** Finished branches are merged into the mission branch; a conflict aborts that merge and is reported. OpenVibe **never pushes** and **never merges into your own branch**.
+5. **It merges.** Finished branches are merged into the mission branch; a conflict aborts that merge and is reported. A mission's own steps **never push** and **never merge into your own branch**. The git window pushes only when you click *Pousser*, and an agent running commands in a terminal is limited only by its permissions.
 
 With the **model router**, each sub-task's level picks the model its agent runs on:
 
