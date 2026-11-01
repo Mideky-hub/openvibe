@@ -5,7 +5,8 @@ import { messages } from "@/i18n";
 import { getSetting, setSetting } from "@/ipc/db";
 import { call } from "@/ipc/invoke";
 import { appMessages } from "./messages";
-import { saveBeforeClose } from "./close";
+import { hasUnsavedWork } from "@/studio/studioStore";
+import { saveEverything } from "./close";
 
 /** The first look, once the app has settled; then a look every 6 h (spec première version §6.4). */
 export const FIRST_CHECK_MS = 10_000;
@@ -79,7 +80,13 @@ export async function installUpdate() {
     if (event.event === "Progress") received += event.data.chunkLength;
     updatesStore.setState({ progress: event.event === "Finished" ? 1 : total > 0 ? Math.min(1, received / total) : 0 });
   });
-  await saveBeforeClose();
+  // The installer closes OpenVibe: changes only the user can decide on stop it here, agents untouched.
+  if (hasUnsavedWork()) {
+    updatesStore.setState({ progress: null });
+    toast.warning(messages(appMessages).updateWaitsForSave);
+    return;
+  }
+  await saveEverything();
   await call<void>("prepare_for_update");
   await update.install();
 }

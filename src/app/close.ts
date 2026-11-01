@@ -12,6 +12,11 @@ export async function saveBeforeClose(event?: { preventDefault: () => void }): P
     event?.preventDefault();
     return;
   }
+  await saveEverything();
+}
+
+/** The scene, the nodes and the field being edited, whoever asks. */
+export async function saveEverything(): Promise<void> {
   const active = document.activeElement;
   if (active instanceof HTMLElement) active.blur();
   await flushAll();
