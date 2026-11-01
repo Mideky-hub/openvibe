@@ -42,6 +42,14 @@ describe("waitingAgents (spec notification §3)", () => {
     expect(list[0].name).toBe("Claude");
   });
 
+  it("carries what the agent says it waits for, when it says so", () => {
+    const nodes = { a: terminal("w1", "A"), b: terminal("w1", "B") };
+    const activities = { a: { activity: "waiting", since: 1, message: "May I?" }, b: waiting(2) };
+    const [first, second] = waitingAgents(["w1"], nodes, { a: running, b: running }, activities);
+    expect(first.message).toBe("May I?");
+    expect(second.message).toBeUndefined();
+  });
+
   it("keeps a stable order when two agents started waiting at the same time", () => {
     const nodes = { b: terminal("w1", "B"), a: terminal("w1", "A") };
     const list = waitingAgents(["w1"], nodes, { a: running, b: running }, { b: waiting(5), a: waiting(5) });

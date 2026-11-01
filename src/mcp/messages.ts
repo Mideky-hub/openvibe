@@ -18,6 +18,10 @@ export const agentMessages = defineMessages(
       planTask: "La tâche de l'utilisateur, résumée.",
       planAgent: "Prénom d'un agent Claude relié, ou « new ».",
       planGroup: "Avec agent « new » seulement : le nom d'un groupe relié que l'agent rejoint. Sans lui, l'agent va dans le groupe de la mission.",
+      addTasks: "Ajoute des tâches à la file de la mission : au-delà du nombre d'agents, ou pendant la mission. Quand un agent rend compte « done », OpenVibe fusionne sa branche et lui donne la suivante.",
+      taskGroup: "Le nom d'un groupe relié : seul un agent de ce groupe la prendra.",
+      queue: "Les tâches en attente et les agents libres.",
+      nextTask: "Donne la prochaine tâche de la file à un agent qui a rendu compte « blocked » ou « failed » ; son travail inachevé reste sur sa branche, et sa tâche est abandonnée (reassign ne la trouve plus).",
       planLevel: "Difficulté. Avec le routeur (mission : router), elle choisit le modèle de l'agent : low Haiku 5.5, medium Sonnet 5.5, high Opus 5.5, extreme Fable 5.1 ; obligatoire alors.",
       team: "Chaque agent de la mission : groupe et spécialité, sous-tâche, état (working, waiting, idle, stopped), étapes, temps passé / budget, compte rendu.",
       readOutput: "La fin du terminal d'un agent de la mission, en texte simple.",
@@ -68,6 +72,8 @@ export const agentMessages = defineMessages(
       alreadyHas: (name: string) => `${name} a déjà une sous-tâche : une sous-tâche par agent.`,
       groupForNew: (n: number) => `Sous-tâche ${n} : group ne s'emploie qu'avec agent « new ».`,
       notLinkedGroup: (n: number, group: string) => `Sous-tâche ${n} : « ${group} » n'est pas un groupe relié.`,
+      titleTaken: (n: number, title: string) => `Sous-tâche ${n} : le titre « ${title} » est déjà pris ; un titre par tâche.`,
+      queueFull: (max: number) => `La file tient ${max} tâches au plus.`,
       level: (n: number) => `Sous-tâche ${n} : niveau low, medium, high ou extreme.`,
       levelRouter: (n: number) => `Sous-tâche ${n} : un niveau (low, medium, high ou extreme) — le routeur choisit le modèle de l'agent avec.`,
       overBudget: (n: number, minutes: number, budget: number) => `Sous-tâche ${n} : ${minutes} min ne tiennent pas dans le budget global (${budget} min de temps réel).`,
@@ -80,6 +86,7 @@ export const agentMessages = defineMessages(
       running: "Une mission est déjà en cours : termine-la avant d'en proposer une autre.",
       finished: "La mission est terminée : l'utilisateur la nettoie depuis le panneau, puis tu pourras proposer un nouveau plan.",
       hiddenWorkspace: "L'espace de l'orchestrateur n'est pas affiché : je ne vois pas ses agents reliés. Propose des agents « new », ou réessaie quand l'utilisateur y revient.",
+      queued: (count: number, waiting: number) => `${plural("fr", count, "tâche ajoutée", "tâches ajoutées")}. En attente : ${waiting}.`,
       proposed: (count: number) => `Plan proposé : ${plural("fr", count, "sous-tâche", "sous-tâches")}. Il attend le feu vert de l'utilisateur (« Lancer la mission » dans le panneau de l'orchestrateur).`,
       emptyTerminal: "(terminal vide)",
       nothingToWrite: "Rien à écrire (text).",
@@ -120,6 +127,16 @@ export const agentMessages = defineMessages(
         `[OpenVibe · mission ${mission}] ${title} — ${brief} Budget : ${budget} min. Branche : ${branch}. ` +
         "Ce worktree est neuf : les dépendances (node_modules…) n'y sont pas installées. " +
         "Déclare tes étapes, délègue à tes sous-agents, commit sur ta branche, puis rends compte avec report.",
+      nextSubTask: (mission: string, title: string, brief: string, budget: number, branch: string, missionBranch: string) =>
+        `[OpenVibe · mission ${mission}] ${title} — ${brief} Budget : ${budget} min. Branche : ${branch}. ` +
+        `Nouvelle tâche, nouvelle conversation, même worktree : commence par fusionner ${missionBranch} dans ta branche. ` +
+        "Déclare tes étapes, délègue à tes sous-agents, commit sur ta branche, puis rends compte avec report.",
+      taken: (name: string, title: string, waiting: number) => `${name} prend « ${title} ». Reste en attente : ${waiting}.`,
+      queueEmpty: "La file est vide et tous ont rendu compte : fusionne, fais vérifier, puis termine.",
+      queueStuck: (waiting: number) => `${plural("fr", waiting, "tâche attend", "tâches attendent")} et aucun agent libre ne peut ${waiting > 1 ? "les" : "la"} prendre : next_task, reassign, ou termine.`,
+      nothingFor: (name: string) => `Aucune tâche en attente pour ${name}.`,
+      notMoved: (name: string) => `${name} ne prend rien pour l'instant : sa branche n'est pas fusionnée.`,
+      windingDown: "La fin de nuit approche : la file ne donne plus de tâche.",
       handover: (name: string, report: string, branch: string) =>
         `Reprise du travail ${/^[aeiouyéèêàâîôûh]/i.test(name) && !/^h[aeiouy]/i.test(name) ? `d'${name}` : `de ${name}`} : ${report}. Sa branche ${branch} : fusionne-la dans la tienne pour repartir de son travail.`,
       handoverReport: (status: string, summary: string) => `son compte rendu (${status}) : « ${summary} »`,
@@ -188,6 +205,10 @@ export const agentMessages = defineMessages(
       planTask: "The user's task, summed up.",
       planAgent: "The first name of a linked Claude agent, or \"new\".",
       planGroup: "With agent \"new\" only: the name of a linked group the agent joins. Without it, the agent goes in the mission's group.",
+      addTasks: "Add tasks to the mission's queue: beyond the number of agents, or during the mission. When an agent reports \"done\", OpenVibe merges its branch and gives it the next one.",
+      taskGroup: "The name of a linked group: only an agent of that group will take it.",
+      queue: "The tasks waiting and the free agents.",
+      nextTask: "Give the queue's next task to an agent that reported \"blocked\" or \"failed\"; its unfinished work stays on its branch, and its task is abandoned (reassign no longer finds it).",
       planLevel: "Difficulty. With the router on (mission: router), it chooses the agent's model: low Haiku 5.5, medium Sonnet 5.5, high Opus 5.5, extreme Fable 5.1; required then.",
       team: "Each agent of the mission: group and speciality, sub-task, state (working, waiting, idle, stopped), steps, time spent / budget, report.",
       readOutput: "The end of a mission agent's terminal, as plain text.",
@@ -238,6 +259,8 @@ export const agentMessages = defineMessages(
       alreadyHas: (name: string) => `${name} already has a sub-task: one sub-task per agent.`,
       groupForNew: (n: number) => `Sub-task ${n}: group only goes with agent "new".`,
       notLinkedGroup: (n: number, group: string) => `Sub-task ${n}: "${group}" is not a linked group.`,
+      titleTaken: (n: number, title: string) => `Sub-task ${n}: the title "${title}" is taken; one title per task.`,
+      queueFull: (max: number) => `The queue holds ${max} tasks at most.`,
       level: (n: number) => `Sub-task ${n}: level low, medium, high or extreme.`,
       levelRouter: (n: number) => `Sub-task ${n}: a level (low, medium, high or extreme) — the router chooses the agent's model with it.`,
       overBudget: (n: number, minutes: number, budget: number) => `Sub-task ${n}: ${minutes} min do not fit in the overall budget (${budget} min of real time).`,
@@ -250,6 +273,7 @@ export const agentMessages = defineMessages(
       running: "A mission is already under way: finish it before proposing another.",
       finished: "The mission is finished: the user cleans it up from the panel, then you can propose a new plan.",
       hiddenWorkspace: "The orchestrator's workspace is not on screen: I cannot see its linked agents. Propose \"new\" agents, or try again when the user is back there.",
+      queued: (count: number, waiting: number) => `${plural("en", count, "task added", "tasks added")}. Waiting: ${waiting}.`,
       proposed: (count: number) => `Plan proposed: ${plural("en", count, "sub-task", "sub-tasks")}. It waits for the user's go-ahead ("Launch the mission" in the orchestrator's panel).`,
       emptyTerminal: "(empty terminal)",
       nothingToWrite: "Nothing to write (text).",
@@ -290,6 +314,16 @@ export const agentMessages = defineMessages(
         `[OpenVibe · mission ${mission}] ${title} — ${brief} Budget: ${budget} min. Branch: ${branch}. ` +
         "This worktree is new: its dependencies (node_modules…) are not installed. " +
         "Declare your steps, delegate to your sub-agents, commit on your branch, then report with report.",
+      nextSubTask: (mission: string, title: string, brief: string, budget: number, branch: string, missionBranch: string) =>
+        `[OpenVibe · mission ${mission}] ${title} — ${brief} Budget: ${budget} min. Branch: ${branch}. ` +
+        `New task, new conversation, same worktree: start by merging ${missionBranch} into your branch. ` +
+        "Declare your steps, delegate to your sub-agents, commit on your branch, then report with report.",
+      taken: (name: string, title: string, waiting: number) => `${name} takes "${title}". Still waiting: ${waiting}.`,
+      queueEmpty: "The queue is empty and everyone has reported: merge, have it checked, then finish.",
+      queueStuck: (waiting: number) => `${plural("en", waiting, "task waits", "tasks wait")} that no free agent can take: next_task, reassign, or finish.`,
+      nothingFor: (name: string) => `No task waiting for ${name}.`,
+      notMoved: (name: string) => `${name} takes nothing for now: its branch is not merged.`,
+      windingDown: "The end of the night is near: the queue gives out no more tasks.",
       handover: (name: string, report: string, branch: string) =>
         `Taking over ${name}'s work: ${report}. Its branch ${branch}: merge it into yours to start from its work.`,
       handoverReport: (status: string, summary: string) => `its report (${status}): "${summary}"`,

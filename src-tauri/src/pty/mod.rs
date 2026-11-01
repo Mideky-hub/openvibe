@@ -5,7 +5,7 @@ pub mod session;
 pub mod shell;
 
 use crate::tr;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -32,6 +32,23 @@ pub struct PtyManager {
     sessions: Arc<Mutex<HashMap<String, Arc<Session>>>>,
     /// Processes whose exit is not fully handled yet (final save included).
     exiting: Arc<AtomicUsize>,
+    /// Terminals being started: a second start of the same one is refused
+    /// before it can touch the first one's token and files.
+    starting: Arc<Mutex<HashSet<String>>>,
+    /// What the database holds of a terminal about to be relaunched; taken by its `spawn`.
+    histories: Arc<Mutex<HashMap<String, Vec<u8>>>>,
+}
+
+/// The right to start one terminal; released when dropped.
+pub struct StartClaim {
+    starting: Arc<Mutex<HashSet<String>>>,
+    node_id: String,
+}
+
+impl Drop for StartClaim {
+    fn drop(&mut self) {
+        lock(&self.starting).remove(&self.node_id);
+    }
 }
 
 pub fn pty_size(cols: u16, rows: u16) -> PtySize {
@@ -53,6 +70,7 @@ impl PtyManager {
         on_output: OnOutput,
         on_exit: impl FnOnce(ExitInfo) + Send + 'static,
     ) -> AppResult<Option<u32>> {
+        let history = lock(&self.histories).remove(node_id).unwrap_or_default();
         let mut sessions = lock(&self.sessions);
         if sessions.contains_key(node_id) {
             return Err(AppError::InvalidInput(tr!(
@@ -64,7 +82,7 @@ impl PtyManager {
             session,
             mut child,
             reader,
-        } = Session::start(plan, size, sink, on_output)?;
+        } = Session::start(plan, size, sink, on_output, &history)?;
         sessions.insert(node_id.to_string(), session.clone());
         drop(sessions);
 
@@ -156,6 +174,27 @@ impl PtyManager {
         for session in lock(&self.sessions).values() {
             session.kill();
         }
+    }
+
+    /// Claims the start of `node_id`: refused while it runs or another start
+    /// is under way. Held until the start has succeeded or failed.
+    pub fn claim_start(&self, node_id: &str) -> AppResult<StartClaim> {
+        let mut starting = lock(&self.starting);
+        if self.is_running(node_id) || !starting.insert(node_id.to_string()) {
+            return Err(AppError::InvalidInput(tr!(
+                "le terminal {node_id} tourne déjà",
+                "terminal {node_id} is already running"
+            )));
+        }
+        Ok(StartClaim {
+            starting: self.starting.clone(),
+            node_id: node_id.to_string(),
+        })
+    }
+
+    /// The previous run's saved output, for the next `spawn` of `node_id` to start from.
+    pub fn seed_history(&self, node_id: &str, history: Vec<u8>) {
+        lock(&self.histories).insert(node_id.to_string(), history);
     }
 
     pub fn is_running(&self, node_id: &str) -> bool {
@@ -270,6 +309,16 @@ mod tests {
         let size = pty_size(0, 0);
         assert_eq!((size.cols, size.rows), (1, 1));
     }
+
+    #[test]
+    fn a_second_start_of_the_same_terminal_is_refused_until_the_first_is_over() {
+        let pty = PtyManager::default();
+        let first = pty.claim_start("n1").unwrap();
+        assert!(pty.claim_start("n1").is_err());
+        assert!(pty.claim_start("n2").is_ok(), "another terminal is free");
+        drop(first);
+        assert!(pty.claim_start("n1").is_ok());
+    }
 }
 
 #[cfg(all(test, windows))]
@@ -368,6 +417,23 @@ mod windows_tests {
         assert!(String::from_utf8_lossy(&info.scrollback.data).contains("openvibe-hello"));
         assert!(mgr.list().is_empty());
         assert!(mgr.scrollback("a").is_none());
+    }
+
+    #[test]
+    fn a_relaunch_keeps_the_saved_output_in_its_scrollback() {
+        let mgr = PtyManager::default();
+        mgr.seed_history("h", b"previous run\r\n".to_vec());
+        let sink = VecSink::default();
+        let exited = spawn_answering(
+            &mgr,
+            "h",
+            cmd_plan(&["/c", "echo second-run"], None),
+            sink.clone(),
+        );
+        let info = wait_exit(&exited);
+        let saved = String::from_utf8_lossy(&info.scrollback.data).into_owned();
+        assert!(saved.contains("previous run"), "{saved:?}");
+        assert!(saved.contains("second-run"), "{saved:?}");
     }
 
     #[test]
@@ -567,7 +633,10 @@ mod windows_tests {
             cmd_plan(&["/k", "echo \x1b[?2004hpaste-mode-on"], None),
             sink.clone(),
         );
-        wait_until("mode switch", || sink.text().contains("paste-mode-on"));
+        // cmd echoes the command line (with the text but not the switch) before it runs it:
+        // the text appearing says nothing yet. Wait for the switch itself, then for its output.
+        wait_until("mode switch", || mgr.pastes_bracketed("i"));
+        wait_until("its output", || sink.text().contains("paste-mode-on"));
         assert!(mgr.pastes_bracketed("i"));
         mgr.kill("i");
         wait_exit(&exited);

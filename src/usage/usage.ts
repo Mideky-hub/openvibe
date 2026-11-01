@@ -36,6 +36,11 @@ export interface SessionUsage {
   inputTokens: number;
   outputTokens: number;
   contextPercent: number | null;
+  /**
+   * A resumed conversation keeps its session id, and Claude restores its cumulative figures: what the
+   * first report of this launch already held, taken off the totals so only this run's spending counts.
+   */
+  before?: { costUsd: number; apiMs: number; wallMs: number; linesAdded: number; linesRemoved: number };
   /** The prompt cache: warm while it holds, until `expiresAt`. */
   cache: { warm: boolean; hitRatio: number | null; expiresAt: number | null; ttl: string | null } | null;
   at: number;
@@ -159,13 +164,18 @@ export interface ModelTotal {
   co2Grams: number;
 }
 
+/** The figures a session spent since this launch: its cumulative figures less what a resumed conversation brought. */
+export function spent(s: SessionUsage, key: "costUsd" | "apiMs" | "wallMs" | "linesAdded" | "linesRemoved"): number {
+  return Math.max(0, s[key] - (s.before?.[key] ?? 0));
+}
+
 /** The sessions added up, and by model, the costliest first. */
 export function totals(sessions: readonly SessionUsage[]) {
   const byModel = new Map<string, ModelTotal>();
   for (const s of sessions) {
     const name = s.model?.name ?? messages(usageMessages).unknownModel;
     const row = byModel.get(name) ?? { name, costUsd: 0, inputTokens: 0, outputTokens: 0, sessions: 0, co2Grams: 0 };
-    row.costUsd += s.costUsd;
+    row.costUsd += spent(s, "costUsd");
     row.inputTokens += s.inputTokens;
     row.outputTokens += s.outputTokens;
     row.sessions += 1;
@@ -176,11 +186,11 @@ export function totals(sessions: readonly SessionUsage[]) {
   const models = [...byModel.values()].sort((a, b) => b.costUsd - a.costUsd);
   return {
     sessions: sessions.length,
-    costUsd: sum((s) => s.costUsd),
-    apiMs: sum((s) => s.apiMs),
-    wallMs: sum((s) => s.wallMs),
-    linesAdded: sum((s) => s.linesAdded),
-    linesRemoved: sum((s) => s.linesRemoved),
+    costUsd: sum((s) => spent(s, "costUsd")),
+    apiMs: sum((s) => spent(s, "apiMs")),
+    wallMs: sum((s) => spent(s, "wallMs")),
+    linesAdded: sum((s) => spent(s, "linesAdded")),
+    linesRemoved: sum((s) => spent(s, "linesRemoved")),
     co2Grams: models.reduce((total, m) => total + m.co2Grams, 0),
     byModel: models,
   };

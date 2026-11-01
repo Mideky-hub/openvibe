@@ -30,8 +30,8 @@ export function SavePresetDialog() {
     const text = messages(presetsMessages).toast;
     const preset = captureCurrentTeam(kept);
     setOpen(false);
-    if (!preset) {
-      toast.error(text.nothing);
+    if (preset === "noCanvas" || !preset) {
+      toast.error(preset === "noCanvas" ? text.noCanvas : text.nothing);
       return;
     }
     try {

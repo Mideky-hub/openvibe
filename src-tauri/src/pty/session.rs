@@ -53,6 +53,7 @@ impl Session {
         size: PtySize,
         sink: Box<dyn OutputSink>,
         on_output: OnOutput,
+        history: &[u8],
     ) -> AppResult<Started> {
         let pair = native_pty_system().openpty(size).map_err(pty_err)?;
         let mut cmd = CommandBuilder::new(&plan.program);
@@ -79,7 +80,7 @@ impl Session {
             master: Mutex::new(Some(pair.master)),
             killer: Mutex::new(child.clone_killer()),
             output: Mutex::new(Output {
-                scrollback: Scrollback::new(SCROLLBACK_CAPACITY),
+                scrollback: Scrollback::with_history(SCROLLBACK_CAPACITY, history),
                 sink: Some(sink),
             }),
             paste: Mutex::new(PasteMode::default()),

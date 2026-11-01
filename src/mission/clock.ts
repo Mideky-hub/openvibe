@@ -41,7 +41,7 @@ export function checkBudgets(now = Date.now()) {
         notify(orchestratorId, over(overrun.name, overrun.task, overrun.budget), told);
       } else told();
     }
-    if (mission.state === "en_cours" && !mission.windDownTold && !found.global && windingDown(mission, now) && !waiting.has(`${orchestratorId}:windDown`)) {
+    if (mission.state === "en_cours" && !mission.windDownTold && !mission.globalOverdue && !found.global && windingDown(mission, now) && !waiting.has(`${orchestratorId}:windDown`)) {
       waiting.add(`${orchestratorId}:windDown`);
       notify(orchestratorId, lines.windDown(remainingGlobal(mission, now) ?? 0), () => {
         waiting.delete(`${orchestratorId}:windDown`);

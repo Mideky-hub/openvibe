@@ -1,6 +1,9 @@
 import { useEffect } from "react";
 import { boot } from "@/app/boot";
 import { Palette } from "@/commands/Palette";
+import { LoopsDialog } from "@/loops/LoopsDialog";
+import { LoopsIndicator } from "@/loops/LoopsIndicator";
+import { SavePresetDialog } from "@/presets/SavePresetDialog";
 import { appMessages } from "@/app/messages";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { HomeScreen } from "@/home/HomeScreen";
@@ -33,6 +36,13 @@ export default function App() {
       {view === "error" && <StatusScreen message={t.projectsLoadFailed(String(error))} />}
       <ErrorBoundary scope="palette" fallback={() => null}>
         <Palette />
+      </ErrorBoundary>
+      <ErrorBoundary scope="presets dialog" fallback={() => null}>
+        <SavePresetDialog />
+      </ErrorBoundary>
+      <ErrorBoundary scope="loops" fallback={() => null}>
+        <LoopsDialog />
+        <LoopsIndicator />
       </ErrorBoundary>
       <ErrorBoundary scope="update dialog" fallback={() => null}>
         <UpdateDialog />

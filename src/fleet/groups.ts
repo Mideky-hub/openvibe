@@ -4,13 +4,16 @@ import { canvasStore } from "@/canvas/canvasStore";
 import { returnKeyboardToCanvas } from "@/canvas/keyboardFocus";
 import { createGroupFrame, groupInfoOf, isGroup, withGroupFolded, withGroupSpeciality } from "@/canvas/groups";
 import { allowRemoval } from "@/canvas/removalGuard";
-import { createNodeElement } from "@/canvas/nodeElement";
+import { createNodeElement, nodeKindOf } from "@/canvas/nodeElement";
 import type { AgentId } from "@/ipc/pty";
 import { newTerminalPayload } from "@/nodes/terminal/launch";
 import { markForAutostart } from "@/nodes/terminal/registry";
 import type { TerminalPayload } from "@/nodes/types";
 import { nodesStore } from "@/store/nodes";
-import { isRunning } from "@/store/terminalStatus";
+import { messages } from "@/i18n";
+import { fleetMessages } from "./messages";
+import { isRunning, statusOf } from "@/store/terminalStatus";
+import { toast } from "sonner";
 import { uiStore } from "@/store/ui";
 import { workspacesStore } from "@/store/workspaces";
 import { readableTargets } from "./groupView";
@@ -105,6 +108,8 @@ export async function addAgentToGroup(groupId: string, agent: AgentId) {
   const workspaceId = workspacesStore.getState().activeId;
   const group = canvasStore.getState().frames.find((f) => f.id === groupId);
   if (!workspaceId || !group || !isGroup(group)) return;
+  // A new agent in a folded group would stay off the screen, and so would not start.
+  if (group.group.folded) setGroupFolded(groupId, false);
   const name = await nameForNewAgent(workspaceId, group.group.pantheon);
   const center = { x: group.x + group.width / 2, y: group.y + group.height / 2 };
   await addTerminal(workspaceId, newTerminalPayload({ ...defaultLaunchOptions(), agent }, name), center, groupId);
@@ -142,10 +147,21 @@ export function setGroupSpeciality(groupId: string, speciality: string) {
 export function setGroupFolded(groupId: string, folded: boolean) {
   const api = canvasStore.getState().api;
   if (!api) return;
+  // A hidden agent is not mounted, so it never starts: wait for the ones still waiting for their turn.
+  const waiting = canvasStore.getState().frames.find((f) => f.id === groupId)?.memberIds.some((id) => statusOf(id).state === "starting");
+  if (folded && waiting) {
+    toast.error(messages(fleetMessages).foldWaiting);
+    return;
+  }
   api.updateScene({
     elements: api
       .getSceneElementsIncludingDeleted()
-      .map((e) => (e.id === groupId && groupInfoOf(e) ? newElementWith(e, { customData: withGroupFolded(e.customData, folded) }) : e)),
+      .map((e) => {
+        if (e.id === groupId && groupInfoOf(e)) return newElementWith(e, { customData: withGroupFolded(e.customData, folded) });
+        // Locked while folded: a click on a hidden agent's empty cell can neither select, move nor delete it.
+        if (e.frameId === groupId && nodeKindOf(e) === "terminal") return newElementWith(e, { locked: folded });
+        return e;
+      }),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
 }

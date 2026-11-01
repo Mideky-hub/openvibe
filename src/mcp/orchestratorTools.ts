@@ -3,7 +3,8 @@ import { setRemoteControl } from "@/fleet/remoteControl";
 import { messages } from "@/i18n";
 import { ptySendText } from "@/ipc/pty";
 import { endMission, mergeMission, reassignTask } from "@/mission/launch";
-import { budgetOf, memberTime, NEW_AGENT, oneLine, proposedPlan, remainingGlobal, sameName, spentMin, type Member, type Mission } from "@/mission/mission";
+import { budgetOf, memberTime, NEW_AGENT, oneLine, proposedPlan, proposedTasks, remainingGlobal, sameName, spentMin, type Member, type Mission } from "@/mission/mission";
+import { freeMembers, giveNext, pumpQueue } from "@/mission/queue";
 import { LEVELS, modelLabel } from "@/mission/router";
 import { agentGroup, agentState, linkedClaudeAgents, linkedGroups, missionOf, orchestratorShown, setMission, updateMember } from "@/mission/store";
 import { terminalText } from "@/nodes/terminal/registry";
@@ -50,6 +51,33 @@ export function orchestratorTools() {
         required: ["name", "task", "subtasks"],
       },
     },
+    {
+      name: "add_tasks",
+      description: d.addTasks,
+      inputSchema: {
+        type: "object",
+        properties: {
+          tasks: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              properties: {
+                title: { type: "string", maxLength: 60 },
+                brief: { type: "string" },
+                budget_min: { type: "integer", minimum: 1 },
+                level: { type: "string", enum: ["low", "medium", "high", "extreme"], description: d.planLevel },
+                group: { type: "string", description: d.taskGroup },
+              },
+              required: ["title", "brief", "budget_min"],
+            },
+          },
+        },
+        required: ["tasks"],
+      },
+    },
+    { name: "queue", description: d.queue, inputSchema: NO_ARGS },
+    { name: "next_task", description: d.nextTask, inputSchema: { type: "object", properties: { agent: { type: "string" } }, required: ["agent"] } },
     { name: "team", description: d.team, inputSchema: NO_ARGS },
     {
       name: "read_output",
@@ -87,7 +115,7 @@ export function orchestratorTools() {
 }
 
 /** Internal names of the orchestrator's tools (`./protocol.ts`). */
-export const ORCHESTRATOR_ONLY = new Set(["mission", "proposer_plan", "equipe", "lire_sortie", "ecrire", "prolonger", "interrompre", "reattribuer", "fusionner", "terminer", "remote_control"]);
+export const ORCHESTRATOR_ONLY = new Set(["mission", "proposer_plan", "add_tasks", "queue", "next_task", "equipe", "lire_sortie", "ecrire", "prolonger", "interrompre", "reattribuer", "fusionner", "terminer", "remote_control"]);
 
 const json = (value: unknown) => said(JSON.stringify(value, null, 2));
 const formed = (mission: Mission) => mission.state === "en_cours" || mission.state === "terminee";
@@ -132,6 +160,7 @@ function describeMission(orchestratorId: string, mission: Mission): ToolResult {
       : null,
     linked_groups: orchestratorShown(orchestratorId) ? linkedGroups(orchestratorId).map(({ name, speciality }) => ({ name, speciality })) : null,
     linked_agents_note: orchestratorShown(orchestratorId) ? null : t().orchestrator.hiddenAgents,
+    queue_waiting: mission.queue?.length ?? 0,
     left_min: remainingGlobal(mission, Date.now()) ?? null,
     overnight: mission.overnight === true,
     elapsed_min: mission.state === "en_cours" && mission.startedAt !== undefined ? Math.floor((Date.now() - mission.startedAt) / 60_000) : null,
@@ -149,6 +178,34 @@ function proposePlan(orchestratorId: string, mission: Mission, args: Record<stri
   if (typeof result === "string") return refused(result);
   setMission(orchestratorId, { state: "plan", ...result, error: undefined });
   return said(t().orchestrator.proposed(result.plan.length));
+}
+
+function addTasks(orchestratorId: string, mission: Mission, args: Record<string, unknown>): ToolResult {
+  if (mission.state === "terminee") return refused(t().orchestrator.finished);
+  const grouped = Array.isArray(args.tasks) && args.tasks.some((s) => Boolean((s as Record<string, unknown> | null)?.groupe));
+  if (grouped && !orchestratorShown(orchestratorId)) return refused(t().orchestrator.hiddenWorkspace);
+  const tasks = proposedTasks(args, mission, linkedGroups(orchestratorId));
+  if (typeof tasks === "string") return refused(tasks);
+  const queue = [...(mission.queue ?? []), ...tasks];
+  setMission(orchestratorId, { queue });
+  void pumpQueue(orchestratorId);
+  return said(t().orchestrator.queued(tasks.length, queue.length));
+}
+
+function describeQueue(mission: Mission): ToolResult {
+  return json({
+    waiting: (mission.queue ?? []).map((s) => ({ title: s.title, brief: s.brief, budget_min: s.budgetMin, level: s.level ? outLevel(s.level) : null, group: s.group?.name ?? null })),
+    free_agents: freeMembers(mission).map((m) => m.name),
+  });
+}
+
+async function nextTask(orchestratorId: string, mission: Mission, args: Record<string, unknown>): Promise<ToolResult> {
+  const member = memberNamed(mission, args.agent);
+  if (typeof member === "string") return refused(member);
+  if (mission.state !== "en_cours") return refused(t().orchestrator.noMission);
+  if (member.handedTo) return refused(t().orchestrator.handedAway(member.name));
+  const result = await giveNext(orchestratorId, member);
+  return "given" in result ? said(result.given) : refused(result.refused);
 }
 
 const timeText = (spent: number | undefined, budget: number) => (spent === undefined ? `? / ${budget} min` : `${Math.floor(spent)} / ${budget} min`);
@@ -301,6 +358,12 @@ export async function orchestratorTool(orchestratorId: string, name: string, arg
       return describeMission(orchestratorId, mission);
     case "proposer_plan":
       return proposePlan(orchestratorId, mission, args);
+    case "add_tasks":
+      return addTasks(orchestratorId, mission, args);
+    case "queue":
+      return describeQueue(mission);
+    case "next_task":
+      return nextTask(orchestratorId, mission, args);
     case "equipe":
       return describeTeam(orchestratorId, mission);
     case "lire_sortie":
@@ -313,8 +376,13 @@ export async function orchestratorTool(orchestratorId: string, name: string, arg
       return mission.state === "en_cours" ? interrupt(mission, args) : refused(t().orchestrator.noMission);
     case "reattribuer":
       return reassign(orchestratorId, mission, args);
-    case "fusionner":
-      return mission.state === "en_cours" ? said(await mergeMission(orchestratorId)) : refused(t().orchestrator.noMission);
+    case "fusionner": {
+      if (mission.state !== "en_cours") return refused(t().orchestrator.noMission);
+      const merged = await mergeMission(orchestratorId);
+      // A conflict held an agent back: merged now, it can take the next task.
+      void pumpQueue(orchestratorId);
+      return said(merged);
+    }
     case "terminer":
       return finish(orchestratorId, mission, args);
     case "remote_control":

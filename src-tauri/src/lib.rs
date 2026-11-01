@@ -13,6 +13,7 @@ mod repo;
 mod review;
 mod studio;
 mod sync;
+mod tokens;
 
 use std::time::Duration;
 
@@ -118,6 +119,7 @@ pub fn run() {
             commands::pty::list_ollama_models,
             commands::pty::npm_available,
             commands::pty::list_shells,
+            commands::tokens::token_usage,
             commands::workspace::list_workspaces,
             commands::workspace::create_workspace,
             commands::workspace::rename_workspace,

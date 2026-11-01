@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { langStore, messages } from "@/i18n";
 import { fleetMessages } from "./messages";
-import { disableRemote, enableRemote, remoteErrorText, remoteScreen, type RemoteIo } from "./remoteControl";
+import { disableRemote, draftOf, enableRemote, remoteErrorText, remoteScreen, type RemoteIo } from "./remoteControl";
 
 const URL = "https://claude.ai/code/session_014egvikPZf3oUfnmUBm3aoD";
 const PROMPT = ["────────────────────────────── Claude · demo ─", "❯ ", "──────────────────────────────", "  demo ⌥ main | Opus 5.5"];
@@ -120,6 +120,23 @@ describe("enableRemote", () => {
     const refusal = ["❯ /remote-control", "  ⎿  Remote Control requires a claude.ai subscription", ...PROMPT].join("\n");
     expect(await enableRemote(fakeTerminal(EMPTY, () => refusal).io)).toEqual({ error: "Remote Control requires a claude.ai subscription" });
     expect(await enableRemote(fakeTerminal(EMPTY, () => EMPTY).io)).toEqual({ error: "Claude n'a pas confirmé Remote Control." });
+  });
+});
+
+describe("a half-typed draft in Claude's prompt (backlog 27 oct)", () => {
+  const DRAFT = ["  Claude Code v2.1.304", "────────────────────────────── Claude · demo ─", "❯ corrige le bug de", "──────────────────────────────", "  demo ⌥ main | Opus 5.5"].join(String.fromCharCode(10));
+
+  it("reads what is typed in the input box, and nothing from the history", () => {
+    expect(draftOf(DRAFT)).toBe("corrige le bug de");
+    expect(draftOf(EMPTY)).toBe("");
+    expect(draftOf(ACTIVE)).toBe("");
+  });
+
+  it("is never completed by /remote-control: enable and disable stop and say so", async () => {
+    const shown = fakeTerminal(DRAFT, () => DRAFT);
+    expect(await enableRemote(shown.io)).toEqual({ error: "Claude a du texte en cours de saisie : envoie-le ou efface-le, puis réessaie." });
+    expect(await disableRemote(shown.io)).toMatchObject({ error: expect.stringContaining("texte en cours") });
+    expect(shown.typed).toEqual([]);
   });
 });
 

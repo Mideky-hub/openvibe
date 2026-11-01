@@ -5,6 +5,7 @@ export const fleetMessages = defineMessages(
   {
     launchFailed: (error: string) => `Lancement impossible : ${error}`,
     orchestratorFailed: (error: string) => `Orchestrateur impossible : ${error}`,
+    foldWaiting: "Attends que les agents du groupe aient démarré avant de le replier : un agent caché ne démarre pas.",
     noClaude: "Claude Code n'est pas installé : l'orchestrateur en a besoin. Installe-le (voir « Bien démarrer » sur l'accueil), puis réessaie.",
     settingNotSaved: (error: string) => `Réglage non enregistré : ${error}`,
     agentFallback: "Agent",
@@ -100,6 +101,7 @@ export const fleetMessages = defineMessages(
       openInBrowser: "Ouvrir dans le navigateur",
       consent: "Claude demande ton accord pour Remote Control : réponds dans son terminal.",
       notConfirmed: "Claude n'a pas confirmé Remote Control.",
+      draft: "Claude a du texte en cours de saisie : envoie-le ou efface-le, puis réessaie.",
       menuNotOpened: "Claude n'a pas ouvert le menu Remote Control.",
       menuUnreadable: "Le menu Remote Control n'a pas pu être lu.",
       disconnectNotConfirmed: "Claude n'a pas confirmé la déconnexion.",
@@ -237,6 +239,7 @@ export const fleetMessages = defineMessages(
   {
     launchFailed: (error: string) => `Could not launch: ${error}`,
     orchestratorFailed: (error: string) => `Could not create the orchestrator: ${error}`,
+    foldWaiting: "Wait for the group's agents to start before folding it: a hidden agent does not start.",
     noClaude: 'Claude Code is not installed: the orchestrator needs it. Install it (see "Getting started" on the home screen), then try again.',
     settingNotSaved: (error: string) => `Setting not saved: ${error}`,
     agentFallback: "Agent",
@@ -328,6 +331,7 @@ export const fleetMessages = defineMessages(
       openInBrowser: "Open in the browser",
       consent: "Claude asks for your consent for Remote Control: answer in its terminal.",
       notConfirmed: "Claude did not confirm Remote Control.",
+      draft: "Claude has text being typed: send or clear it, then try again.",
       menuNotOpened: "Claude did not open the Remote Control menu.",
       menuUnreadable: "The Remote Control menu could not be read.",
       disconnectNotConfirmed: "Claude did not confirm the disconnection.",
