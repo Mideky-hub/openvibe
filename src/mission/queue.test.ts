@@ -437,3 +437,33 @@ it("speaks English when the interface does", async () => {
     "[OpenVibe · mission Auth] API — Fais l'API. Budget: 30 min. Branch: openvibe/auth-isis. New task, new conversation, same worktree: start by merging openvibe/auth into your branch. Declare your steps, delegate to your sub-agents, commit on your branch, then report with report.",
   );
 });
+
+describe("the global budget (review)", () => {
+  it("starts no new task once it is spent: nobody asked for more usage", async () => {
+    await setup({ budgetMin: 30 });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(31 * 60_000);
+    await afterReport("chef", "isis");
+    clock.mockRestore();
+    expect(relaunchTerminal).not.toHaveBeenCalled();
+    expect(ptySendText).not.toHaveBeenCalled();
+    expect(missionNow().queue).toHaveLength(1);
+  });
+
+  it("still moves on while some of it is left", async () => {
+    await setup({ budgetMin: 30 });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(29 * 60_000);
+    await afterReport("chef", "isis");
+    clock.mockRestore();
+    expect(relaunchTerminal).toHaveBeenCalled();
+    expect(missionNow().queue).toEqual([]);
+  });
+
+  it("does not let next_task spend past it either", async () => {
+    await setup({ budgetMin: 30 });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(31 * 60_000);
+    const result = await giveNext("chef", missionNow().members[0]);
+    clock.mockRestore();
+    expect(result).toHaveProperty("refused");
+    expect(relaunchTerminal).not.toHaveBeenCalled();
+  });
+});
