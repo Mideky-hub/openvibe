@@ -123,6 +123,16 @@ it("says plainly what files and commands opens to the agents", async () => {
   expect(missionNow().permission).toBe("work");
 });
 
+it("says the push block is no security boundary, with how it was passed (review)", async () => {
+  await show();
+  const text = document.body.textContent;
+  expect(text).toContain("Ce blocage n'est pas une frontière de sécurité");
+  expect(text).toContain("-c remote.origin.pushurl");
+  expect(text).toContain("GIT_CONFIG_COUNT=0");
+  expect(text).not.toContain("git push reste interdit dans tous les cas");
+  expect(text).toContain("Tes réglages ne sont pas modifiés.");
+});
+
 it("says what files costs a night: an agent stops at its first command", async () => {
   await show();
   expect(document.body.textContent).toContain("un agent s'arrête à sa première commande, jusqu'à ton retour.");
@@ -154,6 +164,8 @@ it("speaks English", async () => {
   expect(document.body.textContent).toContain("Overnight run");
   expect(document.body.textContent).toContain("Agents run any command unasked: the network and the accounts logged in on this PC are open to them.");
   expect(document.body.textContent).toContain("an agent stops at its first command, until you are back.");
+  expect(document.body.textContent).toContain("This block is not a security boundary");
+  expect(document.body.textContent).not.toContain("stays forbidden in every case");
   await act(async () => button("Prepare the night").click());
   expect(vi.mocked(notify).mock.calls[0][1]).toBe(
     "Overnight run: the user is away for 480 min. Call tickets, keep what fits in that time with 4 agents, put the rest in the queue with add_tasks, then call propose_plan: the plan waits for their go-ahead.",
