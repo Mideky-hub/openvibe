@@ -26,6 +26,8 @@ pub struct RepoState {
     pub behind: u32,
     /// What a push would reach (`origin/main`); None when it cannot.
     pub push_to: Option<String>,
+    /// The commit a push would send, as the window read it; empty without a commit.
+    pub head: String,
     /// Why it cannot: `noRemote`, `manyRemotes`, `detached`, `noCommit`, `mirror`.
     pub no_push: Option<String>,
     pub files: Vec<ChangedFile>,
@@ -258,6 +260,9 @@ pub fn state(dir: &Path) -> Result<RepoState, String> {
         .unwrap_or((0, 0)),
         None => (0, 0),
     };
+    let head = run(&root, &["rev-parse", "--verify", "--quiet", "HEAD"])
+        .map(|hash| hash.trim().to_string())
+        .unwrap_or_default();
     let changes = review::changes(dir, None)?;
     let listing = index_listing(&root)?;
     let index = parse_index(&listing);
@@ -272,6 +277,7 @@ pub fn state(dir: &Path) -> Result<RepoState, String> {
         ahead,
         behind,
         push_to: target.as_ref().ok().map(|target| target.label.clone()),
+        head,
         no_push: target.err().map(str::to_string),
         files: changes.files,
         stamps,
@@ -454,10 +460,10 @@ pub fn history(dir: &Path) -> Result<Vec<LogEntry>, String> {
 }
 
 /// Only ever called by the window's Push button (spec fenêtre git §2.3), for the
-/// branch and target that button showed. The refspec is explicit and has no
+/// branch, commit and target that button showed. The refspec is explicit and has no
 /// `+`: `remote.*.push`, `push.default` or `pushRemote` cannot send anything
 /// else, or force anything, behind what the button says.
-pub fn push(dir: &Path, branch: &str, target: &str) -> Result<(), String> {
+pub fn push(dir: &Path, branch: &str, target: &str, head: &str) -> Result<(), String> {
     let root = review::root(dir)?;
     let current = git::status(&root)
         .ok_or_else(|| tr!("pas un dépôt git", "not a git repository"))?
@@ -466,10 +472,12 @@ pub fn push(dir: &Path, branch: &str, target: &str) -> Result<(), String> {
     let Ok(resolved) = resolved else {
         return Err(tr!("rien vers où pousser", "nowhere to push to"));
     };
-    if current != branch || resolved.label != target {
+    // An agent may have committed since: the button counted what it showed.
+    let now = run(&root, &["rev-parse", "--verify", "--quiet", "HEAD"]).unwrap_or_default();
+    if current != branch || resolved.label != target || now.trim() != head {
         return Err(tr!(
-            "La branche ou sa cible a changé : rien n'a été poussé, regarde à nouveau.",
-            "The branch or its target changed: nothing was pushed, have another look."
+            "La branche, ses commits ou sa cible ont changé : rien n'a été poussé, regarde à nouveau.",
+            "The branch, its commits or its target changed: nothing was pushed, have another look."
         ));
     }
     let refspec = format!("refs/heads/{current}:{}", resolved.dest);
@@ -546,6 +554,7 @@ mod tests {
             root,
             &read.branch,
             read.push_to.as_deref().unwrap_or_default(),
+            &read.head,
         )
     }
 
@@ -1127,8 +1136,33 @@ mod tests {
         let bare = with_bare_remote(&root);
         let seen = state(&root).unwrap();
         raw(&root, &["checkout", "-q", "-b", "elsewhere"]);
-        let error = push(&root, &seen.branch, seen.push_to.as_deref().unwrap()).unwrap_err();
+        let error = push(
+            &root,
+            &seen.branch,
+            seen.push_to.as_deref().unwrap(),
+            &seen.head,
+        )
+        .unwrap_err();
         assert!(!error.is_empty());
+        assert_eq!(raw(bare.path(), &["for-each-ref"]), "");
+    }
+
+    /// The button says how many commits it sends: one an agent made since is not asked for (review).
+    #[test]
+    fn refuses_a_push_of_a_commit_the_button_did_not_count() {
+        let (_dir, root) = repo();
+        let bare = with_bare_remote(&root);
+        let seen = state(&root).unwrap();
+        fs::write(root.join("late.txt"), "an agent's\n").unwrap();
+        raw(&root, &["add", "late.txt"]);
+        raw(&root, &["commit", "-q", "-m", "an agent's commit"]);
+        let refused = push(
+            &root,
+            &seen.branch,
+            seen.push_to.as_deref().unwrap(),
+            &seen.head,
+        );
+        assert!(refused.is_err(), "the late commit went out");
         assert_eq!(raw(bare.path(), &["for-each-ref"]), "");
     }
 
