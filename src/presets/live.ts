@@ -14,6 +14,8 @@ import { nodesStore, terminalOf } from "@/store/nodes";
 import type { DeployDeps } from "./deploy";
 import { capturePreset, type TeamPreset } from "./model";
 
+const FRAME_WAIT_MS = 2000;
+
 /** The team of the workspace on screen as a preset; `noCanvas` when none is mounted, null without a group of agents. */
 export function captureCurrentTeam(name: string): TeamPreset | "noCanvas" | null {
   const { api, frames, links } = canvasStore.getState();
@@ -23,6 +25,23 @@ export function captureCurrentTeam(name: string): TeamPreset | "noCanvas" | null
     .filter((e) => nodeKindOf(e) === "orchestrator")
     .map((e) => ({ id: e.id, name: readOrchestratorPayload(nodes[e.id]?.payload).name }));
   return capturePreset({ frames, agentOf: (id) => terminalOf(nodes[id])?.agent, orchestrators, links }, name, crypto.randomUUID(), Date.now());
+}
+
+/** The canvas tells its frames after React's commit: what follows a group needs it known. */
+function frameKnown(frameId: string): Promise<void> {
+  const known = () => canvasStore.getState().frames.some((f) => f.id === frameId);
+  if (known()) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      stop();
+      resolve();
+    };
+    const timer = setTimeout(done, FRAME_WAIT_MS);
+    const stop = canvasStore.subscribe(() => {
+      if (known()) done();
+    });
+  });
 }
 
 /** The real functions of a deployment: the agents it starts are the user's choice (spec presets §3). */
@@ -35,7 +54,11 @@ export async function liveDeployDeps(): Promise<DeployDeps> {
     obstacles: (api?.getSceneElements() ?? []).map(({ x, y, width, height }) => ({ x, y, width, height })),
     fallback: defaultAgent(agents),
     isAvailable: (agent) => agents.length === 0 || agents.some((a) => a.id === agent && a.available),
-    launchGroup: (plan, at) => launchGroup(plan, defaultLaunchOptions(), at),
+    launchGroup: async (plan, at) => {
+      const made = await launchGroup(plan, defaultLaunchOptions(), at);
+      if (made) await frameKnown(made.frameId);
+      return made;
+    },
     setSpeciality: (frameId, speciality) => {
       const scene = canvasStore.getState().api;
       scene?.updateScene({
