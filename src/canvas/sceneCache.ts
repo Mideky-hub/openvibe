@@ -75,7 +75,11 @@ export function editStoredScene(workspaceId: string, elements: readonly Excalidr
   if (!scene) return;
   cache.set(workspaceId, { ...scene, initialData: { ...scene.initialData, elements } });
   const live = elements.filter((e) => !e.isDeleted);
-  void saveScene(workspaceId, JSON.stringify(live), JSON.stringify(scene.initialData.appState ?? {}), liveNodeIds(elements)).catch((error: unknown) =>
+  // A node's row comes before its element: one on its way is not to purge.
+  const closed = new Set(elements.filter((e) => e.isDeleted).map((e) => e.id));
+  const onTheirWay = Object.entries(nodesStore.getState().nodes).flatMap(([id, node]) => (node.workspaceId === workspaceId && !closed.has(id) ? [id] : []));
+  const nodeIds = [...new Set([...liveNodeIds(elements), ...onTheirWay])];
+  void saveScene(workspaceId, JSON.stringify(live), JSON.stringify(scene.initialData.appState ?? {}), nodeIds).catch((error: unknown) =>
     console.warn("stored scene not saved", error),
   );
 }

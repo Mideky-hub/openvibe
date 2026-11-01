@@ -30,7 +30,7 @@ it("lets go of a closed orchestrator's night", () => {
 
 it("takes the PC at the start of the night and releases it at the end, once each", () => {
   const off = installKeepAwake();
-  expect(setKeepAwake).not.toHaveBeenCalled();
+  vi.mocked(setKeepAwake).mockClear();
   nodesStore.setState({ nodes: { chef: orchestrator({ state: "en_cours", overnight: true }) } });
   nodesStore.setState({ nodes: { chef: orchestrator({ state: "en_cours", overnight: true, name: "x" }) } });
   expect(vi.mocked(setKeepAwake).mock.calls).toEqual([[true]]);
@@ -43,5 +43,19 @@ it("takes it back at the start when a night was already running", () => {
   nodesStore.setState({ nodes: { chef: orchestrator({ state: "en_cours", overnight: true }) } });
   const off = installKeepAwake();
   expect(setKeepAwake).toHaveBeenCalledWith(true);
+  off();
+});
+
+it("does not hold the PC past the night when the orchestrator never finished (review)", () => {
+  const min = 60_000;
+  const night = { chef: orchestrator({ state: "en_cours", overnight: true, startedAt: 0, budgetMin: 60 }) };
+  expect(wantsAwake(night, 59 * min)).toBe(true);
+  expect(wantsAwake(night, 85 * min)).toBe(true);
+  expect(wantsAwake(night, 91 * min)).toBe(false);
+});
+
+it("lets go at the start too: a reloaded page must release what Rust still holds (review)", () => {
+  const off = installKeepAwake();
+  expect(vi.mocked(setKeepAwake).mock.calls).toEqual([[false]]);
   off();
 });

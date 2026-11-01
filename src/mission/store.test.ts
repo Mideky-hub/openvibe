@@ -4,7 +4,7 @@ import { nodesStore, type NodeRecord } from "@/store/nodes";
 import { NEW_MISSION } from "./mission";
 import { rememberScene, forgetScene } from "@/canvas/sceneCache";
 import { workspacesStore } from "@/store/workspaces";
-import { agentGroup, canvasKnown, linkedClaudeAgents, linkedGroups, memberBudgets, memberOf, setOrchestratorClosed, workspaceCanvas } from "./store";
+import { agentGroup, canvasKnown, linkedClaudeAgents, linkedGroups, memberBudgets, memberOf, orchestratorShown, setOrchestratorClosed, workspaceCanvas } from "./store";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
 
@@ -103,8 +103,17 @@ describe("a workspace not on screen (spec mission de nuit §6.1)", () => {
 
   it("reads the live canvas when it is the one on screen", () => {
     workspacesStore.setState({ activeId: "w1" });
+    canvasStore.setState({ api: {} as never });
     expect(linkedClaudeAgents("chef")).toEqual([]);
     expect(canvasKnown("chef")).toBe(true);
+    canvasStore.setState({ api: null });
+    forgetScene("w1");
+  });
+
+  it("reads its stored scene from the home screen: the workspace is still the active one, no canvas is mounted (review)", () => {
+    workspacesStore.setState({ activeId: "w1" });
+    expect(orchestratorShown("chef")).toBe(false);
+    expect(linkedClaudeAgents("chef")).toEqual([{ nodeId: "isis", name: "Isis" }]);
     forgetScene("w1");
   });
 });
@@ -119,7 +128,7 @@ it("does not offer an agent already in another running mission (backlog H2)", ()
       free: { workspaceId: "w1", kind: "orchestrator", payload: { name: "Free" } },
     },
   });
-  canvasStore.setState({ links: { busy: { nodeIds: ["isis"], groupIds: [] }, free: { nodeIds: ["isis"], groupIds: [] } }, frames: [] });
+  canvasStore.setState({ api: {} as never, links: { busy: { nodeIds: ["isis"], groupIds: [] }, free: { nodeIds: ["isis"], groupIds: [] } }, frames: [] });
   expect(linkedClaudeAgents("free")).toEqual([]);
   expect(linkedClaudeAgents("busy").map((a) => a.nodeId)).toEqual(["isis"]);
 });

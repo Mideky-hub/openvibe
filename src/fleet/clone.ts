@@ -9,6 +9,7 @@ export function cloneTerminalPayload(source: TerminalPayload, name: string): Ter
   // A mission's model and Remote Control were asked for the source only (final review maj §3).
   delete copy.model;
   delete copy.remoteControl;
+  delete copy.permission;
   // An install runs once, when asked for, and a copy starts by itself: it is a plain shell in the same folder.
   if (copy.oneShot) {
     copy.agent = "shell";

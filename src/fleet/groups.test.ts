@@ -154,6 +154,7 @@ describe("a scene not on screen (spec mission de nuit §6.1)", () => {
 
   it("closes a group there with its terminals and wires, and frees them", async () => {
     const { disposeTerminal } = await import("@/nodes/terminal/registry");
+    nodesStore.getState().forgetWorkspace("w1");
     const wire = { id: "w", type: "arrow", isDeleted: false, customData: { openvibe: { kind: "wire" } }, startBinding: { elementId: "chef" }, endBinding: { elementId: "f1" } };
     rememberScene(
       "w1",
