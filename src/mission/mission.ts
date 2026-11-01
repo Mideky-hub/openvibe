@@ -1,4 +1,5 @@
 import { messages } from "@/i18n";
+import type { Permission } from "@/ipc/pty";
 import { agentMessages } from "@/mcp/messages";
 import { readLevel, type Level } from "./router";
 import type { TicketSource } from "./tickets";
@@ -110,6 +111,8 @@ export interface Mission {
   windDownTold?: boolean;
   /** Where an overnight mission takes its tasks. */
   tickets?: TicketSource;
+  /** What its agents may do unasked; none outside a night (spec mission de nuit §5.3). */
+  permission?: Permission;
   /** The dialog was the go-ahead: the plan starts as soon as it is proposed (spec mission de nuit §5.1). */
   autoLaunch?: boolean;
 }
@@ -231,6 +234,7 @@ export function readMission(raw: unknown): Mission | undefined {
   const tickets = readTicketSource(r.tickets);
   if (tickets) mission.tickets = tickets;
   if (r.autoLaunch === true) mission.autoLaunch = true;
+  if (r.permission === "ask" || r.permission === "edits" || r.permission === "work") mission.permission = r.permission;
   return mission;
 }
 

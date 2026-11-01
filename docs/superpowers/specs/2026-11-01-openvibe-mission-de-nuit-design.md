@@ -104,7 +104,9 @@ Un agent sans surveillance reste bloqué sur un dialogue d'autorisation jusqu'au
 **`git push` est interdit dans tous les cas**, par deux barrières indépendantes :
 
 1. une règle `Bash(git push *)` dans les réglages de la session ;
-2. une configuration git passée par l'environnement du terminal, qui fait échouer tout push vers un dépôt distant. La documentation de Claude Code dit que ces règles portent sur le texte de la commande et ne sont pas une frontière de sécurité (`git -C . push` n'y correspond pas) : la seconde barrière agit dans git lui-même.
+2. une configuration git passée par l'environnement du terminal (`url.<x>.pushInsteadOf`, préfixe vide), vérifiée sur un vrai dépôt : `git push` échoue, par le nom du dépôt distant comme par son URL ; `git fetch` marche. La documentation de Claude Code dit que ces règles portent sur le texte de la commande et ne sont pas une frontière de sécurité (`git -C . push` n'y correspond pas) : la seconde barrière agit dans git lui-même.
+
+Ni l'une ni l'autre n'est un bac à sable : un dépôt distant avec un `pushurl` explicite échappe à la seconde, et `git -C . push` à la première. Il faut les deux, et un agent qui voudrait vraiment contourner en trouverait le moyen. `gh pr create` est refusé par une règle de même nature.
 
 Une session d'orchestrateur garde ses propres refus (spec orchestrateur §4.2). En phase 2, seul OpenVibe poussera, et ces barrières resteront en place pour les agents.
 
@@ -121,7 +123,8 @@ Comportements de Claude Code à vérifier dans une vraie session : voir le rappo
 Constat H2 : les fils et les groupes ne sont connus que de l'espace affiché. Une mission de nuit ne doit dépendre d'aucun espace affiché.
 
 - Les fils et les groupes se lisent dans la scène enregistrée de l'espace de l'orchestrateur quand il n'est pas affiché : `propose_plan`, `mission()`, `team`, `remote_control` et le lancement voient ce qu'ils voient à l'écran.
-- La formation de l'équipe, l'ajout d'un agent et la fin écrivent dans cette scène, et les agents démarrent sans attendre d'être montrés. La note `linked_agents_note` disparaît avec le cas qu'elle décrivait.
+- La formation de l'équipe, l'ajout d'un agent et la fin écrivent dans cette scène, qui reste à jour en mémoire et enregistrée, et les agents démarrent sans attendre d'être montrés.
+- `linked_agents_note` ne reste que pour une scène jamais lue : c'est alors le seul cas où les fils sont inconnus.
 
 ### 6.2 Le rapport du matin (tranche 7)
 

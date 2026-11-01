@@ -7,7 +7,7 @@ import { canvasStore } from "@/canvas/canvasStore";
 import { groupInfoOf, groupOf, insertIntoFrame, withGroupFolded } from "@/canvas/groups";
 import { allowRemoval } from "@/canvas/removalGuard";
 import { createNodeElement, nodeKindOf } from "@/canvas/nodeElement";
-import { markForAutostart } from "@/nodes/terminal/registry";
+import { disposeTerminal, markForAutostart, relaunchTerminal } from "@/nodes/terminal/registry";
 import type { TerminalPayload } from "@/nodes/types";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
@@ -18,6 +18,7 @@ import { cloneTerminalPayload } from "./clone";
 import { arrangeInFrame, freeCell } from "./groupLayout";
 import { fleetMessages } from "./messages";
 import { nameForNewAgent, pantheonsForCopiedGroups } from "./naming";
+import { sceneAccess } from "./sceneAccess";
 
 export interface Point {
   x: number;
@@ -35,21 +36,20 @@ export async function addTerminal(
   center: Point,
   groupId: string | null = null,
 ): Promise<string | null> {
-  const api = canvasStore.getState().api;
-  if (!api) return null;
+  if (!sceneAccess(workspaceId)) return null;
   const element = createNodeElement("terminal", center);
   // The node row must exist before the process can save its scrollback.
   await nodesStore.getState().create(element.id, { workspaceId, kind: "terminal", payload });
   markForAutostart(element.id);
-  // Read after the wait: the scene may have changed meanwhile.
-  const elements = api.getSceneElementsIncludingDeleted();
+  // Read after the wait: the scene may have changed meanwhile, and the user may have left it.
+  const scene = sceneAccess(workspaceId);
+  if (!scene) return null;
+  const elements = scene.elements();
   const frame = groupId ? elements.find((e) => e.id === groupId && !e.isDeleted && groupInfoOf(e)) : undefined;
-  api.updateScene({
-    elements: frame ? joinGroup(elements, element, frame) : [...elements, element],
-    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-  });
-  // Out of sight, Excalidraw would neither show it nor start its agent.
-  revealNode(element.id);
+  scene.write(frame ? joinGroup(elements, element, frame) : [...elements, element]);
+  // Out of sight, Excalidraw would neither show it nor start its agent; in another workspace nothing mounts it at all (spec mission de nuit §6.1).
+  if (scene.shown) revealNode(element.id);
+  else void relaunchTerminal(element.id, payload, "new");
   return element.id;
 }
 
@@ -158,6 +158,16 @@ export function removeNodes(ids: readonly string[]) {
     elements: elements.map((e) => (removed.has(e.id) ? newElementWith(e, { isDeleted: true }) : e)),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
+}
+
+/** Removes `ids` from a scene not on screen: no canvas will free their terminals (spec mission de nuit §6.1). */
+export function removeFromStoredScene(workspaceId: string, ids: ReadonlySet<string>) {
+  const scene = sceneAccess(workspaceId);
+  if (!scene || scene.shown) return;
+  const elements = scene.elements();
+  const terminals = elements.filter((e) => ids.has(e.id) && nodeKindOf(e) === "terminal").map((e) => e.id);
+  scene.write(elements.map((e) => (ids.has(e.id) && !e.isDeleted ? newElementWith(e, { isDeleted: true }) : e)));
+  for (const id of terminals) disposeTerminal(id);
 }
 
 export function removeNode(nodeId: string) {

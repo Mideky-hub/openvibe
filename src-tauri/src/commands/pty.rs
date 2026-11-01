@@ -75,6 +75,7 @@ pub async fn pty_spawn(
         &node_id,
         spec.agent,
         role,
+        spec.claude.as_ref().and_then(|c| c.permission),
         std::path::Path::new(&spec.cwd),
         profile_dir.as_deref(),
     );

@@ -1,13 +1,14 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { showNode } from "@/canvas/arrive";
 import { canvasStore } from "@/canvas/canvasStore";
 import { pauseAgents } from "@/fleet/broadcast";
-import { closeGroup, launchGroup, showGroups } from "@/fleet/groups";
+import { forgetScene, rememberScene } from "@/canvas/sceneCache";
+import { closeGroup, closeStoredGroup, launchGroup, showGroups } from "@/fleet/groups";
 import { nextName } from "@/fleet/names";
 import { linkOrchestrator } from "@/fleet/orchestrators";
-import { addTerminal, removeNodes } from "@/fleet/terminals";
+import { addTerminal, removeFromStoredScene, removeNodes } from "@/fleet/terminals";
 import { missionAddAgent, missionCleanup, missionDiscard, missionMerge, missionPrepare, type Worktree } from "@/ipc/mission";
 import { langStore } from "@/i18n";
 import { ptySendText } from "@/ipc/pty";
@@ -30,9 +31,9 @@ vi.mock("@/ipc/pty", async (importOriginal) => ({
   ptyWrite: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("@/nodes/terminal/registry", () => ({ relaunchTerminal: vi.fn(), stopTerminal: vi.fn(), quietFor: vi.fn(() => 0), typedAgo: vi.fn(() => Infinity), freshText: vi.fn(() => ""), markForAutostart: vi.fn() }));
-vi.mock("@/fleet/groups", () => ({ launchGroup: vi.fn(), closeGroup: vi.fn(), showGroups: vi.fn() }));
+vi.mock("@/fleet/groups", () => ({ launchGroup: vi.fn(), closeGroup: vi.fn(), closeStoredGroup: vi.fn(), showGroups: vi.fn() }));
 vi.mock("@/fleet/orchestrators", () => ({ linkOrchestrator: vi.fn() }));
-vi.mock("@/fleet/terminals", () => ({ addTerminal: vi.fn(() => Promise.resolve("n9")), removeNodes: vi.fn() }));
+vi.mock("@/fleet/terminals", () => ({ addTerminal: vi.fn(() => Promise.resolve("n9")), removeNodes: vi.fn(), removeFromStoredScene: vi.fn() }));
 vi.mock("@/fleet/broadcast", () => ({ pauseAgents: vi.fn(() => Promise.resolve(1)) }));
 vi.mock("@/canvas/arrive", () => ({ showNode: vi.fn() }));
 vi.mock("./ready", () => ({ whenReady: vi.fn(() => Promise.resolve(true)) }));
@@ -387,6 +388,78 @@ describe("a new agent in a chosen group (spec groupes spécialisés §4)", () =>
     await reassignTask("chef", "n7", "nouveau");
     expect(addTerminal).toHaveBeenCalledWith("w1", expect.anything(), { x: 200, y: 150 }, "m1");
     expect(missionNow().members.find((m) => m.nodeId === "n9")?.group).toBeUndefined();
+  });
+});
+
+describe("a mission whose workspace is not on screen (spec mission de nuit §6.1)", () => {
+  const wired = [
+    { id: "chef", type: "embeddable", isDeleted: false, frameId: null, x: 0, y: 0, width: 640, height: 760, customData: { kind: "orchestrator" } },
+    { id: "isis", type: "embeddable", isDeleted: false, frameId: null, x: 0, y: 0, width: 10, height: 10, customData: { kind: "terminal" } },
+  ];
+
+  beforeEach(() => {
+    workspacesStore.setState({ activeId: "w2" });
+    rememberScene("w1", wired as never, {} as never, {}, []);
+  });
+  afterEach(() => forgetScene("w1"));
+
+  it("forms the team in the stored scene, the view left alone", async () => {
+    await setup({ plan: [plan[1], { ...plan[1], title: "Style", group: { id: "g1", name: "Interface" } }] });
+    rememberScene("w1", [...wired, { id: "g1", type: "frame", name: "Interface", x: 0, y: 0, width: 800, height: 500, isDeleted: false, frameId: null, customData: { openvibe: { kind: "group", role: "frontend", pantheon: "norse" } } }, { id: "w", type: "arrow", isDeleted: false, frameId: null, startBinding: { elementId: "chef" }, endBinding: { elementId: "g1" } }] as never, {} as never, {}, []);
+    await launchMission("chef");
+    expect(missionNow().state).toBe("en_cours");
+    expect(launchGroup).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ x: expect.any(Number) }), expect.objectContaining({ workspaceId: "w1" }));
+    expect(addTerminal).toHaveBeenCalledWith("w1", expect.anything(), { x: 400, y: 250 }, "g1");
+    expect(showGroups).not.toHaveBeenCalled();
+    expect(linkOrchestrator).toHaveBeenCalledWith("chef", "f1");
+  });
+
+  it("closes the created agents in the stored scene at the end, the group that a member joined staying", async () => {
+    await setup({ state: "en_cours", project: "C:/code/proj", frameId: "f1", members: [member("isis", "Isis", true), member("n1", "Horus", false), member("n9", "Thor", false, { group: "g1" })] });
+    endMission("chef", "Fini.");
+    expect(closeStoredGroup).toHaveBeenCalledWith("w1", "f1");
+    expect(removeFromStoredScene).toHaveBeenCalledWith("w1", new Set(["n9"]));
+    expect(closeGroup).not.toHaveBeenCalled();
+    expect(removeNodes).not.toHaveBeenCalled();
+    expect(stopTerminal).not.toHaveBeenCalled();
+    expect(relaunchTerminal).toHaveBeenCalledWith("isis", expect.objectContaining({ cwd: "C:/code/proj" }), "new");
+  });
+
+  it("creates a replacement agent there too", async () => {
+    const running = { state: "en_cours" as const, project: "C:/code/proj", slug: "auth", frameId: "f1", plan: [{ title: "t", brief: "b", agent: "Isis", budgetMin: 5 }], members: [member("isis", "Isis", true)] };
+    rememberScene("w1", [...wired, { id: "f1", type: "frame", name: "Mission", x: 0, y: 0, width: 800, height: 500, isDeleted: false, frameId: null, customData: { openvibe: { kind: "group", role: "general", pantheon: "norse" } } }] as never, {} as never, {}, []);
+    await setup(running);
+    expect(await reassignTask("chef", "isis", "nouveau")).toEqual({ name: expect.any(String) });
+    expect(addTerminal).toHaveBeenCalledWith("w1", expect.anything(), { x: 400, y: 250 }, "f1");
+    expect(showNode).not.toHaveBeenCalled();
+  });
+
+  it("still stops the agents when the scene was never read", async () => {
+    forgetScene("w1");
+    await setup({ state: "en_cours", project: "C:/code/proj", frameId: "f1", members: [member("n1", "Horus", false)] });
+    endMission("chef", "Fini.");
+    expect(closeStoredGroup).not.toHaveBeenCalled();
+    expect(stopTerminal).toHaveBeenCalledWith("n1");
+  });
+});
+
+describe("a mission's permissions (spec mission de nuit §5.3)", () => {
+  it("reach every agent of the team, and leave the linked ones at the end", async () => {
+    await setup({ permission: "work" });
+    await launchMission("chef");
+    expect(launchGroup).toHaveBeenCalledWith(expect.anything(), expect.anything(), undefined, expect.objectContaining({ permission: "work" }));
+    expect(terminalOf(nodesStore.getState().nodes.isis)?.permission).toBe("work");
+    expect(relaunchTerminal).toHaveBeenCalledWith("isis", expect.objectContaining({ permission: "work" }), "new");
+    endMission("chef", "Fini.");
+    expect(terminalOf(nodesStore.getState().nodes.isis)?.permission).toBeUndefined();
+    expect(relaunchTerminal).toHaveBeenLastCalledWith("isis", expect.objectContaining({ permission: undefined }), "new");
+  });
+
+  it("add nothing to a mission without a choice", async () => {
+    await setup();
+    await launchMission("chef");
+    expect(terminalOf(nodesStore.getState().nodes.isis)?.permission).toBeUndefined();
+    expect(vi.mocked(launchGroup).mock.calls[0][3]?.permission).toBeUndefined();
   });
 });
 

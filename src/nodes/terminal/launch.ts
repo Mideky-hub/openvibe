@@ -72,6 +72,7 @@ export function buildSpawnSpec(payload: TerminalPayload, mode: LaunchMode): Spaw
     spec.claude = { mode, sessionId: payload.claudeSessionId ?? crypto.randomUUID(), title: payload.title, role: payload.role ?? "agent" };
     if (payload.remoteControl) spec.claude.remoteControl = payload.name || payload.title;
     if (payload.model) spec.claude.model = payload.model;
+    if (payload.permission) spec.claude.permission = payload.permission;
     // The profile's folder if it still exists, else the default account (spec comptes §3).
     const profile = profileNamed(payload.accountId);
     if (profile) spec.claude.configDir = profile.configDir;

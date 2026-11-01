@@ -1,4 +1,4 @@
-import { AGENT_IDS, type AgentId, type OllamaLaunch, type ShellKind } from "@/ipc/pty";
+import { AGENT_IDS, type AgentId, type OllamaLaunch, type Permission, type ShellKind } from "@/ipc/pty";
 import { readMission, type Mission } from "@/mission/mission";
 import { readSteps, type Step } from "./steps";
 
@@ -24,6 +24,8 @@ export interface TerminalPayload {
   remoteControl?: boolean;
   /** Claude's model, chosen by a mission's router (spec maj §3). */
   model?: string;
+  /** What its mission lets it do unasked (spec mission de nuit §5.3). */
+  permission?: Permission;
   /** The Claude profile this terminal started with (spec comptes §3); absent: the default account. */
   accountId?: string;
   /** A command to run once, an install: only an explicit gesture runs it again (spec installation §7). */
@@ -86,6 +88,7 @@ export function readTerminalPayload(raw: unknown): TerminalPayload | null {
   if (r.role === "orchestrator") payload.role = "orchestrator";
   if (r.remoteControl === true) payload.remoteControl = true;
   if (typeof r.model === "string" && r.model) payload.model = r.model;
+  if (r.permission === "ask" || r.permission === "edits" || r.permission === "work") payload.permission = r.permission;
   if (r.oneShot === true) payload.oneShot = true;
   if (typeof r.accountId === "string" && r.accountId) payload.accountId = r.accountId;
   return payload;

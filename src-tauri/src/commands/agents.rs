@@ -16,7 +16,7 @@ use crate::agents::mcp::{Pending, Tokens};
 use crate::agents::subagents::SubagentCounts;
 use crate::agents::{claude_settings, mcp_files, prompts};
 use crate::error::AppResult;
-use crate::pty::shell::{Agent, AgentHooks, Role};
+use crate::pty::shell::{Agent, AgentHooks, Permission, Role};
 use crate::sync::lock;
 
 /// Quiet terminals are checked this often (the 1.5 s rule).
@@ -273,6 +273,7 @@ pub fn hooks_for(
     node_id: &str,
     agent: Agent,
     role: Role,
+    permission: Option<Permission>,
     cwd: &std::path::Path,
     config_dir: Option<&std::path::Path>,
 ) -> AgentHooks {
@@ -303,6 +304,7 @@ pub fn hooks_for(
                 &urls.settings,
                 role,
                 status.as_ref(),
+                permission,
             );
             let Ok(settings) =
                 settings.inspect_err(|err| log::error!("hooks of {node_id} not written: {err}"))

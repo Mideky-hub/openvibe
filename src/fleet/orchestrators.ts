@@ -12,6 +12,7 @@ import { nodesStore } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { uiStore } from "@/store/ui";
 import { workspacesStore } from "@/store/workspaces";
+import { sceneAccess } from "./sceneAccess";
 import { claudeInstalled } from "./agentsStore";
 import { clearSpot, orchestratorSpot } from "./groupLayout";
 import { defaultLaunchOptions } from "./launchAgent";
@@ -72,12 +73,9 @@ export async function addOrchestrator(workspaceId: string, center: Point) {
 
 /** One click of "Relier" (spec habillage §13). */
 export function linkOrchestrator(orchestratorId: string, targetId: string) {
-  const api = canvasStore.getState().api;
-  if (!api) return;
-  api.updateScene({
-    elements: withWire(api.getSceneElementsIncludingDeleted(), orchestratorId, targetId),
-    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-  });
+  const workspaceId = nodesStore.getState().nodes[orchestratorId]?.workspaceId ?? workspacesStore.getState().activeId;
+  const scene = workspaceId ? sceneAccess(workspaceId) : null;
+  scene?.write(withWire(scene.elements(), orchestratorId, targetId));
 }
 
 type Bound = { id: string; type: string; isDeleted?: boolean; startBinding?: { elementId: string } | null; endBinding?: { elementId: string } | null };
