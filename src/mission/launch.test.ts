@@ -368,6 +368,19 @@ describe("a new agent in a chosen group (spec groupes spécialisés §4)", () =>
     expect(stopTerminal).toHaveBeenCalledWith("n9");
   });
 
+  it("does not give a new agent the name of a member gone from the canvas: its branch is still there (review)", async () => {
+    const gone = nextName("norse", []);
+    const running = { state: "en_cours" as const, project: "C:/code/proj", slug: "auth", plan: [{ ...inFront, title: "t" }], members: [member("n7", gone, false, { group: "g1" })] };
+    await setup(running);
+    canvasStore.setState({ api: { getSceneElements: () => [] } as never, frames: [front] });
+    const first = await reassignTask("chef", "n7", "nouveau");
+    const asked = vi.mocked(missionAddAgent).mock.calls.map(([, , name]) => name);
+    expect(asked).toHaveLength(1);
+    expect(asked).not.toContain(gone);
+    expect(first).toEqual({ name: asked[0] });
+    canvasStore.setState({ api: null });
+  });
+
   it("sends a new agent taking over its sub-task to the same group, else the mission's", async () => {
     const running = { state: "en_cours" as const, project: "C:/code/proj", slug: "auth", plan: [{ ...inFront, title: "t" }], members: [member("n7", "Thor", false, { group: "g1" })] };
     await setup(running);

@@ -41,13 +41,19 @@ function GitDrawer({ path }: { path: string }) {
   const [failure, setFailure] = useState<string | null>(null);
   const [pushing, setPushing] = useState(false);
 
+  // An older answer arriving late must not overwrite a newer one.
+  const reads = useRef(0);
   const read = useCallback(() => {
+    const turn = ++reads.current;
     return repoState(path).then(
       (next) => {
+        if (turn !== reads.current) return;
         setError(null);
         setRepo(next);
       },
-      (failed: unknown) => setError(errorText(failed)),
+      (failed: unknown) => {
+        if (turn === reads.current) setError(errorText(failed));
+      },
     );
   }, [path]);
 
@@ -73,11 +79,11 @@ function GitDrawer({ path }: { path: string }) {
 
   const push = async () => {
     const target = repo?.pushTo;
-    if (!target) return;
+    if (!repo || !target) return;
     setPushing(true);
     setFailure(null);
     try {
-      await repoPush(path);
+      await repoPush(path, repo.branch, target);
       toast(t.push.done(target));
     } catch (failed) {
       setFailure(errorText(failed));
@@ -121,20 +127,18 @@ function GitDrawer({ path }: { path: string }) {
           {t.tabHistory}
         </Tab>
       </div>
-      {failure && (
+      {(failure ?? (repo && error)) && (
         <p role="alert" className="shrink-0 whitespace-pre-wrap border-b border-ov-line px-3 py-1.5 text-xs text-ov-danger">
-          {failure}
+          {failure ?? error}
         </p>
       )}
-      {error ? (
-        <GitMessage>{error}</GitMessage>
-      ) : !repo ? (
-        <GitMessage>{t.reading}</GitMessage>
+      {!repo ? (
+        <GitMessage>{error ?? t.reading}</GitMessage>
       ) : (
         <>
           {/* Hidden, not unmounted: a look at the history keeps the message being written and the choices. */}
           <div className={tab === "changes" ? "contents" : "hidden"}>
-            <ChangesTab path={path} files={repo.files} cut={repo.truncated} refresh={refresh} onChanged={() => void again()} onFailure={setFailure} />
+            <ChangesTab path={path} files={repo.files} stamps={repo.stamps} cut={repo.truncated} refresh={refresh} onChanged={() => void again()} onFailure={setFailure} />
           </div>
           {tab === "history" && <HistoryTab path={path} refresh={refresh} />}
         </>
@@ -171,8 +175,16 @@ function PushButton({ repo, pushing, onPush }: { repo: RepoState; pushing: boole
   );
 }
 
-function ChangesTab(props: { path: string; files: ChangedFile[]; cut: boolean; refresh: number; onChanged: () => void; onFailure: (failure: string | null) => void }) {
-  const { path, files, cut, refresh, onChanged, onFailure } = props;
+function ChangesTab(props: {
+  path: string;
+  files: ChangedFile[];
+  stamps: Record<string, string>;
+  cut: boolean;
+  refresh: number;
+  onChanged: () => void;
+  onFailure: (failure: string | null) => void;
+}) {
+  const { path, files, stamps, cut, refresh, onChanged, onFailure } = props;
   const t = useMessages(gitMessages).changes;
   const words = useMessages(reviewMessages);
   // What is left out, not what is in: a new file arrives checked (spec fenêtre git §3.1).
@@ -189,6 +201,11 @@ function ChangesTab(props: { path: string; files: ChangedFile[]; cut: boolean; r
   useEffect(() => {
     if (all.current) all.current.indeterminate = chosen.length > 0 && chosen.length < files.length;
   }, [chosen.length, files.length]);
+
+  // A file gone from the list takes its question with it, or the dialog would come back with the file.
+  useEffect(() => {
+    setAsking((current) => (current && files.some((file) => file.path === current.path) ? current : null));
+  }, [files]);
 
   const toggle = (file: ChangedFile) =>
     setLeft((current) => {
@@ -216,7 +233,7 @@ function ChangesTab(props: { path: string; files: ChangedFile[]; cut: boolean; r
   const discard = async (file: ChangedFile) => {
     setAsking(null);
     onFailure(null);
-    await repoDiscard(path, file).catch((failed: unknown) => onFailure(errorText(failed)));
+    await repoDiscard(path, file, stamps[file.path] ?? "").catch((failed: unknown) => onFailure(errorText(failed)));
     onChanged();
   };
 
@@ -291,7 +308,7 @@ function ChangesTab(props: { path: string; files: ChangedFile[]; cut: boolean; r
             className="resize-none rounded-[6px] bg-ov-field px-2 py-1.5 text-[12px] text-ov-text outline-none placeholder:text-ov-text-3"
           />
           <AccentButton disabled={committing || chosen.length === 0 || !message.trim()} onClick={() => void commit()} className="justify-center text-xs">
-            {t.commit(chosen.length)}
+            {committing ? t.committing : t.commit(chosen.length)}
           </AccentButton>
         </div>
       </div>

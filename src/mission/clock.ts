@@ -32,9 +32,10 @@ export function checkBudgets(now = Date.now()) {
       if (overrun.level === 2 && !mission.overnight) toast.warning(said.overBudgetTwice(overrun.name, overrun.budget));
       const told = () => {
         waiting.delete(key);
-        updateMember(orchestratorId, overrun.nodeId, { overdue: overrun.level });
+        const known = missionOf(nodesStore.getState().nodes[orchestratorId])?.members.find((m) => m.nodeId === overrun.nodeId)?.overdue;
+        updateMember(orchestratorId, overrun.nodeId, { overdue: known === 2 ? 2 : overrun.level });
       };
-      if (before < 1) {
+      if (before < 1 && !waiting.has(`${orchestratorId}:${overrun.nodeId}:1`)) {
         // Recorded as told once typed: a line lost with the app is told again at the next start.
         waiting.add(key);
         const over = mission.overnight ? lines.targetOver : lines.budgetOver;

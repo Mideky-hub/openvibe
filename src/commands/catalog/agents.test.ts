@@ -44,6 +44,7 @@ describe("Agents (spec fenêtre §7.3)", () => {
       "Lancer Shell",
       "Lancer un agent personnalisé…",
       "Autre agent…",
+      "Comptes Claude…",
       "Nouvelle console",
       "Lancer 4 agents",
       "Orchestrateur",

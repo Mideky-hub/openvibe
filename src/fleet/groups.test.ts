@@ -37,7 +37,7 @@ beforeEach(() => {
     updateScene: ({ elements }: { elements?: typeof scene }) => {
       if (elements) scene = elements;
     },
-    getAppState: () => ({ width: 1400, height: 800 }),
+    getAppState: vi.fn(() => ({ width: 1400, height: 800 })),
     scrollToContent: vi.fn(),
   };
   canvasStore.setState({ api: api as unknown as ExcalidrawImperativeAPI });
@@ -83,6 +83,24 @@ it("frames the groups it is given, and does nothing without one", () => {
   expect(scroll).not.toHaveBeenCalled();
   showGroups(["f1", "f2", "gone"]);
   expect(scroll.mock.calls[0][0]).toEqual([scene[0], scene[1]]);
+});
+
+it("shows a group too wide to read whole once, for all its agents to start, then frames its first terminals (review)", async () => {
+  const api = canvasStore.getState().api!;
+  vi.mocked(api.getAppState).mockReturnValue({ width: 1440, height: 900 } as never);
+  const made = await launchGroup(
+    { name: "Mission Auth", role: "general", agents: ["claude", "claude", "claude", "claude"] },
+    { cwd: "C:/code", shell: "default", title: "", command: "" },
+    { x: 0, y: 0 },
+    { pantheon: "egyptian", names: ["Isis", "Horus", "Thot", "Anubis"], cwds: ["C:/a", "C:/b", "C:/c", "C:/d"] },
+  );
+  const scroll = vi.mocked(api.scrollToContent);
+  await vi.waitFor(() => expect(scroll.mock.calls.length).toBeGreaterThan(1));
+  const first = scroll.mock.calls[0][0] as unknown as { id: string }[];
+  expect(first.map((e) => e.id)).toEqual([made!.frameId]);
+  const last = scroll.mock.calls[scroll.mock.calls.length - 1][0] as unknown as { id: string }[];
+  expect(last.map((e) => e.id)).toEqual(made!.nodeIds.slice(0, last.length));
+  expect(last.length).toBeLessThan(4);
 });
 
 it("gives each agent of a staffed group the model the router chose, and none otherwise (backlog 27 oct)", async () => {

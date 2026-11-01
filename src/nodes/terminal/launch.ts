@@ -1,6 +1,7 @@
 import type { AgentId, OllamaLaunch, ShellKind, SpawnSpec } from "@/ipc/pty";
 import { AGENTS } from "@/fleet/catalog";
 import type { TerminalPayload } from "@/nodes/types";
+import { profileNamed } from "@/accounts/store";
 import { messages } from "@/i18n";
 import { nodesMessages } from "@/nodes/messages";
 
@@ -34,6 +35,7 @@ export interface LaunchInput {
   shell: ShellKind;
   ollama?: OllamaLaunch;
   oneShot?: boolean;
+  accountId?: string;
 }
 
 /** The payload of a new terminal; a Claude terminal gets its own conversation id. */
@@ -49,6 +51,7 @@ export function newTerminalPayload(input: LaunchInput, name = ""): TerminalPaylo
   if (input.agent === "claude") payload.claudeSessionId = crypto.randomUUID();
   if (input.agent === "ollama" && input.ollama) payload.ollama = input.ollama;
   if (input.oneShot) payload.oneShot = true;
+  if (input.agent === "claude" && input.accountId) payload.accountId = input.accountId;
   return payload;
 }
 
@@ -70,6 +73,9 @@ export function buildSpawnSpec(payload: TerminalPayload, mode: LaunchMode): Spaw
     if (payload.remoteControl) spec.claude.remoteControl = payload.name || payload.title;
     if (payload.model) spec.claude.model = payload.model;
     if (payload.permission) spec.claude.permission = payload.permission;
+    // The profile's folder if it still exists, else the default account (spec comptes §3).
+    const profile = profileNamed(payload.accountId);
+    if (profile) spec.claude.configDir = profile.configDir;
   }
   if (payload.agent === "ollama" && payload.ollama) spec.ollama = payload.ollama;
   return spec;

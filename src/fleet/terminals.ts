@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { messages } from "@/i18n";
 import { revealNode } from "@/canvas/arrive";
 import { canvasStore } from "@/canvas/canvasStore";
-import { groupInfoOf, groupOf, insertIntoFrame } from "@/canvas/groups";
+import { groupInfoOf, groupOf, insertIntoFrame, withGroupFolded } from "@/canvas/groups";
 import { allowRemoval } from "@/canvas/removalGuard";
 import { createNodeElement, nodeKindOf } from "@/canvas/nodeElement";
 import { disposeTerminal, markForAutostart, relaunchTerminal } from "@/nodes/terminal/registry";
@@ -60,7 +60,7 @@ function joinGroup(elements: readonly ExcalidrawElement[], element: ExcalidrawEl
   return insertIntoFrame(
     elements,
     newElementWith(element, { x: placed.cell.x, y: placed.cell.y, frameId: frame.id }),
-    newElementWith(frame, { width: placed.frame.width, height: placed.frame.height }),
+    newElementWith(frame, { width: placed.frame.width, height: placed.frame.height, customData: withGroupFolded(frame.customData, false) }),
   );
 }
 
@@ -108,8 +108,10 @@ export async function adoptCopies(workspaceId: string, copies: readonly { id: st
   }
   if (refused.size) removeNodes([...refused]);
   const ids = new Set(copies.map((copy) => copy.id).filter((id) => !refused.has(id)));
-  const linked = api
-    .getSceneElementsIncludingDeleted()
+  const scene = api.getSceneElementsIncludingDeleted();
+  const homes = new Set(scene.filter((e) => ids.has(e.id)).map((e) => e.frameId));
+  const linked = scene
+    .map((e) => (homes.has(e.id) && groupInfoOf(e)?.folded ? newElementWith(e, { customData: withGroupFolded(e.customData, false) }) : e))
     .map((e) => {
       const pantheon = pantheons.get(e.id);
       if (pantheon) return newElementWith(e, { customData: { ...e.customData, openvibe: { ...(e.customData?.openvibe as object), pantheon } } });

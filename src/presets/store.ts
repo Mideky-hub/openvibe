@@ -1,5 +1,7 @@
 import { createStore, useStore } from "zustand";
+import { messages } from "@/i18n";
 import { getSetting, setSetting } from "@/ipc/db";
+import { presetsMessages } from "./messages";
 import { PRESETS_VERSION, readPresets, withoutPreset, withPreset, type TeamPreset } from "./model";
 
 /** The setting that holds the presets (spec presets §3). */
@@ -19,6 +21,12 @@ const persist = (presets: TeamPreset[]) => setSetting(PRESETS_KEY, { version: PR
 
 let reading: Promise<void> | null = null;
 
+/** The list before changing it: a failed read stops the change, it does not read as an empty list. */
+async function read() {
+  await presetsStore.getState().load();
+  if (!presetsStore.getState().loaded) throw new Error(messages(presetsMessages).notRead);
+}
+
 export const presetsStore = createStore<PresetsState>()((set, get) => ({
   presets: [],
   loaded: false,
@@ -26,15 +34,15 @@ export const presetsStore = createStore<PresetsState>()((set, get) => ({
     if (get().loaded) return Promise.resolve();
     // One read at a time: the palette and a save ask together.
     reading ??= getSetting<unknown>(PRESETS_KEY)
-      .catch(() => null)
       .then((raw) => set({ presets: readPresets(raw), loaded: true }))
+      .catch((error: unknown) => console.warn("presets not read", error))
       .finally(() => {
         reading = null;
       });
     return reading;
   },
   save: async (preset) => {
-    await get().load();
+    await read();
     const next = withPreset(get().presets, preset);
     if (next === null) return false;
     set({ presets: next });
@@ -42,7 +50,7 @@ export const presetsStore = createStore<PresetsState>()((set, get) => ({
     return true;
   },
   remove: async (id) => {
-    await get().load();
+    await read();
     const next = withoutPreset(get().presets, id);
     set({ presets: next });
     await persist(next);

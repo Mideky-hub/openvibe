@@ -16,6 +16,7 @@ export interface LaunchOptions {
   command: string;
   ollama?: OllamaLaunch;
   oneShot?: boolean;
+  accountId?: string;
 }
 
 /** Agents start in the project folder, in the first available shell (spec habillage §6.1). */

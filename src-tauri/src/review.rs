@@ -118,7 +118,7 @@ fn diff_output(dir: &Path, args: &[&str], codes: &[i32]) -> Result<String, Strin
     let status = child.wait().map_err(|err| err.to_string())?;
     // `--no-index` answers 1 for a difference but also for an error: only
     // a message without any diff is the error.
-    let failed_quietly = bytes.is_empty() && !stderr.trim().is_empty();
+    let failed_quietly = status.code() == Some(1) && bytes.is_empty() && !stderr.trim().is_empty();
     if !failed_quietly && status.code().is_some_and(|code| codes.contains(&code)) {
         Ok(String::from_utf8_lossy(&bytes).into_owned())
     } else {
@@ -246,13 +246,30 @@ pub fn changes(dir: &Path, base: Option<&str>) -> Result<Changes, String> {
 
 fn changes_limited(dir: &Path, base: Option<&str>, max: usize) -> Result<Changes, String> {
     let from = compared(dir, base)?;
+    // From the root whatever `diff.relative` says: the paths go back to git from there.
     let names = git(
         dir,
-        &["diff", "--no-ext-diff", "--name-status", "-z", "-M", &from],
+        &[
+            "diff",
+            "--no-ext-diff",
+            "--no-relative",
+            "--name-status",
+            "-z",
+            "-M",
+            &from,
+        ],
     )?;
     let counts = parse_numstat(&git(
         dir,
-        &["diff", "--no-ext-diff", "--numstat", "-z", "-M", &from],
+        &[
+            "diff",
+            "--no-ext-diff",
+            "--no-relative",
+            "--numstat",
+            "-z",
+            "-M",
+            &from,
+        ],
     )?);
     let mut files: Vec<ChangedFile> = parse_name_status(&names)
         .into_iter()
@@ -335,6 +352,7 @@ pub fn file_diff(dir: &Path, file: &ChangedFile, base: Option<&str>) -> Result<S
         "diff",
         "--no-color",
         "--no-ext-diff",
+        "--no-relative",
         "-M",
         from.as_str(),
         "--",
@@ -592,6 +610,29 @@ mod tests {
             added: None,
             removed: None,
         }
+    }
+
+    /// Windows' usual setup warns about line endings on stderr, exit 0, nothing on
+    /// stdout: that is a file without differences, not a failed diff (review).
+    #[test]
+    fn a_git_warning_on_an_empty_diff_is_no_error() {
+        let Some(repo) = repo() else { return };
+        let dir = repo.path();
+        std::fs::write(dir.join(".gitattributes"), "*.txt text eol=crlf\n").unwrap();
+        std::fs::write(dir.join("w.txt"), "x\r\n").unwrap();
+        sh(dir, &["add", "."]);
+        sh(dir, &["commit", "-q", "-m", "attrs"]);
+        sh(dir, &["config", "core.safecrlf", "warn"]);
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        std::fs::write(dir.join("w.txt"), "x\n").unwrap();
+        let file = ChangedFile {
+            path: "w.txt".into(),
+            old_path: None,
+            status: "modified".into(),
+            added: None,
+            removed: None,
+        };
+        assert_eq!(file_diff(dir, &file, None), Ok(String::new()));
     }
 
     #[test]

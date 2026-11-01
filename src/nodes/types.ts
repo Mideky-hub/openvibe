@@ -26,6 +26,8 @@ export interface TerminalPayload {
   model?: string;
   /** What its mission lets it do unasked (spec mission de nuit §5.3). */
   permission?: Permission;
+  /** The Claude profile this terminal started with (spec comptes §3); absent: the default account. */
+  accountId?: string;
   /** A command to run once, an install: only an explicit gesture runs it again (spec installation §7). */
   oneShot?: boolean;
 }
@@ -88,5 +90,6 @@ export function readTerminalPayload(raw: unknown): TerminalPayload | null {
   if (typeof r.model === "string" && r.model) payload.model = r.model;
   if (r.permission === "ask" || r.permission === "edits" || r.permission === "work") payload.permission = r.permission;
   if (r.oneShot === true) payload.oneShot = true;
+  if (typeof r.accountId === "string" && r.accountId) payload.accountId = r.accountId;
   return payload;
 }

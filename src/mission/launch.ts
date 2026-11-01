@@ -310,7 +310,8 @@ async function newMember(orchestratorId: string, workspaceId: string, mission: M
   const chosen = frames.find((f) => f.id === task.group?.id);
   const frame = chosen ?? frames.find((f) => f.id === mission.frameId);
   const pantheon = frame?.group?.pantheon ?? pantheonForNewGroup(workspaceId);
-  const name = nextName(pantheon, namesInWorkspace(workspaceId));
+  // A closed member's name is free on the canvas, not in git: its branch is still there.
+  const name = nextName(pantheon, [...namesInWorkspace(workspaceId), ...mission.members.map((m) => m.name)]);
   let tree: Worktree;
   try {
     tree = await missionAddAgent(mission.project, mission.slug, name);

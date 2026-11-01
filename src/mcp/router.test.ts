@@ -4,7 +4,7 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import { canvasStore } from "@/canvas/canvasStore";
 import { forgetScene, rememberScene } from "@/canvas/sceneCache";
 import { nodesStore, terminalOf } from "@/store/nodes";
-import { answer, handleCall } from "./router";
+import { answer, handleCall, replyable } from "./router";
 import type { McpCall } from "@/ipc/mcp";
 import { pauseAgents } from "@/fleet/broadcast";
 import { setRemoteControl } from "@/fleet/remoteControl";
@@ -410,6 +410,14 @@ describe("every call gets its reply, even under load or a failing reply", () => 
     await Promise.all(calls.map((c) => handleCall(c, reply)));
     expect(replies.size).toBe(200);
     expect([...replies.values()].every((r) => (r as { content: unknown[] }).content.length > 0)).toBe(true);
+  });
+
+  it("turns an answer JSON cannot carry into a readable error", () => {
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    expect(replyable(cyclic)).toMatchObject({ isError: true });
+    expect(replyable(undefined)).toMatchObject({ isError: true });
+    expect(replyable({ content: [] })).toEqual({ content: [] });
   });
 
   it("replies with a readable error when a tool's answer cannot be sent as JSON", async () => {

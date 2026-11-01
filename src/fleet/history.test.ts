@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { browseHistory, HISTORY_SIZE, historyStore, pushHistory } from "./history";
 
@@ -47,6 +47,23 @@ describe("historyStore", () => {
 });
 
 describe("historyStore, a command sent before the history is read (plan B3)", () => {
+  it("saves nothing over a history it could not read (review)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const saved: unknown[] = [];
+    mockIPC((cmd, args) => {
+      if (cmd === "get_setting") throw { kind: "db", message: "database is locked" };
+      if (cmd === "set_setting") saved.push(args);
+    });
+    const loading = historyStore.getState().load("p9");
+    historyStore.getState().add("vite");
+    await loading;
+    historyStore.getState().add("build");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(saved).toEqual([]);
+    expect(historyStore.getState().entries).toEqual(["vite", "build"]);
+    warn.mockRestore();
+  });
+
   it("keeps the saved commands and the new one, and saves both", async () => {
     const saved: { key: string; value: unknown }[] = [];
     let release: (value: string[]) => void = () => undefined;

@@ -3,6 +3,7 @@ import { getScrollback, ptyAttach, ptyKill, ptySpawn } from "@/ipc/pty";
 import type { TerminalPayload } from "@/nodes/types";
 import { nodesStore } from "@/store/nodes";
 import { isRunning, terminalStatusStore, waitForExit } from "@/store/terminalStatus";
+import { accountsStore, loadAccounts } from "@/accounts/store";
 import { markResumedLaunch } from "@/usage/usageStore";
 import { buildSpawnSpec, type LaunchMode } from "./launch";
 import { messages } from "@/i18n";
@@ -40,12 +41,25 @@ function withConversationId(nodeId: string, payload: TerminalPayload): TerminalP
   return { ...payload, claudeSessionId };
 }
 
+/**
+ * A new Claude conversation starts with the profile in use (spec comptes §3), unless it already has one; a resumed one keeps the
+ * profile it started with, or its conversation would not be found.
+ */
+async function withAccount(nodeId: string, payload: TerminalPayload, mode: LaunchMode): Promise<TerminalPayload> {
+  if (payload.agent !== "claude") return payload;
+  await loadAccounts();
+  const active = accountsStore.getState().active;
+  if (mode !== "new" || payload.accountId || !active) return payload;
+  nodesStore.getState().update(nodeId, { accountId: active });
+  return { ...payload, accountId: active };
+}
+
 export async function startSession(nodeId: string, term: TermSink, payload: TerminalPayload, mode: LaunchMode) {
   // "running" is set before spawning: ConPTY's cursor query arrives before the
   // spawn command returns, and xterm's answer must be let through.
   setStatus(nodeId, { state: "running" });
   try {
-    const spec = buildSpawnSpec(withConversationId(nodeId, payload), mode);
+    const spec = buildSpawnSpec(withConversationId(nodeId, await withAccount(nodeId, payload, mode)), mode);
     // A resumed conversation brings its earlier spending: the usage counts this launch's only.
     if (payload.agent === "claude" && mode !== "new") markResumedLaunch(nodeId);
     await ptySpawn(nodeId, spec, term.cols, term.rows, (bytes) => term.write(bytes));
