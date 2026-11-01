@@ -10,6 +10,7 @@ import { goTo } from "./goToRun";
 import { commandsMessages } from "./messages";
 import { closePalette, modeOf, setPaletteQuery, stripPrefix, usePalette } from "./paletteState";
 import { agentsStore, useAgents } from "@/fleet/agentsStore";
+import { loopCommands } from "@/loops/commands";
 import { presetCommands } from "@/presets/commands";
 import { presetsStore, usePresets } from "@/presets/store";
 import { rememberFunction, useRecentFunctions } from "./recent";
@@ -47,7 +48,8 @@ function PaletteBody() {
   const goToList = mode === "goTo" ? goToSections(goToData.items, search) : [];
   // The saved team presets add their lines to the registry's (spec presets §3).
   const presets = usePresets((s) => s.presets);
-  const commands = useMemo(() => [...COMMANDS, ...presetCommands(presets)], [presets]);
+  const loops = useMemo(() => loopCommands(), []);
+  const commands = useMemo(() => [...COMMANDS, ...presetCommands(presets), ...loops], [presets, loops]);
   const functionList = mode === "functions" && context ? functionSections(commands, context, search, recent) : [];
   const keys =
     mode === "goTo"

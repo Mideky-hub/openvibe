@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { boot } from "@/app/boot";
 import { Palette } from "@/commands/Palette";
+import { LoopsDialog } from "@/loops/LoopsDialog";
+import { LoopsIndicator } from "@/loops/LoopsIndicator";
 import { SavePresetDialog } from "@/presets/SavePresetDialog";
 import { appMessages } from "@/app/messages";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -41,6 +43,10 @@ export default function App() {
       </ErrorBoundary>
       <ErrorBoundary scope="accounts dialog" fallback={() => null}>
         <AccountsDialog />
+      </ErrorBoundary>
+      <ErrorBoundary scope="loops" fallback={() => null}>
+        <LoopsDialog />
+        <LoopsIndicator />
       </ErrorBoundary>
       <ErrorBoundary scope="update dialog" fallback={() => null}>
         <UpdateDialog />

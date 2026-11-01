@@ -87,6 +87,14 @@ describe("an overnight mission (spec mission de nuit §3)", () => {
     expect(toast.warning).not.toHaveBeenCalled();
   });
 
+  it("does not wind down a night whose budget was already told as over: the app was closed through it", () => {
+    night();
+    setMission("chef", { globalOverdue: true });
+    updateMember("chef", "isis", { overdue: 2 });
+    checkBudgets(120 * min);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
   it("says it in English", () => {
     langStore.setState({ lang: "en" });
     try {

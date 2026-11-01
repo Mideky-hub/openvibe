@@ -22,6 +22,7 @@ const ANSWER_MS = 20_000;
 /** A session started with `--remote-control` shows its link within this time. */
 const LAUNCH_MS = 60_000;
 const consentError = () => messages(fleetMessages).remote.consent;
+const draftError = () => messages(fleetMessages).remote.draft;
 
 /** What the last `/remote-control` of a screen says. */
 export type RemoteScreen =
@@ -98,6 +99,17 @@ async function waitFor(io: RemoteIo, done: (screen: RemoteScreen) => boolean, ti
   return null;
 }
 
+/** What is typed in Claude's input box (the line before its closing rule), empty when nothing is. */
+export function draftOf(text: string): string {
+  const filled = text.split(String.fromCharCode(10)).map((line) => line.replace(/\s+$/, "")).filter((line) => line.trim() !== "");
+  const bottom = filled.slice(-5);
+  for (let i = 0; i < bottom.length - 1; i++) {
+    const draft = /^❯\s*(.*)$/.exec(bottom[i])?.[1];
+    if (draft !== undefined && /^─+$/.test(bottom[i + 1].trim())) return draft.trim();
+  }
+  return "";
+}
+
 /** Turns Remote Control on: `/remote-control`, unless the screen says it already is. */
 export async function enableRemote(io: RemoteIo, timeoutMs = ANSWER_MS): Promise<RemoteResult> {
   const before = remoteScreen(io.screen());
@@ -107,6 +119,8 @@ export async function enableRemote(io: RemoteIo, timeoutMs = ANSWER_MS): Promise
     await io.press(ESCAPE);
     return { on: true, url: before.url };
   }
+  // The command would be typed after the user's half-written text, and sent with it.
+  if (draftOf(io.screen())) return { error: draftError() };
   await io.send(COMMAND);
   const after = await waitFor(io, (s) => s.kind === "menu" || s.kind === "active" || s.kind === "error" || s.kind === "consent", timeoutMs);
   if (!after) return { error: messages(fleetMessages).remote.notConfirmed };
@@ -125,6 +139,7 @@ export async function disableRemote(io: RemoteIo, timeoutMs = ANSWER_MS): Promis
   if (screen.kind !== "menu") {
     const wasOn = screen.kind === "active";
     const opened = (s: RemoteScreen) => s.kind === "menu" || s.kind === "error" || s.kind === "consent";
+    if (draftOf(io.screen())) return { error: draftError() };
     await io.send(COMMAND);
     let after = await waitFor(io, (s) => opened(s) || (!wasOn && s.kind === "active"), timeoutMs);
     // It was off: that command turned it on, the next one opens its menu.
@@ -327,7 +342,7 @@ agentActivityStore.subscribe((state, previous) => {
 });
 
 
-const KNOWN_ERRORS = ["consent", "notConfirmed", "menuNotOpened", "menuUnreadable", "disconnectNotConfirmed"] as const;
+const KNOWN_ERRORS = ["consent", "draft", "notConfirmed", "menuNotOpened", "menuUnreadable", "disconnectNotConfirmed"] as const;
 
 /** An error stored as text keeps the language of its moment: a known one is said again in the current language. */
 export function remoteErrorText(error: string): string {

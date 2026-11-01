@@ -230,40 +230,90 @@ fn set(node_id: &str, node: &mut Node, activity: Activity, now: Instant) -> Opti
 /// The longest preview of a question, in characters (spec notification §7).
 pub const MAX_MESSAGE_CHARS: usize = 140;
 
-/// Skips what follows an ESC: a CSI, an OSC up to its end, or one character.
+const ESC: char = '\u{1b}';
+
+/// Skips what follows an ESC, as a terminal reads it. A loop, not recursion:
+/// a hook body can nest tens of thousands of escapes. Text that cannot belong
+/// to a sequence (not ASCII) stays, so a stray ESC costs at most one letter.
 fn skip_escape(chars: &mut Chars) {
-    match chars.next() {
-        Some('[') => skip_csi(chars),
-        Some(']') => {
-            for c in chars.by_ref() {
-                if c == '\u{7}' || c == '\\' {
-                    break;
+    while let Some(c) = chars.clone().next() {
+        if c == ESC {
+            chars.next();
+            continue;
+        }
+        if !(' '..='~').contains(&c) {
+            return;
+        }
+        chars.next();
+        match c {
+            '[' => return skip_csi(chars),
+            ']' | 'P' | 'X' | '^' | '_' => {
+                if !skip_string(chars) {
+                    return;
                 }
             }
+            ' '..='/' => {
+                // Intermediates, then a final character: `ESC ( B`.
+                for c in chars.by_ref() {
+                    if !(' '..='/').contains(&c) {
+                        return;
+                    }
+                }
+            }
+            _ => return,
         }
-        _ => {}
     }
 }
 
+/// Skips a CSI's parameters and its final character, and nothing else.
 fn skip_csi(chars: &mut Chars) {
-    for c in chars.by_ref() {
-        if ('@'..='~').contains(&c) {
-            break;
+    while let Some(c) = chars.clone().next() {
+        if !(' '..='~').contains(&c) {
+            return;
+        }
+        chars.next();
+        if c >= '@' {
+            return;
         }
     }
 }
 
-/// Invisible, yet able to reorder or disguise the text around them.
+/// Skips the body of an OSC, DCS, SOS, PM or APC up to BEL or ST. True when an
+/// ESC ended it, whose sequence (`\` for ST) the caller reads next.
+fn skip_string(chars: &mut Chars) -> bool {
+    for c in chars.by_ref() {
+        match c {
+            ESC => return true,
+            '\u{7}' | '\u{9c}' => return false,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// Invisible, yet able to reorder or disguise the text around them, or to
+/// leave a row that looks empty: format characters, fillers, blank glyphs,
+/// variation selectors and tags.
 fn is_hidden(c: char) -> bool {
     matches!(
         c,
         '\u{ad}'
+            | '\u{34f}'
             | '\u{61c}'
+            | '\u{115f}'..='\u{1160}'
+            | '\u{17b4}'..='\u{17b5}'
+            | '\u{180b}'..='\u{180f}'
             | '\u{200b}'..='\u{200f}'
             | '\u{202a}'..='\u{202e}'
-            | '\u{2060}'..='\u{2064}'
-            | '\u{2066}'..='\u{2069}'
+            | '\u{2060}'..='\u{206f}'
+            | '\u{2800}'
+            | '\u{3164}'
+            | '\u{fe00}'..='\u{fe0f}'
             | '\u{feff}'
+            | '\u{ffa0}'
+            | '\u{fff0}'..='\u{fffb}'
+            | '\u{1d173}'..='\u{1d17a}'
+            | '\u{e0000}'..='\u{e0fff}'
     )
 }
 
@@ -275,8 +325,13 @@ pub fn clean_message(raw: &str) -> Option<String> {
     let mut chars = raw.chars();
     while let Some(c) = chars.next() {
         match c {
-            '\u{1b}' => skip_escape(&mut chars),
+            ESC => skip_escape(&mut chars),
             '\u{9b}' => skip_csi(&mut chars),
+            '\u{90}' | '\u{98}' | '\u{9d}' | '\u{9e}' | '\u{9f}' => {
+                if skip_string(&mut chars) {
+                    skip_escape(&mut chars);
+                }
+            }
             '\n' | '\r' | '\t' => text.push(' '),
             c if c.is_control() || is_hidden(c) => {}
             c => text.push(c),
@@ -547,6 +602,102 @@ mod tests {
         assert!(capped.ends_with('…'));
         let exact = "x".repeat(MAX_MESSAGE_CHARS);
         assert_eq!(clean_message(&exact).as_deref(), Some(exact.as_str()));
+    }
+
+    #[test]
+    fn strips_every_string_sequence_with_its_body() {
+        for raw in [
+            "a\u{1b}Psecret\u{1b}\\b",
+            "a\u{1b}Xsecret\u{1b}\\b",
+            "a\u{1b}^secret\u{1b}\\b",
+            "a\u{1b}_secret\u{1b}\\b",
+            "a\u{90}secret\u{9c}b",
+            "a\u{98}secret\u{9c}b",
+            "a\u{9d}secret\u{9c}b",
+            "a\u{9e}secret\u{9c}b",
+            "a\u{9f}secret\u{9c}b",
+            "a\u{1b}]0;secret\u{9c}b",
+        ] {
+            assert_eq!(clean_message(raw).as_deref(), Some("ab"), "{raw:?}");
+        }
+    }
+
+    #[test]
+    fn a_backslash_does_not_end_a_string_sequence() {
+        assert_eq!(
+            clean_message("a\u{1b}]8;;C:\\Users\\x\u{1b}\\b").as_deref(),
+            Some("ab")
+        );
+    }
+
+    #[test]
+    fn strips_short_and_doubled_escapes_whole() {
+        assert_eq!(clean_message("a\u{1b}(Bb").as_deref(), Some("ab"));
+        assert_eq!(clean_message("\u{1b}\u{1b}[31mred").as_deref(), Some("red"));
+        assert_eq!(clean_message("a\u{1b} Fb").as_deref(), Some("ab"));
+    }
+
+    #[test]
+    fn a_broken_escape_does_not_swallow_readable_text() {
+        assert_eq!(clean_message("\u{1b}[日本語").as_deref(), Some("日本語"));
+        assert_eq!(clean_message("\u{1b}été").as_deref(), Some("été"));
+        assert_eq!(clean_message("end\u{1b}").as_deref(), Some("end"));
+        assert_eq!(clean_message("end\u{1b}[").as_deref(), Some("end"));
+    }
+
+    #[test]
+    fn survives_a_body_full_of_nested_escapes() {
+        // A hook body can hold tens of thousands of these: a recursive parser would overflow the stack.
+        for unit in [
+            "\u{1b}]",
+            "\u{1b}P",
+            "\u{1b}",
+            "\u{9d}\u{1b}",
+            "\u{1b}[",
+            "\u{9b}",
+        ] {
+            assert_eq!(clean_message(&unit.repeat(40_000)), None, "{unit:?}");
+        }
+    }
+
+    #[test]
+    fn strips_every_invisible_family() {
+        for hidden in [
+            '\u{ad}',
+            '\u{34f}',
+            '\u{61c}',
+            '\u{115f}',
+            '\u{1160}',
+            '\u{17b4}',
+            '\u{180b}',
+            '\u{180e}',
+            '\u{200b}',
+            '\u{200f}',
+            '\u{202e}',
+            '\u{2060}',
+            '\u{2066}',
+            '\u{206a}',
+            '\u{206f}',
+            '\u{2800}',
+            '\u{3164}',
+            '\u{fe00}',
+            '\u{fe0f}',
+            '\u{feff}',
+            '\u{ffa0}',
+            '\u{fff9}',
+            '\u{fffb}',
+            '\u{1d173}',
+            '\u{e0001}',
+            '\u{e0041}',
+            '\u{e0100}',
+        ] {
+            assert_eq!(
+                clean_message(&format!("a{hidden}b")).as_deref(),
+                Some("ab"),
+                "{hidden:?}"
+            );
+            assert_eq!(clean_message(&hidden.to_string()), None, "{hidden:?}");
+        }
     }
 
     #[test]

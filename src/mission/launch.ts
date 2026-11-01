@@ -18,7 +18,7 @@ import { outReport } from "@/mcp/protocol";
 import { nodesStore, sessionOf, terminalOf } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { notify } from "./events";
-import { NEW_AGENT, NEW_MISSION, oneLine, sameName, type Member, type Mission, type SubTask } from "./mission";
+import { NEW_AGENT, NEW_MISSION, oneLine, pastTask, sameName, type Member, type Mission, type SubTask } from "./mission";
 import { whenReady } from "./ready";
 import { modelFor } from "./router";
 import { linkedClaudeAgents, linkedGroups, missionOf, orchestratorShown, setMission, updateMember } from "./store";
@@ -45,7 +45,7 @@ export function handoverText(from: Member): string {
  * not resume from another folder (spec §7.3). It takes `model`, the router's,
  * or none to go back to Claude's own (spec maj §3).
  */
-function restartIn(nodeId: string, cwd: string, model?: string): Promise<void> {
+export function restartIn(nodeId: string, cwd: string, model?: string): Promise<void> {
   const payload = terminalOf(nodesStore.getState().nodes[nodeId]);
   if (!payload) return Promise.resolve();
   const patch = { cwd, model, ...newConversation() };
@@ -159,15 +159,8 @@ async function formTeam(orchestratorId: string, workspaceId: string, project: st
   }
 }
 
-/** Types its sub-task in a member's terminal once it is ready (spec §7.3). */
-async function assign(
-  orchestratorId: string,
-  member: Member,
-  mission: string,
-  task: SubTask,
-  restarted: Promise<void> = Promise.resolve(),
-  handover?: string,
-) {
+/** Types `text`, its sub-task, in a member's terminal once it is ready (spec §7.3). */
+export async function assign(orchestratorId: string, member: Member, text: string, restarted: Promise<void> = Promise.resolve()) {
   const id = member.nodeId;
   // Before its relaunch ends, its screen and silence are the previous session's (final review H2).
   await restarted.catch(() => undefined);
@@ -182,7 +175,7 @@ async function assign(
     notify(orchestratorId, t().lines.notReady(member.name));
     return;
   }
-  await ptySendText(id, subTaskText(mission, task, member.branch, handover));
+  await ptySendText(id, text);
   updateMember(orchestratorId, id, { sentAt: Date.now() });
 }
 
@@ -193,7 +186,7 @@ export async function launchMission(orchestratorId: string): Promise<void> {
   const session = sessionOf(record);
   if (!record || !mission || !session || mission.state !== "plan" || !mission.plan?.length) return;
   // The router was turned on after the plan: without levels, every agent would get Claude's default model (final review maj §3).
-  if (mission.router && mission.plan.some((task) => !task.level)) {
+  if (mission.router && [...mission.plan, ...(mission.queue ?? [])].some((task) => !task.level)) {
     const error = t().lines.levelsMissing;
     setMission(orchestratorId, { error });
     notify(orchestratorId, t().lines.proposeLevels(error));
@@ -213,7 +206,7 @@ export async function launchMission(orchestratorId: string): Promise<void> {
   const names = team.members.map((m) => `${m.name} (${m.task})`).join(", ");
   notify(orchestratorId, t().lines.goAhead(names, team.branch));
   const plan = mission.plan;
-  team.members.forEach((member, i) => void assign(orchestratorId, member, mission.name ?? "", plan[i], restarts.get(member.nodeId)));
+  team.members.forEach((member, i) => void assign(orchestratorId, member, subTaskText(mission.name ?? "", plan[i], member.branch), restarts.get(member.nodeId)));
 }
 
 /** `finish` (spec §7.7): created agents close, linked ones go back to the project. */
@@ -234,6 +227,34 @@ export function endMission(orchestratorId: string, summary: string) {
   for (const member of mission.members) if (!member.linked) stopTerminal(member.nodeId);
 }
 
+/** The merges under way, by mission worktree: git merges one branch at a time there. */
+const merging = new Map<string, Promise<unknown>>();
+
+function oneMergeAtATime<T>(worktree: string, merge: () => Promise<T>): Promise<T> {
+  const turn = (merging.get(worktree) ?? Promise.resolve()).then(merge, merge);
+  merging.set(worktree, turn.catch(() => undefined));
+  return turn;
+}
+
+/** Merges one member's branch into the mission's: what to say of it, and whether its branch is in. */
+export function mergeMember(orchestratorId: string, worktree: string, member: Member): Promise<{ line: string; merged: boolean; uncommitted: boolean }> {
+  const m = t().merge;
+  return oneMergeAtATime(worktree, async () => {
+    try {
+      const { merge, uncommitted } = await missionMerge(worktree, member.worktree, member.branch);
+      const note = uncommitted ? m.uncommitted : "";
+      if (merge.kind === "conflict") return { line: m.conflict(member.name, merge.files.join(", "), note), merged: false, uncommitted };
+      const said = merge.kind === "merged" ? m.merged : member.merged ? m.already : m.empty;
+      // It may have taken another task meanwhile: that one is not merged.
+      const now = missionOf(nodesStore.getState().nodes[orchestratorId])?.members.find((other) => other.nodeId === member.nodeId);
+      if (now?.task === member.task && now.report?.at === member.report?.at) updateMember(orchestratorId, member.nodeId, { merged: true });
+      return { line: m.line(member.name, said, note), merged: true, uncommitted };
+    } catch (error) {
+      return { line: m.failed(member.name, errorText(error)), merged: false, uncommitted: false };
+    }
+  });
+}
+
 /** `merge` (spec §7.6): the branches of the agents done since the last merge. */
 export async function mergeMission(orchestratorId: string): Promise<string> {
   const m = t().merge;
@@ -244,21 +265,7 @@ export async function mergeMission(orchestratorId: string): Promise<string> {
   const ready = mission.members.filter((m) => m.report?.status === "termine" && !m.handedTo);
   if (ready.length === 0) return m.nothing;
   const lines: string[] = [];
-  for (const member of ready) {
-    try {
-      const { merge, uncommitted } = await missionMerge(mission.worktree, member.worktree, member.branch);
-      const note = uncommitted ? m.uncommitted : "";
-      if (merge.kind === "conflict") {
-        lines.push(m.conflict(member.name, merge.files.join(", "), note));
-        continue;
-      }
-      const said = merge.kind === "merged" ? m.merged : member.merged ? m.already : m.empty;
-      updateMember(orchestratorId, member.nodeId, { merged: true });
-      lines.push(m.line(member.name, said, note));
-    } catch (error) {
-      lines.push(m.failed(member.name, errorText(error)));
-    }
-  }
+  for (const member of ready) lines.push((await mergeMember(orchestratorId, mission.worktree, member)).line);
   return `${m.header(mission.branch ?? "")}\n${lines.join("\n")}`;
 }
 
@@ -367,6 +374,7 @@ export async function reassignTask(orchestratorId: string, fromNodeId: string, t
       sentAt: undefined,
       merged: undefined,
       done: finished ? [...(found.done ?? []), found.task] : found.done,
+      past: [...(found.past ?? []), pastTask(found, found.report)],
     };
   }
   const latest = missionOf(nodesStore.getState().nodes[orchestratorId]) ?? mission;
@@ -377,6 +385,6 @@ export async function reassignTask(orchestratorId: string, fromNodeId: string, t
   if (isRunning(from.nodeId)) {
     void ptySendText(from.nodeId, t().lines.handedAway(from.task, to.name)).catch(() => undefined);
   }
-  void assign(orchestratorId, to, mission.name ?? "", task, Promise.resolve(), handoverText(from));
+  void assign(orchestratorId, to, subTaskText(mission.name ?? "", task, to.branch, handoverText(from)));
   return { name: to.name };
 }
