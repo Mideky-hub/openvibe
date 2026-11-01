@@ -166,6 +166,13 @@ describe("moveCardWithGithub", () => {
     expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("gh auth refresh -s project"));
   });
 
+  it("follows on GitHub from a mission's folder, the user being on the home screen", async () => {
+    mockGithub({ github_list_project_items: () => [], github_project_statuses: () => [] });
+    projectsStore.setState({ activeId: null });
+    await moveCardWithGithub("b", "k1", "done", undefined, "C:/mission");
+    expect(calls).toContainEqual(["github_set_issue_state", { path: "C:/mission", repo: "o/r", number: 1, state: "closed" }]);
+  });
+
   it("moves a card without a link locally only", async () => {
     await moveCardWithGithub("b", "k2", "doing", 0);
     expect(calls).toEqual([]);
