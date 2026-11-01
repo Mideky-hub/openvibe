@@ -3,7 +3,8 @@ import { sendToAgents } from "@/fleet/broadcast";
 import { getSetting, setSetting } from "@/ipc/db";
 import { freshText } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
-import { nodesStore } from "@/store/nodes";
+import { nodesStore, terminalOf } from "@/store/nodes";
+import { acceptsInstruction } from "./engine";
 import { createLoopsStore, LOOPS_KEY, type LoopsState } from "./store";
 
 /**
@@ -16,6 +17,7 @@ export const loopsStore = createLoopsStore(
     isLive: (id) => nodesStore.getState().nodes[id]?.kind === "terminal",
     activityOf: (id) => agentActivityStore.getState().activities[id]?.activity,
     screenOf: (id) => freshText(id, 40),
+    canReceive: (id) => acceptsInstruction(terminalOf(nodesStore.getState().nodes[id])?.agent, freshText(id, 40)),
     send: async (ids, text) => {
       const { sent } = await sendToAgents(ids, text);
       return { sent };

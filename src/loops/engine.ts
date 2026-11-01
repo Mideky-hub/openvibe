@@ -1,4 +1,6 @@
 import type { Activity } from "@/ipc/activity";
+import type { AgentId } from "@/ipc/pty";
+import { claudeUp } from "@/mission/ready";
 import type { LoopDef } from "./model";
 
 /** The least time between two runs of an idle or output loop (spec boucles §3). */
@@ -24,6 +26,8 @@ export interface EngineDeps {
   activityOf: (nodeId: string) => Activity | undefined;
   /** What the agent's terminal shows now. */
   screenOf: (nodeId: string) => string;
+  /** The instruction would reach the agent, not the shell it left. */
+  canReceive: (nodeId: string) => boolean;
   /** Types the instruction into the agents; how many it reached (it spares those that wait, stopped or starting). */
   send: (nodeIds: string[], text: string) => Promise<{ sent: number }>;
 }
@@ -38,6 +42,11 @@ interface State {
   /** Idle trigger: the targets that just became idle. */
   idle: Set<string>;
   busy: boolean;
+}
+
+/** A Claude that quit leaves its shell running, and the shell would run the text as a command (README mission). */
+export function acceptsInstruction(agent: AgentId | undefined, screen: string): boolean {
+  return agent !== "claude" || claudeUp(screen);
 }
 
 const shows = (screen: string, text: string) => screen.toLocaleLowerCase().includes(text.toLocaleLowerCase());
@@ -80,7 +89,7 @@ export function createLoopEngine(deps: EngineDeps, onChange: (id: string, runtim
 
   /** One send to `ids`; counted only if it reached someone. */
   async function run(state: State, ids: string[]) {
-    const targets = ids.filter((id) => deps.isLive(id) && deps.activityOf(id) !== "waiting");
+    const targets = ids.filter((id) => deps.isLive(id) && deps.activityOf(id) !== "waiting" && deps.canReceive(id));
     if (targets.length === 0 || state.busy) return;
     state.busy = true;
     state.lastRunAt = deps.now();

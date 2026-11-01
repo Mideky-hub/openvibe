@@ -17,7 +17,7 @@ vi.mock("./live", async () => {
   const { useStore } = await import("zustand");
   const { createLoopsStore } = await import("./store");
   const store = createLoopsStore(
-    { now: () => Date.now(), isLive: () => true, activityOf: () => undefined, screenOf: () => "", send: async (ids) => (sends.push(ids), { sent: ids.length }) },
+    { now: () => Date.now(), isLive: () => true, activityOf: () => undefined, screenOf: () => "", canReceive: () => true, send: async (ids) => (sends.push(ids), { sent: ids.length }) },
     { read: async () => null, write: async () => undefined },
     { setInterval: () => 0 as never, clearInterval: () => undefined },
   );

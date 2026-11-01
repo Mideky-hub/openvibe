@@ -25,6 +25,7 @@ const engineDeps = (): EngineDeps => ({
   isLive: () => true,
   activityOf: () => undefined,
   screenOf: () => "",
+  canReceive: () => true,
   send: async (ids) => {
     sent.push(ids);
     return { sent: ids.length };
