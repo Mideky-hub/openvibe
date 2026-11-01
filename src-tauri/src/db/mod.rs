@@ -385,6 +385,49 @@ mod tests {
         assert_eq!(backups_in(dir.path()), 0);
     }
 
+    /// What the night added lives in payloads and settings: a 1.1.0-beta.1 base needs no step.
+    #[test]
+    fn a_base_of_the_published_version_opens_as_it_is() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("openvibe.db");
+        base_at_version(&path, 4);
+        {
+            let conn = Connection::open(&path).unwrap();
+            let (project, workspace) = raw_workspace(&conn);
+            conn.execute_batch(&format!(
+                "INSERT INTO workspaces (id, project_id, name, position, created_at, updated_at, kind)
+                   VALUES ('code', '{project}', 'Code', 1, 0, 0, 'code');
+                 INSERT INTO nodes (id, workspace_id, kind, payload_json, updated_at)
+                   VALUES ('k1', '{workspace}', 'kanban', '{{\"columns\":[]}}', 0),
+                          ('f1', '{workspace}', 'file', '{{\"path\":\"a.md\"}}', 0);"
+            ))
+            .unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(backups_in(dir.path()), 0);
+        db.with(|conn| {
+            let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+            assert_eq!(version, 4);
+            let payload: String =
+                conn.query_row("SELECT payload_json FROM nodes WHERE id = 'k1'", [], |r| {
+                    r.get(0)
+                })?;
+            assert_eq!(payload, r#"{"columns":[]}"#);
+            let kind: String =
+                conn.query_row("SELECT kind FROM workspaces WHERE id = 'code'", [], |r| {
+                    r.get(0)
+                })?;
+            assert_eq!(kind, "code");
+            let files: i64 =
+                conn.query_row("SELECT count(*) FROM nodes WHERE kind = 'file'", [], |r| {
+                    r.get(0)
+                })?;
+            assert_eq!(files, 1);
+            Ok(())
+        })
+        .unwrap();
+    }
+
     #[test]
     fn refuses_a_base_from_a_newer_version() {
         let dir = tempfile::tempdir().unwrap();
