@@ -34,9 +34,13 @@ export function subTaskText(mission: string, task: SubTask, branch: string, hand
   return handover ? `${text} ${handover}` : text;
 }
 
-/** What an agent is told of a task that may come from a ticket: the orchestrator's note stops at the orchestrator (spec mission de nuit §5.1). */
-export function withTicketNote(mission: Mission, text: string): string {
-  return mission.tickets ? `${text} ${t().lines.ticketData}` : text;
+/**
+ * What an agent is told of a task that may come from a ticket or from a Kanban
+ * card, which GitHub may have filled: the orchestrator's note stops at the
+ * orchestrator (spec mission de nuit §5.1).
+ */
+export function withTicketNote(mission: Mission, text: string, task?: { card?: string }): string {
+  return mission.tickets || task?.card ? `${text} ${t().lines.ticketData}` : text;
 }
 
 /** What the next agent learns of the previous one (spec §7.2 reassign). */
@@ -225,7 +229,7 @@ export async function launchMission(orchestratorId: string): Promise<void> {
   notify(orchestratorId, t().lines.goAhead(names, team.branch));
   const plan = mission.plan;
   void startMissionCards(orchestratorId, team.members, plan).catch(() => undefined);
-  team.members.forEach((member, i) => void assign(orchestratorId, member, withTicketNote(mission, subTaskText(mission.name ?? "", plan[i], member.branch)), restarts.get(member.nodeId)));
+  team.members.forEach((member, i) => void assign(orchestratorId, member, withTicketNote(mission, subTaskText(mission.name ?? "", plan[i], member.branch), plan[i]), restarts.get(member.nodeId)));
 }
 
 /** `finish` (spec §7.7): created agents close, linked ones go back to the project. */
@@ -407,6 +411,6 @@ export async function reassignTask(orchestratorId: string, fromNodeId: string, t
   if (isRunning(from.nodeId)) {
     void ptySendText(from.nodeId, t().lines.handedAway(from.task, to.name)).catch(() => undefined);
   }
-  void assign(orchestratorId, to, withTicketNote(mission, subTaskText(mission.name ?? "", task, to.branch, handoverText(from))));
+  void assign(orchestratorId, to, withTicketNote(mission, subTaskText(mission.name ?? "", task, to.branch, handoverText(from)), task));
   return { name: to.name };
 }
