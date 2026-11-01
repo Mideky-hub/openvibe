@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { messages } from "@/i18n";
 import { revealNode } from "@/canvas/arrive";
 import { canvasStore } from "@/canvas/canvasStore";
-import { groupInfoOf, groupOf, insertIntoFrame } from "@/canvas/groups";
+import { groupInfoOf, groupOf, insertIntoFrame, withGroupFolded } from "@/canvas/groups";
 import { allowRemoval } from "@/canvas/removalGuard";
 import { createNodeElement, nodeKindOf } from "@/canvas/nodeElement";
 import { markForAutostart } from "@/nodes/terminal/registry";
@@ -60,7 +60,7 @@ function joinGroup(elements: readonly ExcalidrawElement[], element: ExcalidrawEl
   return insertIntoFrame(
     elements,
     newElementWith(element, { x: placed.cell.x, y: placed.cell.y, frameId: frame.id }),
-    newElementWith(frame, { width: placed.frame.width, height: placed.frame.height }),
+    newElementWith(frame, { width: placed.frame.width, height: placed.frame.height, customData: withGroupFolded(frame.customData, false) }),
   );
 }
 
