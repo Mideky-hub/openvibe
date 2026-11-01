@@ -25,7 +25,7 @@ const file = (path: string, status: ChangedFile["status"] = "modified", counts: 
   removed: counts?.[1] ?? null,
 });
 
-const base: RepoState = { branch: "main", upstream: "origin/main", ahead: 2, behind: 0, pushTo: "origin/main", noPush: null, files: [], stamps: { "src/a.ts": "s1", "b.txt": "s2" }, truncated: false };
+const base: RepoState = { branch: "main", upstream: "origin/main", ahead: 2, behind: 0, pushTo: "origin/main", head: "abc", noPush: null, files: [], stamps: { "src/a.ts": "s1", "b.txt": "s2" }, truncated: false };
 
 let repo: RepoState;
 let history: LogEntry[];
@@ -302,7 +302,7 @@ describe("pushing (spec fenêtre git §3.5)", () => {
     expect(called("repo_push")).toEqual([]);
     calls = [];
     await act(async () => button("Pousser 2 → origin/main")!.click());
-    expect(called("repo_push")).toEqual([{ cmd: "repo_push", args: { path: "C:/code/api", branch: "main", target: "origin/main" } }]);
+    expect(called("repo_push")).toEqual([{ cmd: "repo_push", args: { path: "C:/code/api", branch: "main", target: "origin/main", head: "abc" } }]);
     expect(called("repo_state").length).toBe(1);
     expect(toast).toHaveBeenCalledWith("Poussé vers origin/main");
   });

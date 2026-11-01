@@ -4,7 +4,7 @@ import { nodesStore } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { notify } from "./events";
 import { assign, mergeMember, restartIn } from "./launch";
-import { oneLine, pastTask, windingDown, type Member, type Mission, type QueuedTask, type SubTask } from "./mission";
+import { noNewWork, oneLine, pastTask, type Member, type Mission, type QueuedTask, type SubTask } from "./mission";
 import { modelFor } from "./router";
 import { agentState, isOrchestratorClosed, memberGroupId, missionOf, setMission } from "./store";
 
@@ -74,7 +74,7 @@ function take(orchestratorId: string, mission: Mission, member: Member, report: 
 function stillMovable(orchestratorId: string, nodeId: string, report: NonNullable<Member["report"]>) {
   const mission = missionNow(orchestratorId);
   const member = memberNow(orchestratorId, nodeId);
-  if (!mission || !member || mission.state !== "en_cours" || windingDown(mission, Date.now()) || !isRunning(nodeId)) return null;
+  if (!mission || !member || mission.state !== "en_cours" || noNewWork(mission, Date.now()) || !isRunning(nodeId)) return null;
   if (member.report?.at !== report.at || member.report.status !== report.status) return null;
   const task = nextFor(mission, member);
   return task ? { mission, member, task } : null;
@@ -150,7 +150,7 @@ export async function giveNext(orchestratorId: string, member: Member): Promise<
   if (!member.report) return { refused: t().reassign.notDone(member.name) };
   const mission = missionNow(orchestratorId);
   if (!isRunning(member.nodeId)) return { refused: t().orchestrator.stopped(member.name) };
-  if (mission && windingDown(mission, Date.now())) return { refused: t().lines.windingDown };
+  if (mission && noNewWork(mission, Date.now())) return { refused: t().lines.windingDown };
   if (!mission || !nextFor(mission, member)) return { refused: t().lines.nothingFor(member.name) };
   const given = await moveOnce(orchestratorId, member.nodeId);
   return given ? { given } : { refused: t().lines.notMoved(member.name) };

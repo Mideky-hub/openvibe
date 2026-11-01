@@ -6,6 +6,7 @@ import { isRunning, terminalStatusStore, waitForExit } from "@/store/terminalSta
 import { accountsStore, loadAccounts } from "@/accounts/store";
 import { markResumedLaunch } from "@/usage/usageStore";
 import { buildSpawnSpec, type LaunchMode } from "./launch";
+import { accountsMessages } from "@/accounts/messages";
 import { messages } from "@/i18n";
 import { nodesMessages } from "@/nodes/messages";
 
@@ -48,6 +49,8 @@ function withConversationId(nodeId: string, payload: TerminalPayload): TerminalP
 async function withAccount(nodeId: string, payload: TerminalPayload, mode: LaunchMode): Promise<TerminalPayload> {
   if (payload.agent !== "claude") return payload;
   await loadAccounts();
+  // Its folder is unknown, not gone: the default account would spend for the wrong one.
+  if (payload.accountId && accountsStore.getState().unread) throw new Error(messages(accountsMessages).notRead);
   const active = accountsStore.getState().active;
   if (mode !== "new" || payload.accountId || !active) return payload;
   nodesStore.getState().update(nodeId, { accountId: active });

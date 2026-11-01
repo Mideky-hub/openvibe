@@ -393,6 +393,11 @@ export function windingDown(mission: Mission, now: number): boolean {
   return (now - mission.startedAt) / MINUTE >= mission.budgetMin - windDownMin(mission.budgetMin);
 }
 
+/** No new work starts: the mission is winding down, or the global budget is spent, overnight or not. */
+export function noNewWork(mission: Mission, now: number): boolean {
+  return windingDown(mission, now) || (mission.startedAt !== undefined && remainingGlobal(mission, now) === 0);
+}
+
 export type BudgetTone = "ok" | "late" | "over";
 
 /** A budget's bar (spec §8.3): green, orange past 80 %, red past 100 %. */

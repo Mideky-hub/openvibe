@@ -1,5 +1,7 @@
 import { createStore } from "zustand";
+import { messages } from "@/i18n";
 import { createLoopEngine, TICK_MS, type EngineDeps, type LoopRuntime } from "./engine";
+import { loopsMessages } from "./messages";
 import { LOOPS_VERSION, readLoops, validateLoop, withLoop, withoutLoop, type LoopDef } from "./model";
 
 /** The setting that holds the loops (spec boucles §3): their definitions only, never that one is on. */
@@ -53,6 +55,11 @@ export function createLoopsStore(
 
   const store = createStore<LoopsState>()((set, get) => {
     const persist = (loops: LoopDef[]) => io.write({ version: LOOPS_VERSION, loops });
+    // A failed read stops the change: it does not read as an empty list.
+    const readList = async () => {
+      await get().load();
+      if (!get().loaded) throw new Error(messages(loopsMessages).notRead);
+    };
     const ticking = () => {
       timer ??= timers.setInterval(() => void engine.tick(), TICK_MS);
     };
@@ -64,8 +71,8 @@ export function createLoopsStore(
         if (get().loaded) return Promise.resolve();
         reading ??= io
           .read()
-          .catch(() => null)
           .then((raw) => set({ loops: readLoops(raw), loaded: true }))
+          .catch((error: unknown) => console.warn("loops not read", error))
           .finally(() => {
             reading = null;
           });
@@ -74,7 +81,7 @@ export function createLoopsStore(
       save: async (loop) => {
         const checked = validateLoop(loop);
         if (!checked.ok) return "invalid";
-        await get().load();
+        await readList();
         const kept: LoopDef = { ...checked.loop, id: loop.id };
         const next = withLoop(get().loops, kept);
         if (next === null) return "full";
@@ -85,7 +92,7 @@ export function createLoopsStore(
         return "ok";
       },
       remove: async (id) => {
-        await get().load();
+        await readList();
         engine.stop(id);
         const next = withoutLoop(get().loops, id);
         set({ loops: next });

@@ -5,11 +5,13 @@ interface AccountsState {
   profiles: Profile[];
   active: string | null;
   loaded: boolean;
+  /** The list could not be read: which account a terminal belongs to is unknown. */
+  unread: boolean;
   /** The Accounts dialog (spec comptes §6). */
   open: boolean;
 }
 
-export const accountsStore = createStore<AccountsState>()(() => ({ profiles: [], active: null, loaded: false, open: false }));
+export const accountsStore = createStore<AccountsState>()(() => ({ profiles: [], active: null, loaded: false, unread: false, open: false }));
 
 export function useAccounts<T>(selector: (state: AccountsState) => T): T {
   return useStore(accountsStore, selector);
@@ -20,11 +22,11 @@ let loading: Promise<void> | undefined;
 /** Reads the profiles once; a terminal about to start waits for it. */
 export function loadAccounts(): Promise<void> {
   loading ??= accountsList()
-    .then(({ profiles, active }) => accountsStore.setState({ profiles, active, loaded: true }))
+    .then(({ profiles, active }) => accountsStore.setState({ profiles, active, loaded: true, unread: false }))
     .catch(() => {
-      // Without profiles, terminals start with the default account.
+      // Without profiles, new terminals start with the default account; one bound to a profile does not (session.ts).
       loading = undefined;
-      accountsStore.setState({ loaded: true });
+      accountsStore.setState({ loaded: true, unread: true });
     });
   return loading;
 }

@@ -8,13 +8,14 @@ import { nextName, nextPantheon } from "./names";
 
 /**
  * Names already carried by the terminals of a workspace. A closed terminal's
- * node stays in memory for Ctrl+Z but is off the canvas: its name is free again.
+ * node stays in memory for Ctrl+Z, its element marked deleted: its name is free
+ * again. One not on the scene yet is being created: its name is taken.
  */
 export function namesInWorkspace(workspaceId: string): string[] {
-  const scene = canvasStore.getState().api?.getSceneElements();
-  const onCanvas = scene ? new Set(scene.map((e) => e.id)) : null;
+  const scene = canvasStore.getState().api?.getSceneElementsIncludingDeleted() ?? [];
+  const closed = new Set(scene.filter((e) => e.isDeleted).map((e) => e.id));
   return Object.entries(nodesStore.getState().nodes)
-    .filter(([id, node]) => node.workspaceId === workspaceId && node.kind === "terminal" && node.payload.name && (!onCanvas || onCanvas.has(id)))
+    .filter(([id, node]) => node.workspaceId === workspaceId && node.kind === "terminal" && node.payload.name && !closed.has(id))
     .map(([, node]) => node.payload.name);
 }
 

@@ -12,6 +12,8 @@ export interface RepoState {
   behind: number;
   /** What a push would reach; null when it cannot, `noPush` saying why. */
   pushTo: string | null;
+  /** The commit a push would send, as read here; empty without a commit. */
+  head: string;
   noPush: NoPush | null;
   files: ChangedFile[];
   /** Each file as it is now, by path: what a discard must still find. */
@@ -35,5 +37,5 @@ export const repoHistory = (path: string) => call<LogEntry[]>("repo_history", { 
 export const repoCommit = (path: string, files: ChangedFile[], message: string) => call<string>("repo_commit", { path, files, message });
 /** Only after the window's confirmation; refused if the file changed since it was listed. */
 export const repoDiscard = (path: string, file: ChangedFile, stamp: string) => call<void>("repo_discard", { path, file, stamp });
-/** Only ever the Push button's click (spec fenêtre git §2.3), for the branch and target it showed: refused if they changed. */
-export const repoPush = (path: string, branch: string, target: string) => call<void>("repo_push", { path, branch, target });
+/** Only ever the Push button's click (spec fenêtre git §2.3), for the branch, target and commits it showed: refused if they changed. */
+export const repoPush = (path: string, branch: string, target: string, head: string) => call<void>("repo_push", { path, branch, target, head });

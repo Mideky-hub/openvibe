@@ -3,6 +3,7 @@ import { defineMessages } from "@/i18n";
 export const accountsMessages = defineMessages(
   {
     title: "Comptes Claude",
+    notRead: "Les comptes n'ont pas pu être lus : ce terminal attend, pour ne pas démarrer sur un autre compte.",
     description: "Un profil est un nom et un dossier : Claude y garde sa connexion et ses conversations. OpenVibe ne lit rien de ce dossier.",
     defaultName: "Par défaut",
     defaultHint: "L'environnement d'OpenVibe (CLAUDE_CONFIG_DIR ou ~/.claude)",
@@ -25,6 +26,7 @@ export const accountsMessages = defineMessages(
   },
   {
     title: "Claude accounts",
+    notRead: "The accounts could not be read: this terminal waits, so as not to start on another account.",
     description: "A profile is a name and a folder: Claude keeps its login and conversations there. OpenVibe reads nothing in that folder.",
     defaultName: "Default",
     defaultHint: "OpenVibe's environment (CLAUDE_CONFIG_DIR or ~/.claude)",

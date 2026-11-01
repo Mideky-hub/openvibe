@@ -83,7 +83,7 @@ function GitDrawer({ path }: { path: string }) {
     setPushing(true);
     setFailure(null);
     try {
-      await repoPush(path, repo.branch, target);
+      await repoPush(path, repo.branch, target, repo.head);
       toast(t.push.done(target));
     } catch (failed) {
       setFailure(errorText(failed));
