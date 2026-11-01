@@ -4,6 +4,8 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.2.0-beta.1] - 2026-11-01
+
 ### Added
 - **Notes:** per-project Markdown notes (plain files in the project's `.openvibe/notes/`), a graph of the links between them, notes per group, and a note list agents are told about. Open them from the rail, the palette or a group's menu.
 - **Install agents from the interface:** from the home screen or the palette, in a visible terminal, with a prerequisites check first, and Ollama models pulled the same way. Nothing is ever installed without being asked.
