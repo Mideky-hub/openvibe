@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
+import { loadAccounts, useAccounts } from "@/accounts/store";
 import { AGENTS } from "@/fleet/catalog";
 import { useMessages } from "@/i18n";
 import { formatDecimal } from "@/i18n/format";
@@ -23,10 +24,12 @@ function formatTokens(count: number): string {
 export function TokensView({ onBack }: { onBack: () => void }) {
   const u = useMessages(shellMessages).usage;
   const nodes = useNodes((s) => s.nodes);
+  const hasProfiles = useAccounts((s) => s.profiles.length > 0);
   const [report, setReport] = useState<TokenReport | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    void loadAccounts();
     let alive = true;
     tokenUsage().then(
       (next) => alive && setReport(next),
@@ -61,6 +64,11 @@ export function TokensView({ onBack }: { onBack: () => void }) {
         </button>
         <p className="ov-label">{u.tokensTitle}</p>
       </div>
+      {hasProfiles && (
+        <p data-tokens-scope className="text-[11px] text-ov-text-3">
+          {u.tokensDefaultOnly}
+        </p>
+      )}
       {error ? (
         <p className="text-[12px] text-ov-danger">{u.tokensFailed(error)}</p>
       ) : !report ? (

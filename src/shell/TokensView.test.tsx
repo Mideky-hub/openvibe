@@ -3,6 +3,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
+import { accountsStore } from "@/accounts/store";
+import { langStore } from "@/i18n";
 import { nodesStore } from "@/store/nodes";
 import { TokensView } from "./TokensView";
 
@@ -59,5 +61,25 @@ it("says so when the logs cannot be read, and goes back", async () => {
   expect(host.textContent).toContain("Lecture impossible");
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Usage"]')!.click());
   expect(back).toHaveBeenCalled();
+  await done();
+});
+
+const profile = { id: "work", name: "Travail", configDir: "C:/profiles/work" };
+
+it("says it covers the default folder only, when profiles exist (review)", async () => {
+  accountsStore.setState({ profiles: [profile] });
+  const { host, done } = await show(() => report);
+  expect(host.querySelector("[data-tokens-scope]")?.textContent).toBe("Compte par défaut seulement : les profils Claude ne sont pas comptés ici.");
+  await act(async () => langStore.setState({ lang: "en" }));
+  expect(host.querySelector("[data-tokens-scope]")?.textContent).toBe("Default account only: Claude profiles are not counted here.");
+  await act(async () => langStore.setState({ lang: "fr" }));
+  await done();
+  accountsStore.setState({ profiles: [] });
+});
+
+it("says nothing of it without profiles (review)", async () => {
+  accountsStore.setState({ profiles: [] });
+  const { host, done } = await show(() => report);
+  expect(host.querySelector("[data-tokens-scope]")).toBeNull();
   await done();
 });
