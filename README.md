@@ -62,7 +62,8 @@ If you know Symvibe, OpenVibe covers the same ground (driving a fleet of CLI age
 - **Install an agent from the app.** For an agent that is not found, *Installer* shows the official command in full, then runs it in a visible terminal on the canvas that you can interrupt. Ollama models install the same way. Nothing is fetched or run in the background.
 - **Loops.** Send an instruction again and again, with brakes. A loop fires every N minutes, when an agent goes idle, or when its screen shows a text; it must end after a number of turns (up to 1000) or a duration (up to 24 hours), whichever comes first. It never writes to an agent that waits for you, is stopped or is starting. A pill at the bottom left counts the running loops and their turns, with *Tout arrêter* one click away, and every loop is off again after a restart. Three templates (progress report, relaunch, watch the tests) fill the form but start nothing.
 - **Several Claude accounts.** A profile is only a name and a folder (Claude Code's `CLAUDE_CONFIG_DIR`). *Comptes Claude…* in the function palette lists them: *Utiliser* makes one the account of the next Claude agents, *Se connecter* opens a visible terminal to sign in, *Retirer* forgets a profile and leaves its folder alone. A terminal keeps the account it started with, and shows it in its header. OpenVibe never reads, copies or stores a credential.
-- **A git window.** Click the branch chip at the bottom left: the files changed in the project, their diff, a tick per file to commit exactly those, the history, and a *Pousser* button that names its target (`Pousser 3 → origin/main`). Discarding a file asks first and says what is lost; pushing happens only when you click, never forces, and nothing in the palette or the agents can push for you.
+- **A git window.** Click the branch chip at the bottom left: the files changed in the project, their diff, a tick per file to commit exactly those, the history, and a *Pousser* button that names its target (`Pousser 3 → origin/main`). Discarding a file asks first and says what is lost; this button is the only route to a push inside OpenVibe's own tools: it goes only when you click, and it never forces. An agent running commands in a terminal is limited only by its permissions.
+- **Overnight run.** Say how long you will be away: an orchestrator plans, a team works through a queue of tickets, and a morning report waits for you. See [Overnight run](#overnight-run), and read its warnings first.
 - **Icon libraries.** About 600 icons from the Excalidraw community (system design, AWS, Azure, GCP), bundled with the app, for sketching architecture next to the agents that build it.
 - **Projects and workspaces.** One project per folder, several workspace tabs per project; drag the tabs to reorder them (or `Alt+←` / `Alt+→` on a tab, or its menu), and the order is remembered. OpenVibe saves everything locally and, after a restart, offers to resume your Claude conversations.
 - **Keyboard first.** Use the palettes, jump between terminals, or right-press anywhere for the radial menu. Light and dark themes follow Windows.
@@ -117,6 +118,16 @@ With the **model router**, each sub-task's level picks the model its agent runs 
 | `extreme` | Claude Fable 5.1 |
 
 The orchestrator talks to OpenVibe through a local MCP server, with tools such as `propose_plan`, `team`, `read_output`, `extend`, `reassign`, `merge` and `remote_control`. It can read the repository, but it is denied `Edit`, `Write` and `NotebookEdit`: the agents write the code.
+
+### Overnight run
+
+Before you leave, open *Mission de nuit…* in the mission panel: how long you will be away, how many agents, and where the tickets come from (GitHub issues with a label, or `BACKLOG.md`). The orchestrator plans and the team works through a queue: when an agent reports done, its branch is merged into the mission branch and it takes the next task. When you are back, a morning report in the panel gives what is done, what failed, what to check by hand and the time spent. Kanban is not a source yet. The PC stays awake during the mission, but closing the lid or asking for sleep still puts it to sleep.
+
+Read this before you choose:
+
+- **By default the plan waits for your go-ahead and agents have *Fichiers*.** They edit files unasked and stop at their first command until you are back. That is the safer choice, and it limits what a night can do.
+- ***Fichiers et commandes* is an explicit choice.** Agents run any command unasked: the network and the accounts logged in on this PC are open to them. Use a repository you can afford to lose.
+- **The push block is not a security boundary.** `git push` and the `gh` commands that reach the remote are denied by rules on the command's text and by a git setting in the terminal. They stop accidents. An agent running commands can get past them: a review did with `-c remote.origin.pushurl` and `GIT_CONFIG_COUNT=0`.
 
 ## Supported agents
 

@@ -58,6 +58,14 @@ Un orchestrateur ne démarre qu'avec les outils d'OpenVibe, servis par un serveu
 
 Une mission travaille sur des branches git, qui demandent un premier commit. Dans le dossier du projet : `git add -A`, puis `git commit -m "Premier commit"`, et relance la mission.
 
+## Une mission de nuit a fait peu, ou plus que voulu
+
+- **Les agents se sont arrêtés tôt.** Sous *Fichiers*, le choix par défaut, un agent s'arrête à sa première commande jusqu'à votre retour : le rapport du matin montre ces tâches comme pas finies. *Fichiers et commandes* évite cela, mais les agents lancent alors n'importe quelle commande sans demander, et le réseau et les comptes connectés sur ce PC leur sont ouverts. Choisissez-le en connaissance de cause.
+- **Rien n'a démarré.** Par défaut, le plan attend votre feu vert : cliquez *Lancer la mission* avant de partir, ou cochez *Lancer sans attendre mon feu vert*.
+- **Pas de tickets.** Les issues GitHub sont lues avec `gh`, qui doit être installé et connecté, et seules les issues portant le label donné sont lues. `BACKLOG.md` doit être à la racine du projet. Kanban n'est pas encore une source.
+- **La mission s'est arrêtée dans la nuit.** Le PC reste éveillé pendant la mission, mais fermer le capot ou demander la mise en veille l'endort quand même.
+- **Un agent a poussé, ou agi sur GitHub.** Le blocage du push n'est pas une frontière de sécurité. `git push` et les commandes `gh` qui atteignent le dépôt distant sont refusés par des règles sur le texte de la commande et par un réglage git du terminal : ils arrêtent les accidents, et un agent qui lance des commandes peut les contourner, comme une relecture l'a fait avec `-c remote.origin.pushurl` et `GIT_CONFIG_COUNT=0`. Si cela compte, restez sur *Fichiers*, ou utilisez un dépôt et des comptes que vous pouvez vous permettre d'exposer.
+
 ## Une boucle n'envoie rien
 
 Une boucle n'écrit jamais à un agent qui attend ta réponse (boîte de permission comprise), qui est arrêté ou qui démarre encore ; ce tour est sauté et ne compte pas. Un agent fermé est ignoré, et une boucle sans cible vivante s'éteint. Toutes les boucles sont de nouveau éteintes après un redémarrage d'OpenVibe : rallume-les depuis la fenêtre des boucles (*Gérer les boucles…* dans la palette de fonctions). La pastille en bas à gauche, ou *Boucles : tout arrêter*, les arrête toutes.
