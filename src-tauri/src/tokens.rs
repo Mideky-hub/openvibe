@@ -217,7 +217,7 @@ pub fn scan_with(root: &Path, now_secs: u64, limits: &Limits) -> Report {
     let cutoff = SystemTime::UNIX_EPOCH
         + std::time::Duration::from_secs(((first - 1).max(0) as u64) * 86_400);
     files.retain(|(modified, _)| *modified >= cutoff);
-    files.sort_by(|a, b| b.0.cmp(&a.0));
+    files.sort_by_key(|file| std::cmp::Reverse(file.0));
     let mut truncated = files.len() > limits.files;
     files.truncate(limits.files);
 
