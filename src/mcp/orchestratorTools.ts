@@ -2,14 +2,15 @@ import { pauseAgents } from "@/fleet/broadcast";
 import { setRemoteControl } from "@/fleet/remoteControl";
 import { messages } from "@/i18n";
 import { ptySendText } from "@/ipc/pty";
-import { endMission, mergeMission, reassignTask } from "@/mission/launch";
+import { endMission, launchMission, mergeMission, reassignTask } from "@/mission/launch";
 import { budgetOf, memberTime, NEW_AGENT, oneLine, proposedPlan, proposedTasks, remainingGlobal, sameName, spentMin, type Member, type Mission } from "@/mission/mission";
 import { freeMembers, giveNext, pumpQueue } from "@/mission/queue";
 import { LEVELS, modelLabel } from "@/mission/router";
+import { readTickets } from "@/mission/tickets";
 import { agentGroup, agentState, linkedClaudeAgents, linkedGroups, missionOf, orchestratorShown, setMission, updateMember } from "@/mission/store";
 import { terminalText } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
-import { nodesStore, terminalOf } from "@/store/nodes";
+import { nodesStore, sessionOf, terminalOf } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { refused, said, type ToolResult } from "./agentTools";
 import { agentMessages } from "./messages";
@@ -78,6 +79,7 @@ export function orchestratorTools() {
     },
     { name: "queue", description: d.queue, inputSchema: NO_ARGS },
     { name: "next_task", description: d.nextTask, inputSchema: { type: "object", properties: { agent: { type: "string" } }, required: ["agent"] } },
+    { name: "tickets", description: d.tickets, inputSchema: NO_ARGS },
     { name: "team", description: d.team, inputSchema: NO_ARGS },
     {
       name: "read_output",
@@ -115,7 +117,7 @@ export function orchestratorTools() {
 }
 
 /** Internal names of the orchestrator's tools (`./protocol.ts`). */
-export const ORCHESTRATOR_ONLY = new Set(["mission", "proposer_plan", "add_tasks", "queue", "next_task", "equipe", "lire_sortie", "ecrire", "prolonger", "interrompre", "reattribuer", "fusionner", "terminer", "remote_control"]);
+export const ORCHESTRATOR_ONLY = new Set(["mission", "proposer_plan", "add_tasks", "queue", "next_task", "tickets", "equipe", "lire_sortie", "ecrire", "prolonger", "interrompre", "reattribuer", "fusionner", "terminer", "remote_control"]);
 
 const json = (value: unknown) => said(JSON.stringify(value, null, 2));
 const formed = (mission: Mission) => mission.state === "en_cours" || mission.state === "terminee";
@@ -163,6 +165,7 @@ function describeMission(orchestratorId: string, mission: Mission): ToolResult {
     queue_waiting: mission.queue?.length ?? 0,
     left_min: remainingGlobal(mission, Date.now()) ?? null,
     overnight: mission.overnight === true,
+    auto_launch: mission.autoLaunch === true,
     elapsed_min: mission.state === "en_cours" && mission.startedAt !== undefined ? Math.floor((Date.now() - mission.startedAt) / 60_000) : null,
     error: mission.error ?? null,
   });
@@ -177,7 +180,23 @@ function proposePlan(orchestratorId: string, mission: Mission, args: Record<stri
   const result = proposedPlan(args, mission, linkedClaudeAgents(orchestratorId).map((a) => a.name), linkedGroups(orchestratorId));
   if (typeof result === "string") return refused(result);
   setMission(orchestratorId, { state: "plan", ...result, error: undefined });
+  // The dialog was the go-ahead: the user has left (spec mission de nuit §5.1).
+  if (mission.overnight && mission.autoLaunch) {
+    void launchMission(orchestratorId);
+    return said(t().orchestrator.launchingNight);
+  }
   return said(t().orchestrator.proposed(result.plan.length));
+}
+
+/** `tickets`: OpenVibe reads the source, the orchestrator may not run commands (spec mission de nuit §5.1). */
+async function tickets(orchestratorId: string, mission: Mission): Promise<ToolResult> {
+  const project = sessionOf(nodesStore.getState().nodes[orchestratorId])?.cwd;
+  if (!mission.tickets || !project) return refused(t().orchestrator.noTickets);
+  try {
+    return json({ note: t().orchestrator.ticketsNote, tickets: await readTickets(project, mission.tickets) });
+  } catch (error) {
+    return refused(t().orchestrator.ticketsFailed(error instanceof Error ? error.message : String(error)));
+  }
 }
 
 function addTasks(orchestratorId: string, mission: Mission, args: Record<string, unknown>): ToolResult {
@@ -364,6 +383,8 @@ export async function orchestratorTool(orchestratorId: string, name: string, arg
       return describeQueue(mission);
     case "next_task":
       return nextTask(orchestratorId, mission, args);
+    case "tickets":
+      return tickets(orchestratorId, mission);
     case "equipe":
       return describeTeam(orchestratorId, mission);
     case "lire_sortie":

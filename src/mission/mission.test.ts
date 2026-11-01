@@ -246,7 +246,9 @@ describe("the time of a mission (spec orchestrateur §8)", () => {
   });
 
   it("keeps the overnight marks of a saved mission", () => {
-    expect(readMission({ state: "en_cours", overnight: true, windDownTold: true })).toMatchObject({ overnight: true, windDownTold: true });
+    expect(readMission({ state: "en_cours", overnight: true, windDownTold: true, autoLaunch: true, tickets: { kind: "github", label: "nuit" } })).toMatchObject({ overnight: true, windDownTold: true, autoLaunch: true, tickets: { kind: "github", label: "nuit" } });
+    expect(readMission({ state: "plan", tickets: { kind: "backlog" } })?.tickets).toEqual({ kind: "backlog" });
+    expect(readMission({ state: "plan", tickets: { kind: "kanban" } })).not.toHaveProperty("tickets");
     expect(readMission({ state: "en_cours" })).not.toHaveProperty("overnight");
   });
 

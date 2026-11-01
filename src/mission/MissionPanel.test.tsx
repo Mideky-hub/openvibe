@@ -77,6 +77,17 @@ it("shows the group a new agent will join (spec groupes spécialisés §3)", asy
   expect(host.textContent).toContain("nouveau → Interface · 20 min");
 });
 
+it("opens « Mission de nuit » from its settings, and marks a night (spec mission de nuit §5.1)", async () => {
+  await show();
+  expect(host.textContent).toContain("Mission de nuit…");
+  await act(async () => button("Mission de nuit…").click());
+  expect(document.body.textContent).toContain("Préparer la nuit");
+  await act(async () => root.unmount());
+  host.remove();
+  await show({ overnight: true });
+  expect(host.querySelector("header")?.textContent).toContain("de nuit");
+});
+
 it("shows the tasks waiting in the queue (spec mission de nuit §4)", async () => {
   await show({ state: "plan", name: "Auth", plan: [{ title: "Login", brief: "Fais le login", agent: "Isis", budgetMin: 20 }], queue: [{ title: "API", brief: "b", budgetMin: 30 }, { title: "Docs", brief: "b", budgetMin: 10 }] });
   expect(host.querySelector("[data-queue]")?.textContent).toContain("En attente (2)");
