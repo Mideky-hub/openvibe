@@ -55,15 +55,16 @@ export function memberOf(nodeId: string, { evenClosed = false } = {}): { orchest
   return null;
 }
 
-/** Whether the orchestrator's workspace is on screen. */
+/** Whether the orchestrator's workspace is on screen. The home screen leaves it active, with no canvas mounted. */
 export function orchestratorShown(orchestratorId: string): boolean {
   const record = nodesStore.getState().nodes[orchestratorId];
-  return record !== undefined && record.workspaceId === workspacesStore.getState().activeId;
+  return record !== undefined && record.workspaceId === workspacesStore.getState().activeId && canvasStore.getState().api !== null;
 }
 
 /** A workspace's wires and groups: live on screen, from its stored scene otherwise (spec mission de nuit §6.1). */
 export function workspaceCanvas(workspaceId: string | undefined): Pick<ReturnType<typeof canvasStore.getState>, "frames" | "links"> {
-  if (workspaceId === undefined || workspaceId === workspacesStore.getState().activeId) return canvasStore.getState();
+  const shown = workspaceId === workspacesStore.getState().activeId && canvasStore.getState().api !== null;
+  if (workspaceId === undefined || shown) return canvasStore.getState();
   const elements = cachedElements(workspaceId) ?? [];
   return { frames: framesFromScene(elements), links: orchestratorLinks(elements) };
 }

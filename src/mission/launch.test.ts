@@ -75,7 +75,7 @@ beforeEach(() => {
   vi.mocked(launchGroup).mockResolvedValue({ frameId: "f1", nodeIds: ["n1"] });
   for (const id of ["chef", "isis", "n1"]) terminalStatusStore.getState().set(id, { state: "running" });
   workspacesStore.setState({ activeId: "w1" });
-  canvasStore.setState({ frames: [], links: {} });
+  canvasStore.setState({ api: { getSceneElementsIncludingDeleted: () => [] } as never, frames: [], links: {} });
 });
 
 it("writes an agent's sub-task on one line, with its budget, branch and duties (spec §7.3)", () => {
@@ -432,6 +432,15 @@ describe("a mission whose workspace is not on screen (spec mission de nuit §6.1
     expect(await reassignTask("chef", "isis", "nouveau")).toEqual({ name: expect.any(String) });
     expect(addTerminal).toHaveBeenCalledWith("w1", expect.anything(), { x: 400, y: 250 }, "f1");
     expect(showNode).not.toHaveBeenCalled();
+  });
+
+  it("closes them too from the home screen: no canvas is mounted to do it, and they would run on (review)", async () => {
+    workspacesStore.setState({ activeId: "w1" });
+    canvasStore.setState({ api: null });
+    await setup({ state: "en_cours", project: "C:/code/proj", frameId: "f1", members: [member("n1", "Horus", false)] });
+    endMission("chef", "Fini.");
+    expect(closeGroup).not.toHaveBeenCalled();
+    expect(closeStoredGroup).toHaveBeenCalledWith("w1", "f1");
   });
 
   it("still stops the agents when the scene was never read", async () => {

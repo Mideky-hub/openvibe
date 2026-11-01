@@ -70,7 +70,7 @@ beforeEach(() => {
   for (const id of ["chef", "isis", "horus"]) terminalStatusStore.getState().set(id, { state: "running" });
   agentActivityStore.setState({ activities: {} });
   workspacesStore.setState({ activeId: "w1" });
-  canvasStore.setState({ frames: [], links: {} });
+  canvasStore.setState({ api: { getSceneElements: () => [], getSceneElementsIncludingDeleted: () => [] } as never, frames: [], links: {} });
 });
 
 describe("an agent that reports « done » (spec mission de nuit §4.3)", () => {

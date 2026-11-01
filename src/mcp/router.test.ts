@@ -42,6 +42,7 @@ const textOf = (result: unknown) => (result as { content: { text: string }[] }).
 beforeAll(async () => {
   mockIPC(() => undefined);
   workspacesStore.setState({ activeId: "w1" });
+  canvasStore.setState({ api: { getSceneElements: () => [], getSceneElementsIncludingDeleted: () => [] } as never });
   await nodesStore.getState().create("isis", {
     workspaceId: "w1",
     kind: "terminal",
