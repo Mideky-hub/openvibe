@@ -37,8 +37,22 @@ beforeEach(() => {
   sceneReady("w1");
   sceneGone("w1");
   vi.mocked(installAgent).mockClear();
-  workspacesStore.setState({ activeId: null });
+  workspacesStore.setState({ activeId: null, workspaces: [] });
   projectsStore.setState({ view: "home", projects: [], open });
+});
+
+it("goes to a canvas when the project reopens on its code workspace", async () => {
+  const workspace = (id: string, kind: "canvas" | "code") => ({ id, projectId: "a", name: id, position: 0, pantheon: null, kind });
+  workspacesStore.setState({ workspaces: [workspace("code", "code"), workspace("w1", "canvas")] });
+  projectsStore.setState({ projects: [project("a", 1)] });
+  open.mockImplementationOnce(async () => {
+    projectsStore.setState({ view: "project" });
+    workspacesStore.setState({ activeId: "code" });
+  });
+  await installFromHome("codex");
+  expect(workspacesStore.getState().activeId).toBe("w1");
+  sceneReady("w1");
+  expect(installAgent).toHaveBeenCalledWith("codex");
 });
 
 it("opens the last project and installs once its scene is on screen (spec installation §4.2)", async () => {
