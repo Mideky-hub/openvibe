@@ -9,7 +9,11 @@ import {
   groupOf,
   groupPantheons,
   insertIntoFrame,
+  MAX_SPECIALITY,
   nextGroupName,
+  withGroupFolded,
+  withGroupSpeciality,
+  hiddenNodeIds,
 } from "./groups";
 
 const element = (fields: Record<string, unknown>) =>
@@ -90,6 +94,21 @@ describe("group frame elements", () => {
     expect(groupInfoOf(created)).toEqual({ role: "backend", pantheon: "greek" });
   });
 
+  it("reads a group's speciality, tidied; without one the group is as before", () => {
+    const withSpeciality = (speciality: unknown) => groupInfoOf(frame("g", { customData: { openvibe: { kind: "group", role: "backend", pantheon: "greek", speciality } } }));
+    expect(withSpeciality("  API\n et  bases ")).toEqual({ role: "backend", pantheon: "greek", speciality: "API et bases" });
+    expect(withSpeciality("x".repeat(60))?.speciality).toHaveLength(MAX_SPECIALITY);
+    for (const none of ["", "   ", 12, null, undefined]) expect(withSpeciality(none)).toEqual({ role: "backend", pantheon: "greek" });
+  });
+
+  it("creates a frame with its speciality, and sets or clears it keeping the rest of its data", () => {
+    const created = createGroupFrame({ x: 0, y: 0, width: 1, height: 1 }, "Backend", { role: "backend", pantheon: "greek", speciality: "API" });
+    expect(groupInfoOf(created)?.speciality).toBe("API");
+    const data = { other: 1, openvibe: { kind: "group", role: "backend", pantheon: "greek", speciality: "API" } };
+    expect(withGroupSpeciality(data, " Tests ")).toEqual({ other: 1, openvibe: { kind: "group", role: "backend", pantheon: "greek", speciality: "Tests" } });
+    expect(withGroupSpeciality(data, "  ")).toEqual({ other: 1, openvibe: { kind: "group", role: "backend", pantheon: "greek" } });
+  });
+
   it("puts a new child right under its frame, which takes its grown size", () => {
     const scene = [{ id: "x" }, { id: "f", size: 1 }, { id: "y" }];
     expect(insertIntoFrame(scene, { id: "t" }, { id: "f", size: 2 })).toEqual([{ id: "x" }, { id: "t" }, { id: "f", size: 2 }, { id: "y" }]);
@@ -110,5 +129,27 @@ describe("groupBeingRenamed", () => {
   it("leaves plain frames and the idle editor to Excalidraw", () => {
     expect(groupBeingRenamed("plain", frames)).toBeNull();
     expect(groupBeingRenamed(null, frames)).toBeNull();
+  });
+});
+
+describe("a folded group (spec replier un groupe)", () => {
+  it("is read from the frame, and written without trace when unfolded", () => {
+    const data = (folded: unknown) => group("g", "backend", "greek", { customData: { openvibe: { kind: "group", role: "backend", pantheon: "greek", folded } } });
+    expect(groupInfoOf(data(true))?.folded).toBe(true);
+    expect(groupInfoOf(data("yes"))?.folded).toBeUndefined();
+    expect(groupInfoOf(group("g"))?.folded).toBeUndefined();
+    const folded = withGroupFolded(group("g").customData, true) as { openvibe: Record<string, unknown> };
+    expect(folded.openvibe.folded).toBe(true);
+    expect((withGroupFolded(folded, false) as { openvibe: Record<string, unknown> }).openvibe).not.toHaveProperty("folded");
+  });
+
+  it("tells the terminals hidden by folded groups", () => {
+    const scene = [
+      group("g1", "backend", "greek", { customData: { openvibe: { kind: "group", role: "backend", pantheon: "greek", folded: true } } }),
+      group("g2"),
+      terminal("a", "g1"),
+      terminal("b", "g2"),
+    ];
+    expect([...hiddenNodeIds(framesFromScene(scene))]).toEqual(["a"]);
   });
 });

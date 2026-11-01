@@ -22,6 +22,11 @@ describe("resumeOfferOf", () => {
 });
 
 describe("startsOnKeystroke", () => {
+  it("leaves a one-shot command to the Relancer button: a stray key must not run an installer again", () => {
+    expect(startsOnKeystroke({ state: "stopped" }, true)).toBe(false);
+    expect(startsOnKeystroke({ state: "exited", code: 0 }, true)).toBe(false);
+  });
+
   it("starts a terminal from the keyboard only when nothing runs in it", () => {
     expect(startsOnKeystroke({ state: "stopped" })).toBe(true);
     expect(startsOnKeystroke({ state: "exited", code: 1 })).toBe(true);

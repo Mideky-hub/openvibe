@@ -46,14 +46,26 @@ If you know Symvibe, OpenVibe covers the same ground (driving a fleet of CLI age
 
 - **Real terminals on a canvas.** Every agent is a real PTY (ConPTY on Windows) drawn with xterm.js. You can pan, zoom, draw around the agents and annotate their work. The canvas is [Excalidraw](https://github.com/excalidraw/excalidraw), so shapes, arrows, text and images all work.
 - **Teams.** Launch four agents at once, or compose a group with a role (Frontend, Backend, Testers, Reviewers…). Each group takes its names from a pantheon: Athéna, Hermès, Apollon…
+  - Give a group a **speciality** (one line, from its menu): a linked orchestrator reads it to hand each sub-task to the right group.
+  - **Fold** a group onto its label with the chevron: its terminals leave the screen, nothing stops, and the label keeps its counters. Going to one of its agents unfolds it; a group can't be folded while its agents are still starting.
+  - Save the team on screen as a **preset** (*Enregistrer l'équipe comme preset…* in the function palette) and deploy it in any project with *Déployer l'équipe*. A preset keeps the shape only: groups, roles, specialities, agents and links, never instructions or history.
 - **Live states.** OpenVibe shows whether each agent is starting, ready, running, waiting for you, stopped or done, both on the canvas and in the Agents panel. For Claude Code the state comes from its hooks; for other agents, from their output.
 - **One instruction box for everyone.** Address `@tous` (everyone), a group, an agent, or several at once (`@athena/hermes`). A line starting with `/` goes to the agents' CLI as a command, and OpenVibe suggests Claude Code's commands. The history keeps your last 50 instructions per project.
 - **An orchestrator that manages.** Give it a goal. It proposes a plan, gives each agent a sub-task on its own git branch and worktree, watches the time budget and merges the results into a mission branch. Details are [below](#the-orchestrator).
 - **Change review.** See what an agent changed, either uncommitted or since its base, browse the repository read-only, and click a line to leave a remark. All remarks go back to the agent in one message.
+- **Hear about questions.** When an agent waits for you, a notice stays at the bottom left of the window until it stops waiting, and a Windows notification appears if the window is not in focus (switch it off in the settings menu). A click takes you to the agent, and a palette command goes to the next one that waits.
 - **Remote Control.** Turn on Claude Code's Remote Control for one agent, a group or the whole team, and follow them from your phone.
 - **Usage at a glance.** The title bar shows your Claude subscription's session and weekly limits. Click it for cost, durations, tokens per model, prompt cache state and an estimate of CO₂.
+- **Tokens over 30 days.** From the usage detail, a chart of the tokens you used each day, and their share by agent and by model. OpenVibe reads the logs Claude Code already keeps on your disk, counters only, never the conversations; nothing is sent anywhere. Codex is not read yet.
+- **Code studio.** Fix a file by hand without leaving OpenVibe: open the studio from the right rail or the function palette, pick a file of the project, edit it with syntax colours in both themes and save with `Ctrl+S`. If an agent wrote the file meanwhile, the save is refused and you choose: reload, or overwrite what you saw.
+- **Notes.** Notes are Markdown files in `.openvibe/notes/` of the project, so an agent can read them without OpenVibe. Link them with `[[name]]`, search them, see their backlinks and their graph, and attach notes to a group. A read-only tool lets agents list and read them.
+- **Install an agent from the app.** For an agent that is not found, *Installer* shows the official command in full, then runs it in a visible terminal on the canvas that you can interrupt. Ollama models install the same way. Nothing is fetched or run in the background.
+- **Loops.** Send an instruction again and again, with brakes. A loop fires every N minutes, when an agent goes idle, or when its screen shows a text; it must end after a number of turns (up to 1000) or a duration (up to 24 hours), whichever comes first. It never writes to an agent that waits for you, is stopped or is starting. A pill at the bottom left counts the running loops and their turns, with *Tout arrêter* one click away, and every loop is off again after a restart. Three templates (progress report, relaunch, watch the tests) fill the form but start nothing.
+- **Several Claude accounts.** A profile is only a name and a folder (Claude Code's `CLAUDE_CONFIG_DIR`). *Comptes Claude…* in the function palette lists them: *Utiliser* makes one the account of the next Claude agents, *Se connecter* opens a visible terminal to sign in, *Retirer* forgets a profile and leaves its folder alone. A terminal keeps the account it started with, and shows it in its header. OpenVibe never reads, copies or stores a credential.
+- **A git window.** Click the branch chip at the bottom left: the files changed in the project, their diff, a tick per file to commit exactly those, the history, and a *Pousser* button that names its target (`Pousser 3 → origin/main`). Discarding a file asks first and says what is lost; this button is the only route to a push inside OpenVibe's own tools: it goes only when you click, and it never forces. An agent running commands in a terminal is limited only by its permissions.
+- **Overnight run.** Say how long you will be away: an orchestrator plans, a team works through a queue of tickets, and a morning report waits for you. See [Overnight run](#overnight-run), and read its warnings first.
 - **Icon libraries.** About 600 icons from the Excalidraw community (system design, AWS, Azure, GCP), bundled with the app, for sketching architecture next to the agents that build it.
-- **Projects and workspaces.** One project per folder, several workspace tabs per project. OpenVibe saves everything locally and, after a restart, offers to resume your Claude conversations.
+- **Projects and workspaces.** One project per folder, several workspace tabs per project; drag the tabs to reorder them (or `Alt+←` / `Alt+→` on a tab, or its menu), and the order is remembered. OpenVibe saves everything locally and, after a restart, offers to resume your Claude conversations.
 - **Keyboard first.** Use the palettes, jump between terminals, or right-press anywhere for the radial menu. Light and dark themes follow Windows.
 
 ## A tour
@@ -94,18 +106,28 @@ The orchestrator is a Claude Code session that acts as a team manager. Link one 
 2. **You launch the mission.** OpenVibe creates the mission branch `openvibe/<mission>`, plus a branch and a worktree for each agent next to your repository. It then gives every agent its sub-task.
 3. **The agents report.** Each Claude agent declares its steps, which appear as a timeline under its terminal, and reports back when done. Agents can hand parts of their work to their own sub-agents.
 4. **The orchestrator keeps time.** It is told when a sub-task reaches its budget. At twice the budget you get a notification and a red bar. Nobody is stopped automatically: the orchestrator can extend, interrupt or reassign.
-5. **It merges.** Finished branches are merged into the mission branch; a conflict aborts that merge and is reported. OpenVibe **never pushes** and **never merges into your own branch**.
+5. **It merges.** Finished branches are merged into the mission branch; a conflict aborts that merge and is reported. A mission's own steps **never push** and **never merge into your own branch**. The git window pushes only when you click *Pousser*, and an agent running commands in a terminal is limited only by its permissions.
 
 With the **model router**, each sub-task's level picks the model its agent runs on:
 
 | Level | Model |
 |---|---|
-| `faible` (low) | Claude Haiku 5.5 |
-| `moyen` (medium) | Claude Sonnet 5.5 |
-| `élevé` (high) | Claude Opus 5.5 |
-| `extrême` (extreme) | Claude Fable 5.1 |
+| `low` | Claude Haiku 5.5 |
+| `medium` | Claude Sonnet 5.5 |
+| `high` | Claude Opus 5.5 |
+| `extreme` | Claude Fable 5.1 |
 
 The orchestrator talks to OpenVibe through a local MCP server, with tools such as `propose_plan`, `team`, `read_output`, `extend`, `reassign`, `merge` and `remote_control`. It can read the repository, but it is denied `Edit`, `Write` and `NotebookEdit`: the agents write the code.
+
+### Overnight run
+
+Before you leave, open *Mission de nuit…* in the mission panel: how long you will be away, how many agents, and where the tickets come from (GitHub issues with a label, or `BACKLOG.md`). The orchestrator plans and the team works through a queue: when an agent reports done, its branch is merged into the mission branch and it takes the next task. When you are back, a morning report in the panel gives what is done, what failed, what to check by hand and the time spent. Kanban is not a source yet. The PC stays awake during the mission, but closing the lid or asking for sleep still puts it to sleep.
+
+Read this before you choose:
+
+- **By default the plan waits for your go-ahead and agents have *Fichiers*.** They edit files unasked and stop at their first command until you are back. That is the safer choice, and it limits what a night can do.
+- ***Fichiers et commandes* is an explicit choice.** Agents run any command unasked: the network and the accounts logged in on this PC are open to them. Use a repository you can afford to lose.
+- **The push block is not a security boundary.** `git push` and the `gh` commands that reach the remote are denied by rules on the command's text and by a git setting in the terminal. They stop accidents. An agent running commands can get past them: a review did with `-c remote.origin.pushurl` and `GIT_CONFIG_COUNT=0`.
 
 ## Supported agents
 
@@ -154,6 +176,8 @@ On first launch, the home screen walks you through installing an agent, adding a
 
 **Updates.** OpenVibe looks for a new release on GitHub 10 seconds after it starts, then every 6 hours, and offers to install it. Before the installer restarts it, OpenVibe saves your canvas and the terminals' history; Claude conversations can be resumed afterwards. Updates are signed: one whose signature does not match is refused. This check is the only request OpenVibe makes on its own. To turn it off, open the settings menu (the gear) and untick **Rechercher les mises à jour automatiquement**.
 
+OpenVibe runs once: launching it a second time brings the open window back (and restores it if it was minimized) instead of starting another copy, which would fight the first over the database and the log.
+
 ### Build from source
 
 **Prerequisites** (Windows 10/11):
@@ -188,7 +212,8 @@ The installer is written to `src-tauri/target/release/bundle/nsis/`. It installs
   - Each Claude Code session gets an extra `--settings` file. It declares hooks that report the session's state, a status line that reports usage, and an MCP server for the mission tools.
   - Every request needs a token drawn when the app starts, or a token for the session itself.
   - OpenVibe reads your own `~/.claude/settings.json` but never modifies it, and your own status line keeps showing in the terminals.
-- **Storage:** projects, canvases, terminal scrollback and settings live in a local SQLite database under `%APPDATA%\dev.openvibe.app\`.
+- **Storage:** projects, canvases, terminal scrollback and settings live in a local SQLite database under `%APPDATA%\dev.openvibe.app\`. Notes are plain files in the project's `.openvibe/notes/`; team presets are a setting of the database.
+- **Token counts:** read-only and bounded. OpenVibe scans the `.jsonl` logs under Claude Code's folder (`~/.claude/projects`, or `$CLAUDE_CONFIG_DIR`) for the last 30 days, keeps dates, models and counters, and drops the rest unread.
 
 See [SECURITY.md](SECURITY.md) for the security model in more detail.
 

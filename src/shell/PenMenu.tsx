@@ -6,7 +6,8 @@ import { useMessages } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/app/theme";
 import { displayColorFor, sceneColorFor } from "@/theme/sceneColors";
-import { PEN_COLORS, PEN_WIDTHS } from "./tools";
+import { PEN_COLORS } from "@/theme/penColors";
+import { PEN_WIDTHS } from "./tools";
 import { ToolButton } from "./buttons";
 import { shellMessages } from "./messages";
 
@@ -36,7 +37,14 @@ export function PenMenu({ active }: { active: boolean }) {
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (next) choose({});
+        if (!next) return;
+        // Opening picks the pen with the colour and width in force (shared with the shapes): it writes nothing.
+        const api = canvasStore.getState().api;
+        if (!api) return;
+        const app = api.getAppState();
+        setColor(app.currentItemStrokeColor);
+        setWidth(app.currentItemStrokeWidth);
+        api.setActiveTool({ type: "freedraw" });
       }}
     >
       <PopoverTrigger asChild>

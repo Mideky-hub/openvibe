@@ -59,3 +59,12 @@ describe("the agents panel's state (spec identité §5.6)", () => {
     expect(agentsPanelStore.getState().open).toBe(true);
   });
 });
+
+it("forgets a counter's filter when the panel is reopened from the rail", () => {
+  mockIPC(() => undefined);
+  showAgents("working");
+  expect(agentsPanelStore.getState().filter).toBe("working");
+  setAgentsPanel(false);
+  setAgentsPanel(true);
+  expect(agentsPanelStore.getState().filter).toBe("all");
+});

@@ -1,4 +1,5 @@
 import type { NormalizedZoomValue } from "@excalidraw/excalidraw/types";
+import { ZONE_OFFSETS } from "./canvasFocus";
 import { canvasStore } from "./canvasStore";
 import { zoomAroundCenter } from "./zoom";
 
@@ -6,7 +7,7 @@ import { zoomAroundCenter } from "./zoom";
 export function fitScene() {
   const api = canvasStore.getState().api;
   const elements = api?.getSceneElements() ?? [];
-  if (api && elements.length > 0) api.scrollToContent(elements, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true });
+  if (api && elements.length > 0) api.scrollToContent(elements, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true, canvasOffsets: ZONE_OFFSETS });
 }
 
 /** The zoom control's steps and « Zoom 100 % »: `next`, around the view's center. */

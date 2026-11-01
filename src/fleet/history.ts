@@ -28,6 +28,8 @@ export function browseHistory(entries: readonly string[], index: number | null, 
 interface HistoryState {
   projectId: string | null;
   entries: string[];
+  /** The saved commands were read: until then a send is kept in memory only. */
+  loaded: boolean;
   load: (projectId: string) => Promise<void>;
   add: (text: string) => void;
 }
@@ -35,18 +37,33 @@ interface HistoryState {
 export const historyStore = createStore<HistoryState>()((set, get) => ({
   projectId: null,
   entries: [],
+  loaded: false,
   load: async (projectId) => {
     if (get().projectId === projectId) return;
-    set({ projectId, entries: [] });
-    const saved = await getSetting<unknown>(historyKey(projectId)).catch(() => null);
-    if (get().projectId !== projectId || !Array.isArray(saved)) return;
-    set({ entries: saved.filter((entry): entry is string => typeof entry === "string").slice(-HISTORY_SIZE) });
+    set({ projectId, entries: [], loaded: false });
+    let saved: unknown;
+    try {
+      saved = await getSetting<unknown>(historyKey(projectId));
+    } catch (error) {
+      // Left unloaded: this session's commands stay in memory, nothing is saved over the unread list.
+      console.warn("command history not read", error);
+      return;
+    }
+    if (get().projectId !== projectId) return;
+    const before = saved === null || !Array.isArray(saved) ? [] : saved.filter((entry): entry is string => typeof entry === "string");
+    // Commands sent while the history was being read go after the saved ones, and are saved with them.
+    const sent = get().entries;
+    const merged = sent.reduce(pushHistory, before.slice(-HISTORY_SIZE));
+    set({ entries: merged, loaded: true });
+    if (sent.length > 0) {
+      setSetting(historyKey(projectId), merged).catch((error: unknown) => console.warn("command history not saved", error));
+    }
   },
   add: (text) => {
-    const { projectId, entries } = get();
+    const { projectId, entries, loaded } = get();
     const next = pushHistory(entries, text);
     set({ entries: next });
-    if (projectId) {
+    if (projectId && loaded) {
       setSetting(historyKey(projectId), next).catch((error: unknown) => console.warn("command history not saved", error));
     }
   },

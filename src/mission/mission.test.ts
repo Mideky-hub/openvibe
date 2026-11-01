@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { langStore } from "@/i18n";
-import { budgetBar, budgetOf, clockText, memberTime, NEW_MISSION, oneLine, overruns, proposedPlan, readMission, remainingGlobal, sameName, spentMin, type Member, type Mission } from "./mission";
+import { budgetBar, budgetOf, clockText, memberTime, NEW_MISSION, oneLine, overruns, proposedPlan, proposedTasks, readMission, remainingGlobal, sameName, spentMin, windingDown, type Member, type Mission } from "./mission";
 
 const task = (agent: string, budget = 20) => ({ titre: "Login", consigne: "Fais le login", agent, budget_min: budget });
 const args = (...sous_taches: object[]) => ({ nom: "Auth", tache: "Ajoute l'authentification", sous_taches });
@@ -22,11 +22,113 @@ describe("proposedPlan (spec orchestrateur §7.2)", () => {
     const budgeted: Mission = { ...NEW_MISSION, budgetMin: 30, maxAgents: 2 };
     expect(proposedPlan(args(task("Zeus")), NEW_MISSION, ["Athéna"])).toContain("Zeus");
     expect(proposedPlan(args(task("Athéna"), task("Athéna")), NEW_MISSION, ["Athéna"])).toContain("une sous-tâche par agent");
-    expect(proposedPlan(args(task("nouveau", 20), task("nouveau", 20)), budgeted, [])).toContain("budget global");
+    // Real time: two agents in parallel share it, one sub-task alone must fit (spec mission de nuit §3).
+    expect(proposedPlan(args({ ...task("nouveau", 30), titre: "A" }, { ...task("nouveau", 30), titre: "B" }), budgeted, [])).toMatchObject({ name: "Auth" });
+    expect(proposedPlan(args(task("nouveau", 31)), budgeted, [])).toBe("Sous-tâche 1 : 31 min ne tiennent pas dans le budget global (30 min de temps réel).");
     expect(proposedPlan(args(task("nouveau"), task("nouveau"), task("nouveau")), budgeted, [])).toContain("2 sous-tâches");
     expect(proposedPlan(args(task("nouveau", 0)), NEW_MISSION, [])).toContain("budget");
     expect(proposedPlan({ tache: "x", sous_taches: [task("nouveau")] }, NEW_MISSION, [])).toContain("nom");
     expect(proposedPlan(args(), NEW_MISSION, [])).toContain("au moins une");
+  });
+});
+
+describe("a new agent's group (spec groupes spécialisés §3)", () => {
+  const groups = [{ id: "f1", name: "Interface" }];
+
+  it("puts it in a linked group, named as the orchestrator reads it", () => {
+    const result = proposedPlan(args({ ...task("nouveau"), groupe: "interface" }), NEW_MISSION, [], groups);
+    expect(typeof result === "string" ? result : result.plan[0].group).toEqual({ id: "f1", name: "Interface" });
+  });
+
+  it("keeps the mission's group without one", () => {
+    const result = proposedPlan(args(task("nouveau")), NEW_MISSION, [], groups);
+    expect(typeof result === "string" ? result : Object.keys(result.plan[0])).not.toContain("group");
+  });
+
+  it("refuses an unknown group, and a group for a named agent", () => {
+    expect(proposedPlan(args({ ...task("nouveau"), groupe: "Zeus" }), NEW_MISSION, [], groups)).toBe("Sous-tâche 1 : « Zeus » n'est pas un groupe relié.");
+    expect(proposedPlan(args({ ...task("Athéna"), groupe: "Interface" }), NEW_MISSION, ["Athéna"], groups)).toBe("Sous-tâche 1 : group ne s'emploie qu'avec agent « new ».");
+  });
+
+  it("refuses them in English too", () => {
+    langStore.setState({ lang: "en" });
+    try {
+      expect(proposedPlan(args({ ...task("nouveau"), groupe: "Zeus" }), NEW_MISSION, [], groups)).toBe('Sub-task 1: "Zeus" is not a linked group.');
+      expect(proposedPlan(args({ ...task("Athéna"), groupe: "Interface" }), NEW_MISSION, ["Athéna"], groups)).toBe('Sub-task 1: group only goes with agent "new".');
+    } finally {
+      langStore.setState({ lang: "fr" });
+    }
+  });
+
+  it("is saved with the plan and on the member", () => {
+    const saved = readMission({
+      state: "en_cours",
+      plan: [{ title: "A", brief: "B", agent: "nouveau", budgetMin: 1, group: { id: "f1", name: "Interface" } }, { title: "C", brief: "D", agent: "nouveau", budgetMin: 1, group: { id: 3 } }],
+      members: [{ nodeId: "n", name: "Isis", task: "A", budgetMin: 1, linked: false, branch: "b", worktree: "w", group: "f1" }],
+    });
+    expect(saved?.plan?.map((s) => s.group)).toEqual([{ id: "f1", name: "Interface" }, undefined]);
+    expect(saved?.members[0].group).toBe("f1");
+  });
+});
+
+describe("tasks for the queue (spec mission de nuit §4.2)", () => {
+  const item = (titre: string, extra: object = {}) => ({ titre, consigne: "Fais-le", budget_min: 20, ...extra });
+  const added = (...tasks: unknown[]) => ({ tasks });
+
+  it("reads them in order, with their level and group", () => {
+    const groups = [{ id: "g1", name: "Interface" }];
+    expect(proposedTasks(added(item("A"), item("B", { niveau: "eleve", groupe: "interface" })), NEW_MISSION, groups)).toEqual([
+      { title: "A", brief: "Fais-le", budgetMin: 20 },
+      { title: "B", brief: "Fais-le", budgetMin: 20, level: "eleve", group: { id: "g1", name: "Interface" } },
+    ]);
+  });
+
+  it("checks them like a plan", () => {
+    expect(proposedTasks(added(), NEW_MISSION, [])).toBe("Donne au moins une sous-tâche.");
+    expect(proposedTasks(added(item("")), NEW_MISSION, [])).toContain("titre court");
+    expect(proposedTasks(added(item("A", { consigne: "" })), NEW_MISSION, [])).toContain("brief");
+    expect(proposedTasks(added(item("A", { budget_min: 0 })), NEW_MISSION, [])).toContain("budget");
+    expect(proposedTasks(added(item("A", { budget_min: 31 })), { ...NEW_MISSION, budgetMin: 30 }, [])).toContain("budget global");
+    expect(proposedTasks(added(item("A", { niveau: "énorme" })), NEW_MISSION, [])).toContain("niveau");
+    expect(proposedTasks(added(item("A")), { ...NEW_MISSION, router: true }, [])).toContain("routeur");
+    expect(proposedTasks(added(item("A", { groupe: "Zeus" })), NEW_MISSION, [])).toContain("Zeus");
+  });
+
+  it("keeps titles unique: reassign and team name a task by its title", () => {
+    const mission = { ...NEW_MISSION, plan: [{ title: "Login", brief: "b", agent: "Isis", budgetMin: 5 }], queue: [{ title: "API", brief: "b", budgetMin: 5 }], members: [] };
+    expect(proposedTasks(added(item("login")), mission, [])).toBe("Sous-tâche 1 : le titre « login » est déjà pris ; un titre par tâche.");
+    expect(proposedTasks(added(item("api")), mission, [])).toContain("déjà pris");
+    expect(proposedTasks(added(item("Docs"), item("docs")), mission, [])).toContain("Sous-tâche 2");
+    expect(proposedPlan(args(task("nouveau")), { ...mission, plan: undefined, queue: [{ title: "Login", brief: "b", budgetMin: 5 }] }, [])).toContain("déjà pris");
+  });
+
+  it("holds 100 tasks at most", () => {
+    const queue = Array.from({ length: 99 }, (_, i) => ({ title: `T${i}`, brief: "b", budgetMin: 5 }));
+    expect(proposedTasks(added(item("A")), { ...NEW_MISSION, queue }, [])).toHaveLength(1);
+    expect(proposedTasks(added(item("A"), item("B")), { ...NEW_MISSION, queue }, [])).toBe("La file tient 100 tâches au plus.");
+  });
+
+  it("says what is wrong in English", () => {
+    langStore.setState({ lang: "en" });
+    try {
+      const mission = { ...NEW_MISSION, queue: [{ title: "API", brief: "b", budgetMin: 5 }] };
+      expect(proposedTasks(added(item("api")), mission, [])).toBe('Sub-task 1: the title "api" is taken; one title per task.');
+      expect(proposedTasks({ tasks: Array.from({ length: 101 }, (_, i) => item(`T${i}`)) }, NEW_MISSION, [])).toBe("The queue holds 100 tasks at most.");
+    } finally {
+      langStore.setState({ lang: "fr" });
+    }
+  });
+
+  it("is saved with the mission, what an agent finished too", () => {
+    const past = { task: "Login", status: "termine", summary: "ok", merged: true, spentMin: 3, budgetMin: 5, branch: "b" };
+    const saved = readMission({
+      state: "en_cours",
+      queue: [{ title: "A", brief: "B", budgetMin: 1, level: "faible", group: { id: "g", name: "G" } }, { title: 3 }],
+      members: [{ nodeId: "n", name: "Isis", task: "A", budgetMin: 1, linked: false, branch: "b", worktree: "w", past: [past, { task: "x" }] }],
+    });
+    expect(saved?.queue).toEqual([{ title: "A", brief: "B", budgetMin: 1, level: "faible", group: { id: "g", name: "G" } }]);
+    expect(saved?.members[0].past).toEqual([past]);
+    expect(readMission({ state: "plan" })).not.toHaveProperty("queue");
   });
 });
 
@@ -123,12 +225,31 @@ describe("the time of a mission (spec orchestrateur §8)", () => {
     expect(overruns({ ...mission, state: "terminee" }, 31 * min)).toEqual({ members: [], global: false });
   });
 
-  it("knows what is left of the global budget, without the handed-over sub-tasks", () => {
-    expect(remainingGlobal(running([member(), member({ nodeId: "n2", extraMin: 5 }), member({ nodeId: "n3", handedTo: "Isis" })], { budgetMin: 30 }))).toBe(5);
-    expect(remainingGlobal(running([member()]))).toBeUndefined();
-    // A member who reported only took what it spent (final review H3).
-    const early = member({ report: { summary: "ok", status: "termine", at: 5 * min } });
-    expect(remainingGlobal(running([early, member({ nodeId: "n2" }), member({ nodeId: "n3" })], { budgetMin: 60 }))).toBe(35);
+  it("counts the global budget in real time from the go-ahead, whatever the number of agents (spec mission de nuit §3)", () => {
+    const team = [member(), member({ nodeId: "n2", extraMin: 5 }), member({ nodeId: "n3", handedTo: "Isis" })];
+    expect(remainingGlobal(running(team, { budgetMin: 30, startedAt: 0 }), 12 * min)).toBe(18);
+    expect(remainingGlobal(running(team), 12 * min)).toBeUndefined();
+    expect(remainingGlobal(running(team, { budgetMin: 30 }), 12 * min)).toBe(30);
+    expect(remainingGlobal(running(team, { budgetMin: 30, startedAt: 0 }), 40 * min)).toBe(0);
+    expect(remainingGlobal(running(team, { state: "terminee", budgetMin: 30, startedAt: 0, endedAt: 10 * min }), 25 * min)).toBe(20);
+  });
+
+  it("winds an overnight mission down near its end, at 10 % or 10 min, and half of a short one", () => {
+    const night = (budgetMin: number) => running([member()], { overnight: true, budgetMin, startedAt: 0 });
+    expect(windingDown(night(480), 431 * min)).toBe(false);
+    expect(windingDown(night(480), 432 * min)).toBe(true);
+    expect(windingDown(night(60), 49 * min)).toBe(false);
+    expect(windingDown(night(60), 50 * min)).toBe(true);
+    expect(windingDown(night(15), 7 * min)).toBe(false);
+    expect(windingDown(night(15), 8 * min)).toBe(true);
+    expect(windingDown(running([member()], { budgetMin: 60, startedAt: 0 }), 59 * min)).toBe(false);
+  });
+
+  it("keeps the overnight marks of a saved mission", () => {
+    expect(readMission({ state: "en_cours", overnight: true, windDownTold: true, autoLaunch: true, tickets: { kind: "github", label: "nuit" } })).toMatchObject({ overnight: true, windDownTold: true, autoLaunch: true, tickets: { kind: "github", label: "nuit" } });
+    expect(readMission({ state: "plan", tickets: { kind: "backlog" } })?.tickets).toEqual({ kind: "backlog" });
+    expect(readMission({ state: "plan", tickets: { kind: "kanban" } })).not.toHaveProperty("tickets");
+    expect(readMission({ state: "en_cours" })).not.toHaveProperty("overnight");
   });
 
   it("colours a budget's bar: green, orange past 80 %, red past 100 %", () => {

@@ -16,7 +16,7 @@ use crate::agents::mcp::{Pending, Tokens};
 use crate::agents::subagents::SubagentCounts;
 use crate::agents::{claude_settings, mcp_files, prompts};
 use crate::error::AppResult;
-use crate::pty::shell::{Agent, AgentHooks, Role};
+use crate::pty::shell::{Agent, AgentHooks, Permission, Role};
 use crate::sync::lock;
 
 /// Quiet terminals are checked this often (the 1.5 s rule).
@@ -67,6 +67,8 @@ pub struct ActivityEvent {
     node_id: String,
     activity: Activity,
     since: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -74,6 +76,8 @@ pub struct ActivityEvent {
 pub struct ActivitySnapshot {
     hooks_available: bool,
     activities: Vec<ActivityEvent>,
+    /// The sessions running subagents, for a page that reloads.
+    subagents: Vec<SubagentsEvent>,
 }
 
 /// Wall-clock milliseconds of `at`, given `now` and the wall clock at `now`:
@@ -94,6 +98,7 @@ fn event(change: &Change) -> ActivityEvent {
         node_id: change.node_id.clone(),
         activity: change.activity,
         since: epoch_ms(change.since, Instant::now(), wall_ms()),
+        message: change.message.clone(),
     }
 }
 
@@ -222,7 +227,13 @@ fn on_hook(app: &AppHandle, hit: HookHit) {
     let change = if hit.session_ended {
         tracker.session_end(&hit.node_id, Instant::now())
     } else {
-        tracker.hook(&hit.node_id, hit.source, hit.activity, Instant::now())
+        tracker.hook(
+            &hit.node_id,
+            hit.source,
+            hit.activity,
+            Instant::now(),
+            hit.message,
+        )
     };
     drop(tracker);
     if hit.session_ended {
@@ -262,7 +273,9 @@ pub fn hooks_for(
     node_id: &str,
     agent: Agent,
     role: Role,
+    permission: Option<Permission>,
     cwd: &std::path::Path,
+    config_dir: Option<&std::path::Path>,
 ) -> AgentHooks {
     let state = app.state::<AgentState>();
     let Some(server) = &state.hooks else {
@@ -282,7 +295,7 @@ pub fn hooks_for(
                     config,
                     user: claude_settings::status_line_for(
                         cwd,
-                        claude_settings::user_settings_file().as_deref(),
+                        claude_settings::settings_file_in(config_dir).as_deref(),
                     ),
                 });
             let settings = claude_settings::write(
@@ -291,6 +304,7 @@ pub fn hooks_for(
                 &urls.settings,
                 role,
                 status.as_ref(),
+                permission,
             );
             let Ok(settings) =
                 settings.inspect_err(|err| log::error!("hooks of {node_id} not written: {err}"))
@@ -365,9 +379,15 @@ pub async fn mcp_reply(state: State<'_, AgentState>, call_id: u64, result: Value
 #[tauri::command]
 pub async fn agent_activity_snapshot(state: State<'_, AgentState>) -> AppResult<ActivitySnapshot> {
     let activities = lock(&state.tracker).snapshot().iter().map(event).collect();
+    let subagents = lock(&state.subagents)
+        .running()
+        .into_iter()
+        .map(|(node_id, running)| SubagentsEvent { node_id, running })
+        .collect();
     Ok(ActivitySnapshot {
         hooks_available: state.hooks.is_some(),
         activities,
+        subagents,
     })
 }
 

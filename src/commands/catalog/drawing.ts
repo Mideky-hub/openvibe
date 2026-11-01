@@ -53,11 +53,11 @@ function selectedIds(): string[] {
   return Object.keys(selection).filter((id) => selection[id]);
 }
 
-/** Every selected element is locked: « Déverrouiller », as Excalidraw's own menu says. */
+/** Some selected element is locked: Excalidraw's lock then unlocks the whole selection, a mixed one included. */
 export function selectionLocked(): boolean {
   const ids = new Set(selectedIds());
   const selected = canvasStore.getState().api?.getSceneElements().filter((e) => ids.has(e.id)) ?? [];
-  return selected.length > 0 && selected.every((e) => e.locked);
+  return selected.some((e) => e.locked);
 }
 
 const withSelection = (ctx: CommandContext) => inProject(ctx) && selectedIds().length > 0;

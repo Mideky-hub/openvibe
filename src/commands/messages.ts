@@ -13,6 +13,13 @@ export const commandsMessages = defineMessages(
       recent: "Récentes",
     },
     failed: (label: string, error: string) => `${label} impossible : ${error}`,
+    // Same words as the buttons' own toasts.
+    failedLike: {
+      "terminal.duplicate": (error: string) => `Duplication impossible : ${error}`,
+      "workspace.new": (error: string) => `Création impossible : ${error}`,
+      "workspace.delete": (error: string) => `Suppression impossible : ${error}`,
+      "group.orchestrate": (error: string) => `Orchestrateur impossible : ${error}`,
+    } as Record<string, ((error: string) => string) | undefined>,
     goTo: {
       sections: { terminal: "Terminaux", group: "Groupes", orchestrator: "Orchestrateurs", workspace: "Workspaces", project: "Projets" },
       keywords: { group: "groupe", orchestrator: "orchestrateur", workspace: "workspace", tab: "onglet" },
@@ -36,6 +43,12 @@ export const commandsMessages = defineMessages(
       recent: "Recent",
     },
     failed: (label: string, error: string) => `${label} failed: ${error}`,
+    failedLike: {
+      "terminal.duplicate": (error: string) => `Could not duplicate: ${error}`,
+      "workspace.new": (error: string) => `Could not create: ${error}`,
+      "workspace.delete": (error: string) => `Could not delete: ${error}`,
+      "group.orchestrate": (error: string) => `Could not create the orchestrator: ${error}`,
+    } as Record<string, ((error: string) => string) | undefined>,
     goTo: {
       sections: { terminal: "Terminals", group: "Groups", orchestrator: "Orchestrators", workspace: "Workspaces", project: "Projects" },
       keywords: { group: "group", orchestrator: "orchestrator", workspace: "workspace", tab: "tab" },

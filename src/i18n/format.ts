@@ -20,10 +20,13 @@ export function keyLabel(keys: string, lang: Lang = current()): string {
     .join("+");
 }
 
-/** « 03:50 » today, « lun. 08:00 » / "Mon 08:00" another day, in 24-hour time. */
+/** « 03:50 » today, « lun. 08:00 » / "Mon 08:00" another day within a week, « 9 nov. 08:00 » beyond, in 24-hour time. */
 export function formatClock(ms: number, now: number, lang: Lang = current()): string {
   const locale = lang === "fr" ? "fr-FR" : "en-GB";
   const date = new Date(ms);
   const time = date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
-  return date.toDateString() === new Date(now).toDateString() ? time : `${date.toLocaleDateString(locale, { weekday: "short" })} ${time}`;
+  if (date.toDateString() === new Date(now).toDateString()) return time;
+  // Past six days the weekday would be taken for the coming one: the date says which.
+  const far = Math.abs(ms - now) > 6 * 24 * 3_600_000;
+  return `${date.toLocaleDateString(locale, far ? { day: "numeric", month: "short" } : { weekday: "short" })} ${time}`;
 }

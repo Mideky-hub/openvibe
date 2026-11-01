@@ -2,6 +2,7 @@ import { langStore, messages } from "@/i18n";
 import { declaredSteps, markedSteps, MAX_STEPS } from "@/nodes/steps";
 import { notify } from "@/mission/events";
 import { oneLine } from "@/mission/mission";
+import { afterReport } from "@/mission/queue";
 import { isOrchestratorClosed, memberOf, updateMember } from "@/mission/store";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
@@ -46,7 +47,7 @@ export function agentTools() {
       description: d.report,
       inputSchema: {
         type: "object",
-        properties: { summary: { type: "string" }, status: { type: "string", enum: ["done", "blocked", "failed"] } },
+        properties: { summary: { type: "string" }, status: { type: "string", enum: ["done", "blocked", "failed"] }, check: { type: "string", description: d.reportCheck } },
         required: ["summary", "status"],
       },
     },
@@ -63,6 +64,9 @@ export function declareSteps(nodeId: string, args: Record<string, unknown>): Too
   return said(t().agent.declared(steps.length));
 }
 
+/** The internal identifiers, said with their accents. */
+const FRENCH_STEP: Record<string, string> = { a_venir: "à venir", en_cours: "en cours", fait: "fait", echec: "échec" };
+
 export function markStep(nodeId: string, args: Record<string, unknown>): ToolResult {
   const current = terminalOf(nodesStore.getState().nodes[nodeId])?.steps ?? [];
   const steps = markedSteps(current, args.titre, args.etat);
@@ -70,7 +74,7 @@ export function markStep(nodeId: string, args: Record<string, unknown>): ToolRes
   nodesStore.getState().update(nodeId, { steps });
   const step = steps.find((s) => s.title.toLowerCase() === String(args.titre).trim().toLowerCase())!;
   // French reads « en cours », English the protocol's "in_progress".
-  const state = langStore.getState().lang === "fr" ? step.state.replace("_", " ") : outStep(step.state);
+  const state = langStore.getState().lang === "fr" ? FRENCH_STEP[step.state] : outStep(step.state);
   return said(t().agent.marked(step.title, state));
 }
 
@@ -83,9 +87,12 @@ export function report(nodeId: string, args: Record<string, unknown>): ToolResul
   if (!summary) return refused(t().agent.summarize);
   if (status !== "termine" && status !== "bloque" && status !== "echec") return refused(t().agent.unknownStatus(String(status)));
   // `merge` merges every « done » branch again: a merged one stays so until then (final review H2).
-  updateMember(found.orchestratorId, nodeId, { report: { summary, status, at: Date.now() } });
+  const check = typeof args.check === "string" ? oneLine(args.check) : "";
+  updateMember(found.orchestratorId, nodeId, { report: { summary, status, at: Date.now(), ...(check ? { check } : {}) } });
   // Queued even when nobody listens: a relaunched or restored orchestrator hears it then (final review R3).
   notify(found.orchestratorId, t().agent.reported(found.member.name, outReport(status), oneLine(summary)));
+  // The queue moves on without it: a stopped orchestrator must not stall the night.
+  void afterReport(found.orchestratorId, nodeId);
   if (isOrchestratorClosed(found.orchestratorId) || !isRunning(found.orchestratorId)) return said(t().agent.unheard);
   return said(t().agent.sent);
 }

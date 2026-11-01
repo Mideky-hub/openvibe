@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { focusTerminal } from "@/nodes/terminal/registry";
 import { arrivalStore } from "./arrivalSignal";
-import { arrivalView, arrive, needsMove, showNode } from "./arrive";
+import { arrivalView, arrive, FOCUS_FRAMES, arrivingNode, needsMove, revealNode, showNode } from "./arrive";
 import { canvasStore } from "./canvasStore";
 
 vi.mock("@/nodes/terminal/registry", () => ({ focusTerminal: vi.fn() }));
@@ -69,6 +69,32 @@ describe("arrive", () => {
     expect(arrivalStore.getState()).toEqual({ nodeId: "isis", seq: before + 1 });
   });
 
+  describe("under the waiting notice (spec notification §4)", () => {
+    const notice = (rect: Partial<DOMRect>) => {
+      const element = document.createElement("section");
+      element.setAttribute("data-waiting-notice", "");
+      element.getBoundingClientRect = () => rect as DOMRect;
+      document.body.append(element);
+      return element;
+    };
+
+    it("centers a terminal the notice would cover: the question is at its bottom", () => {
+      const element = notice({ left: 70, right: 330, top: 500, bottom: 640 });
+      withScene(at100);
+      arrive("isis");
+      expect(updateScene.mock.calls[0][0].appState.scrollX).toBe((1400 - 720) / 2 - 100);
+      element.remove();
+    });
+
+    it("keeps the view when the notice is clear of the terminal", () => {
+      const element = notice({ left: 70, right: 330, top: 700, bottom: 840 });
+      withScene(at100);
+      arrive("isis");
+      expect(updateScene.mock.calls[0][0].appState).not.toHaveProperty("scrollX");
+      element.remove();
+    });
+  });
+
   it("moves the view first when needed, then focuses xterm on the next frame, after the view moved", () => {
     withScene({ ...at100, zoom: 0.5 });
     arrive("isis");
@@ -80,14 +106,17 @@ describe("arrive", () => {
     expect(focusTerminal).toHaveBeenCalledWith("isis");
   });
 
-  it("keeps trying to give the keyboard for a few frames: a node shown late still gets it", () => {
+  it("keeps trying to give the keyboard for a while: a terminal mounted late, after a workspace switch, still gets it", () => {
     withScene(at100);
     expect(arrive("isis")).toBe(true);
     for (let i = 0; i < 3; i++) frames.shift()!(0);
     expect(vi.mocked(focusTerminal).mock.calls.length).toBe(3);
+    // About a second on, the terminal is finally mounted.
+    for (let i = 0; i < 40; i++) frames.shift()!(0);
+    expect(frames.length).toBeGreaterThan(0);
     // Then it stops trying.
     while (frames.length > 0) frames.shift()!(0);
-    expect(vi.mocked(focusTerminal).mock.calls.length).toBe(10);
+    expect(vi.mocked(focusTerminal).mock.calls.length).toBe(FOCUS_FRAMES);
   });
 
   it("stops trying once the terminal has the keyboard", () => {
@@ -108,6 +137,18 @@ describe("arrive", () => {
     frames.shift()!(0);
     expect(focusTerminal).toHaveBeenCalledWith("chef");
     expect(arrivalStore.getState()).toEqual(before);
+  });
+
+  it("lets only the latest arrival keep trying, and names the one still arriving", () => {
+    withScene(at100);
+    arrive("isis");
+    arrive("chef");
+    expect(arrivingNode()).toBe("chef");
+    while (frames.length > 0) frames.shift()!(0);
+    // The first loop stopped at its first frame; the second ran its ten.
+    expect(vi.mocked(focusTerminal).mock.calls.filter(([id]) => id === "isis")).toHaveLength(0);
+    expect(vi.mocked(focusTerminal).mock.calls.filter(([id]) => id === "chef")).toHaveLength(FOCUS_FRAMES);
+    expect(arrivingNode()).toBeNull();
   });
 
   it("does nothing for a terminal that is not on the canvas", () => {
@@ -142,5 +183,55 @@ describe("showNode", () => {
     showNode("isis");
     expect(updateScene).not.toHaveBeenCalled();
     expect(showNode("closed")).toBe(false);
+  });
+});
+
+describe("revealNode (plan B1)", () => {
+  const scrollToContent = vi.fn();
+  const withScene = (appState: Record<string, unknown>) =>
+    canvasStore.setState({
+      api: {
+        getSceneElements: () => [isis],
+        getAppState: () => ({ ...appState, zoom: { value: appState.zoom } }),
+        scrollToContent,
+      } as unknown as ExcalidrawImperativeAPI,
+    });
+  beforeEach(() => scrollToContent.mockClear());
+
+  it("scrolls to a node that is off screen, keeping the zoom: Excalidraw mounts nothing it does not show", () => {
+    withScene({ ...at100, scrollX: -5000 });
+    expect(revealNode("isis")).toBe(true);
+    expect(scrollToContent).toHaveBeenCalledWith(isis, { animate: true, canvasOffsets: { top: 72, bottom: 60 } });
+  });
+
+  it("leaves the view alone when the node is in sight, even zoomed out", () => {
+    withScene({ ...at100, zoom: 0.5 });
+    expect(revealNode("isis")).toBe(true);
+    expect(scrollToContent).not.toHaveBeenCalled();
+  });
+
+  it("does nothing for a node that is gone", () => {
+    withScene(at100);
+    expect(revealNode("nope")).toBe(false);
+  });
+});
+
+describe("arriving at a terminal of a folded group (spec replier un groupe §2)", () => {
+  it("unfolds the group first, then arrives", async () => {
+    const setGroupFolded = vi.fn();
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    vi.doMock("@/fleet/groups", () => ({ setGroupFolded }));
+    const updateScene = vi.fn();
+    canvasStore.setState({
+      frames: [{ id: "g", name: "G", x: 0, y: 0, width: 1, height: 1, group: { role: "general", pantheon: "greek", folded: true }, memberIds: ["isis"] }] as never,
+      api: {
+        getSceneElements: () => [isis],
+        getAppState: () => ({ scrollX: 0, scrollY: 0, zoom: { value: 1 }, ...viewport }),
+        updateScene,
+      } as unknown as ExcalidrawImperativeAPI,
+    });
+    expect(arrive("isis")).toBe(true);
+    await vi.waitFor(() => expect(setGroupFolded).toHaveBeenCalledWith("g", false));
+    canvasStore.setState({ frames: [] });
   });
 });

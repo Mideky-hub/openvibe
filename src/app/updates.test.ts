@@ -1,12 +1,14 @@
+// @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { check } from "@tauri-apps/plugin-updater";
 import { toast } from "sonner";
 import { call } from "@/ipc/invoke";
 import { flushAll } from "@/lib/flush";
-import { checkForUpdate, FIRST_CHECK_MS, installUpdate, startUpdateChecks, updatesStore } from "./updates";
+import { guardQuit } from "@/studio/studioStore";
+import { checkForUpdate, CHECK_TIMEOUT_MS, FIRST_CHECK_MS, installUpdate, startUpdateChecks, updatesStore } from "./updates";
 
 vi.mock("@tauri-apps/plugin-updater", () => ({ check: vi.fn() }));
-vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
+vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), warning: vi.fn() }) }));
 vi.mock("@/ipc/invoke", () => ({ call: vi.fn(() => Promise.resolve()) }));
 vi.mock("@/lib/flush", () => ({ flushAll: vi.fn(() => Promise.resolve()), onFlushAll: vi.fn() }));
 
@@ -21,6 +23,7 @@ function fakeUpdate(version = "1.0.0-beta.2") {
       onEvent({ event: "Progress", data: { chunkLength: 50 } });
       onEvent({ event: "Finished" });
     }),
+    close: vi.fn(async () => undefined),
     install: vi.fn(async () => {
       steps.push("install");
     }),
@@ -82,4 +85,77 @@ it("checks 10 s after the start, only when automatic checks are on", async () =>
   await vi.advanceTimersByTimeAsync(FIRST_CHECK_MS + 1);
   expect(check).toHaveBeenCalledTimes(1);
   stopAgain();
+});
+
+it("does not close an open update dialog on an automatic check", async () => {
+  updatesStore.setState({ dialogOpen: true });
+  vi.mocked(check).mockResolvedValue(fakeUpdate() as never);
+  await checkForUpdate();
+  expect(updatesStore.getState().dialogOpen).toBe(true);
+});
+
+it("gives the request a timeout", async () => {
+  vi.mocked(check).mockResolvedValue(null);
+  await checkForUpdate();
+  expect(check).toHaveBeenCalledWith({ timeout: CHECK_TIMEOUT_MS });
+});
+
+it("closes the previous Update when a new one is found", async () => {
+  const first = fakeUpdate("1.0.0-beta.2");
+  vi.mocked(check).mockResolvedValueOnce(first as never).mockResolvedValueOnce(fakeUpdate("1.0.0-beta.3") as never);
+  await checkForUpdate();
+  await checkForUpdate();
+  expect(first.close).toHaveBeenCalledTimes(1);
+});
+
+it("blurs a field being edited before installing", async () => {
+  vi.mocked(check).mockResolvedValue(fakeUpdate() as never);
+  await checkForUpdate();
+  const input = document.createElement("input");
+  document.body.append(input);
+  input.focus();
+  await installUpdate();
+  expect(document.activeElement).not.toBe(input);
+  input.remove();
+});
+
+it("does not install over unsaved changes in the code studio, and says so (review)", async () => {
+  const update = fakeUpdate();
+  vi.mocked(check).mockResolvedValue(update as never);
+  await checkForUpdate();
+  vi.mocked(call).mockClear();
+  const release = guardQuit(() => true, () => true);
+  await installUpdate();
+  release();
+  expect(update.install).not.toHaveBeenCalled();
+  expect(call).not.toHaveBeenCalledWith("prepare_for_update");
+  expect(toast.warning).toHaveBeenCalled();
+  expect(updatesStore.getState().progress).toBeNull();
+});
+
+it("saves everything before an update even with the studio open and clean (review)", async () => {
+  const update = fakeUpdate();
+  vi.mocked(check).mockResolvedValue(update as never);
+  await checkForUpdate();
+  vi.mocked(flushAll).mockClear();
+  const release = guardQuit(() => false, () => false);
+  await installUpdate();
+  release();
+  expect(flushAll).toHaveBeenCalled();
+  expect(update.install).toHaveBeenCalled();
+});
+
+it("leaves the update being installed open when a check finds it again (review)", async () => {
+  const first = fakeUpdate();
+  let finish: () => void = () => undefined;
+  first.download.mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+  vi.mocked(check).mockResolvedValue(first as never);
+  await checkForUpdate();
+  const installing = installUpdate();
+  vi.mocked(check).mockResolvedValue(fakeUpdate() as never);
+  await checkForUpdate();
+  expect(first.close).not.toHaveBeenCalled();
+  finish();
+  await installing;
+  expect(first.install).toHaveBeenCalled();
 });

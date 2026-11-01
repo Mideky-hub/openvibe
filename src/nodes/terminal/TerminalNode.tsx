@@ -9,6 +9,7 @@ import { terminalOf, useNodes } from "@/store/nodes";
 import { useTerminalStatus } from "@/store/terminalStatus";
 import { ArrivalFlash } from "./ArrivalFlash";
 import { frameStyle, WAITING_GLOW } from "./frame";
+import { MissingNode } from "./MissingNode";
 import { ResumeCard } from "./ResumeCard";
 import { HeaderButton, TerminalHeader } from "./TerminalHeader";
 import { useTerminalHost } from "./useTerminalHost";
@@ -28,11 +29,7 @@ export function TerminalNode({ nodeId }: { nodeId: string }) {
   useTerminalHost(nodeId, hostRef, hasPayload);
 
   if (!payload) {
-    return (
-      <div className="grid h-full place-items-center rounded-xl border border-ov-line bg-ov-surface text-sm text-ov-text-2">
-        {t.notFound}
-      </div>
-    );
+    return <MissingNode text={t.notFound} />;
   }
 
   const waiting = status.state === "running" && activity?.activity === "waiting";

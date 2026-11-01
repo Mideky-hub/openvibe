@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentsText, countsText, groupsText, livingAgents, waitingText } from "./groupSummary";
+import { agentsText, countsText, groupsText, livingAgents, membersIn, waitingText } from "./groupSummary";
 
 describe("countsText", () => {
   it("shows the members and those at work", () => {
@@ -33,5 +33,14 @@ describe("agentsText / groupsText", () => {
     expect(agentsText(8)).toBe("8 agents");
     expect(groupsText(0)).toBe("0 groupe");
     expect(groupsText(2)).toBe("2 groupes");
+  });
+});
+
+describe("membersIn", () => {
+  it("counts only members whose process runs", () => {
+    const activities: Record<string, string> = { a: "working", b: "working", c: "waiting" };
+    const running = (id: string) => id !== "b";
+    expect(membersIn(["a", "b", "c"], "working", (id) => activities[id], running)).toBe(1);
+    expect(membersIn(["a", "b", "c"], "waiting", (id) => activities[id], running)).toBe(1);
   });
 });

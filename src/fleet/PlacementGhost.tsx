@@ -40,7 +40,9 @@ export function PlacementGhost() {
 
   return (
     <div
-      className="fixed inset-0 z-40 cursor-crosshair"
+      // Starts under the bars: the title bar's buttons and drag area keep working while placing or linking.
+      className="fixed inset-x-0 bottom-0 z-40 cursor-crosshair"
+      style={{ top: TOP_ROW_HEIGHT }}
       onPointerMove={(e) => setPointer({ x: e.clientX, y: e.clientY })}
       onContextMenu={(e) => {
         e.preventDefault();

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import type { Activity } from "@/ipc/activity";
 import type { AgentId } from "@/ipc/pty";
@@ -13,10 +14,13 @@ import {
   pausedStore,
   pausedText,
   RESUME_WINDOW_MS,
+  resumeAgent,
   resumeAgents,
+  sendCommand,
   resumedText,
   sendToAgents,
   skippedText,
+  startingText,
   unsuitedText,
   waitingText,
 } from "./broadcast";
@@ -37,7 +41,7 @@ beforeEach(() => {
 });
 afterEach(() => clearMocks());
 
-async function agent(id: string, agentId: AgentId, state: "running" | "stopped", activity?: Activity) {
+async function agent(id: string, agentId: AgentId, state: "running" | "stopped" | "starting", activity?: Activity) {
   await nodesStore.getState().create(id, {
     workspaceId: "w1",
     kind: "terminal",
@@ -52,20 +56,28 @@ describe("sendToAgents", () => {
     await agent("isis", "claude", "running", "idle");
     await agent("thot", "claude", "stopped");
     await agent("anubis", "codex", "stopped");
-    expect(await sendToAgents(["isis", "thot", "anubis"], "lance les tests")).toEqual({ sent: 1, skipped: ["Thot", "Anubis"], waiting: [], unsuited: [] });
+    expect(await sendToAgents(["isis", "thot", "anubis"], "lance les tests")).toEqual({ sent: 1, skipped: ["Thot", "Anubis"], waiting: [], unsuited: [], starting: [] });
     expect(calls).toEqual([{ cmd: "pty_send_text", nodeId: "isis", text: "lance les tests" }]);
+  });
+
+  it("names an agent still in its staggered start apart from the stopped ones (plan B3)", async () => {
+    await agent("isis", "claude", "running", "idle");
+    await agent("thot", "claude", "starting");
+    expect(await sendToAgents(["isis", "thot"], "go")).toEqual({ sent: 1, skipped: [], waiting: [], unsuited: [], starting: ["Thot"] });
+    expect(startingText(["Thot"])).toBe("1 agent en démarrage ignoré : Thot — réessaie dans un instant");
+    expect(startingText([])).toBeNull();
   });
 
   it("counts an agent whose process just died as ignored", async () => {
     await agent("osiris", "claude", "running", "idle");
     dead.add("osiris");
-    expect(await sendToAgents(["osiris"], "x")).toEqual({ sent: 0, skipped: ["Osiris"], waiting: [], unsuited: [] });
+    expect(await sendToAgents(["osiris"], "x")).toEqual({ sent: 0, skipped: ["Osiris"], waiting: [], unsuited: [], starting: [] });
   });
 
   it("leaves an agent waiting for an answer alone: Enter would approve its dialog", async () => {
     await agent("horus", "claude", "running", "waiting");
     await agent("seth2", "codex", "running", "working");
-    expect(await sendToAgents(["horus", "seth2"], "lance les tests")).toEqual({ sent: 1, skipped: [], waiting: ["Horus"], unsuited: [] });
+    expect(await sendToAgents(["horus", "seth2"], "lance les tests")).toEqual({ sent: 1, skipped: [], waiting: ["Horus"], unsuited: [], starting: [] });
     expect(calls.map((c) => c.nodeId)).toEqual(["seth2"]);
   });
 
@@ -73,7 +85,7 @@ describe("sendToAgents", () => {
     await agent("isis", "claude", "running", "idle");
     await agent("thot", "shell", "running");
     await agent("anubis", "codex", "running", "idle");
-    expect(await sendToAgents(["isis", "thot", "anubis"], "/effort ultracode")).toEqual({ sent: 2, skipped: [], waiting: [], unsuited: ["Thot"] });
+    expect(await sendToAgents(["isis", "thot", "anubis"], "/effort ultracode")).toEqual({ sent: 2, skipped: [], waiting: [], unsuited: ["Thot"], starting: [] });
     expect(calls.map((c) => c.nodeId)).toEqual(["isis", "anubis"]);
     calls = [];
     expect((await sendToAgents(["thot"], "npm test")).sent).toBe(1);
@@ -154,5 +166,33 @@ describe("pauseAgents / resumeAgents", () => {
     expect(calls).toEqual([{ cmd: "pty_send_text", nodeId: "ra", text: "\ncontinue" }]);
     expect(pausedStore.getState().pausedAt.ra).toBeUndefined();
     expect(pausedStore.getState().pausedAt.bastet).toBeDefined();
+  });
+});
+
+describe("resumeAgent when the process just died (plan B3)", () => {
+  it("says so instead of leaving the rejection unhandled, and stays paused", async () => {
+    const warning = vi.spyOn(toast, "warning").mockImplementation(() => "");
+    await agent("anubis2", "claude", "running", "idle");
+    pausedStore.getState().mark(["anubis2"], 1);
+    dead.add("anubis2");
+    await expect(resumeAgent("anubis2")).resolves.toBe(false);
+    expect(warning).toHaveBeenCalledWith("Anubis2 n'a pas pu reprendre : le processus vient de s'arrêter");
+    expect(pausedStore.getState().pausedAt.anubis2).toBe(1);
+    warning.mockRestore();
+  });
+});
+
+describe("sendCommand and agents still starting (plan B3)", () => {
+  it("warns about them apart from the stopped ones", async () => {
+    const warning = vi.spyOn(toast, "warning").mockImplementation(() => "");
+    await agent("isis", "claude", "running", "idle");
+    await agent("thot", "claude", "starting");
+    await agent("anubis", "claude", "stopped");
+    await sendCommand(["isis", "thot", "anubis"], "go");
+    expect(warning.mock.calls.map(([text]) => text)).toEqual([
+      "1 agent arrêté ignoré : Anubis",
+      "1 agent en démarrage ignoré : Thot — réessaie dans un instant",
+    ]);
+    warning.mockRestore();
   });
 });

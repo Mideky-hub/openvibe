@@ -156,7 +156,7 @@ Pilule verticale symétrique du rail gauche. Dans cette spec elle ne porte qu'un
 
 Le panneau Flotte s'ouvre à gauche du rail (largeur 300 px, hauteur jusqu'à 70 % de la fenêtre, défilable) :
 
-- filtres en pastilles : Tous, En cours, Attend, Inactifs, Arrêtés, avec leurs compteurs ;
+- filtres en pastilles : Tous, En cours, Attend, Actifs, Prêts, Arrêtés, avec leurs compteurs. « Actifs » range les processus vivants dont l'activité est inconnue (la pastille dit ACTIF, §7.2, avant le premier événement d'activité) : le compteur suit la pastille ; amendement du 2026-11-01 (l'ancienne liste les rangeait dans « Inactifs ») ;
 - par groupe : point de couleur, nom en majuscules, compteurs ; puis « Hors groupe » ;
 - par agent : logo, prénom, nom de l'agent en gris, pastille d'état, durée dans l'état en Geist Mono (« 12 min ») ;
 - clic sur un agent : centre la vue dessus à 100 % et l'active (comme l'activation actuelle, spec V1 §6.3) ;

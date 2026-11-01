@@ -5,7 +5,7 @@ import { groupOf, isGroup, type SceneGroup } from "@/canvas/groups";
 import { setAgentsFilter, setAgentsPanel } from "@/fleet/agentsPanelState";
 import { canPause, canResume, pauseAgents, pauseAll, resumeAgent, resumeAll, type AgentFacts } from "@/fleet/broadcast";
 import { AGENTS } from "@/fleet/catalog";
-import { groupMembers, requestCloseGroup, ungroup } from "@/fleet/groups";
+import { groupMembers, requestCloseGroup, setGroupFolded, ungroup } from "@/fleet/groups";
 import { orchestrateGroup } from "@/fleet/orchestrators";
 import { duplicateTerminal, requestClose } from "@/fleet/terminals";
 import type { TerminalPayload } from "@/nodes/types";
@@ -46,7 +46,13 @@ const hasTerminal = (ctx: CommandContext) => payloadOf(ctx) !== undefined;
 const hasGroup = (ctx: CommandContext) => groupOfCurrent(ctx) !== null;
 // `available` guarantees both before `run`.
 const terminalId = (ctx: CommandContext) => ctx.terminalId as string;
-const groupId = (ctx: CommandContext) => (groupOfCurrent(ctx) as SceneGroup).id;
+/** `run` of a group command: nothing happens if the group went between the palette and Entrée. */
+function forGroup(run: (id: string) => void | Promise<void>): Command["run"] {
+  return (ctx) => {
+    const group = groupOfCurrent(ctx);
+    if (group) return run(group.id);
+  };
+}
 
 function terminalSection(ctx: CommandContext): string {
   const payload = payloadOf(ctx);
@@ -82,7 +88,8 @@ export const CURRENT: readonly Command[] = [
     available: hasTerminal,
     // Claude resumes its session, other agents start anew (plan F2, décision 2).
     run: (ctx) => {
-      const payload = payloadOf(ctx) as TerminalPayload;
+      const payload = payloadOf(ctx);
+      if (!payload) return;
       relaunchTerminal(terminalId(ctx), payload, payload.agent === "claude" && payload.claudeSessionId ? "resume" : "new");
     },
   }),
@@ -136,50 +143,55 @@ export const CURRENT: readonly Command[] = [
     section: groupSection,
     available: hasGroup,
     // Its label edits the name: the group comes into view first.
-    run: (ctx) => {
-      const id = groupId(ctx);
+    run: forGroup((id) => {
       focusGroup(id);
       requestAnimationFrame(() => uiStore.getState().setRenamingGroup(id));
-    },
+    }),
   }),
   command("group.addAgent", {
     section: groupSection,
     available: hasGroup,
     // The group's menu, in the agents panel (plan F2, décision 4).
-    run: (ctx) => {
+    run: forGroup((id) => {
       setAgentsFilter("all");
       setAgentsPanel(true);
-      requestUi({ kind: "groupMenu", id: groupId(ctx) });
-    },
+      requestUi({ kind: "groupMenu", id });
+    }),
   }),
   command("group.orchestrate", {
     section: groupSection,
     available: hasGroup,
-    run: async (ctx) => {
-      await orchestrateGroup(groupId(ctx));
-    },
+    run: forGroup(async (id) => {
+      await orchestrateGroup(id);
+    }),
   }),
-  command("group.ungroup", { section: groupSection, available: hasGroup, run: (ctx) => ungroup(groupId(ctx)) }),
-  command("group.close", { section: groupSection, available: hasGroup, run: (ctx) => requestCloseGroup(groupId(ctx)) }),
+  command("group.fold", {
+    section: groupSection,
+    available: hasGroup,
+    // Folds an unfolded group onto its label, unfolds a folded one (spec replier un groupe).
+    run: forGroup((id) => setGroupFolded(id, !canvasStore.getState().frames.find((f) => f.id === id)?.group?.folded)),
+  }),
+  command("group.ungroup", { section: groupSection, available: hasGroup, run: forGroup((id) => ungroup(id)) }),
+  command("group.close", { section: groupSection, available: hasGroup, run: forGroup((id) => requestCloseGroup(id)) }),
   command("group.pause", {
     section: groupSection,
     available: hasGroup,
-    run: async (ctx) => {
-      await pauseAll(groupMembers(groupId(ctx)));
-    },
+    run: forGroup(async (id) => {
+      await pauseAll(groupMembers(id));
+    }),
   }),
   command("group.resume", {
     section: groupSection,
     available: hasGroup,
-    run: async (ctx) => {
-      await resumeAll(groupMembers(groupId(ctx)));
-    },
+    run: forGroup(async (id) => {
+      await resumeAll(groupMembers(id));
+    }),
   }),
   command("group.frame", {
     section: groupSection,
     available: hasGroup,
-    run: (ctx) => {
-      focusGroup(groupId(ctx));
-    },
+    run: forGroup((id) => {
+      focusGroup(id);
+    }),
   }),
 ];

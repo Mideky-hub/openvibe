@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { browseHistory, HISTORY_SIZE, historyStore, pushHistory } from "./history";
 
@@ -43,5 +43,42 @@ describe("historyStore", () => {
     expect(historyStore.getState().entries).toEqual(["b", "a"]);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(saved).toEqual([{ key: "command.history.p1", value: ["b", "a"] }]);
+  });
+});
+
+describe("historyStore, a command sent before the history is read (plan B3)", () => {
+  it("saves nothing over a history it could not read (review)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const saved: unknown[] = [];
+    mockIPC((cmd, args) => {
+      if (cmd === "get_setting") throw { kind: "db", message: "database is locked" };
+      if (cmd === "set_setting") saved.push(args);
+    });
+    const loading = historyStore.getState().load("p9");
+    historyStore.getState().add("vite");
+    await loading;
+    historyStore.getState().add("build");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(saved).toEqual([]);
+    expect(historyStore.getState().entries).toEqual(["vite", "build"]);
+    warn.mockRestore();
+  });
+
+  it("keeps the saved commands and the new one, and saves both", async () => {
+    const saved: { key: string; value: unknown }[] = [];
+    let release: (value: string[]) => void = () => undefined;
+    mockIPC((cmd, args) => {
+      if (cmd === "get_setting") return new Promise((resolve) => (release = resolve));
+      if (cmd === "set_setting") saved.push(args as { key: string; value: unknown });
+    });
+    const loading = historyStore.getState().load("p2");
+    historyStore.getState().add("vite");
+    release(["a", "b"]);
+    await loading;
+    expect(historyStore.getState().entries).toEqual(["a", "b", "vite"]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // Never the new command alone over the saved history.
+    expect(saved.every((s) => (s.value as string[]).length === 3)).toBe(true);
+    expect(saved.length).toBeGreaterThan(0);
   });
 });

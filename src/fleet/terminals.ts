@@ -1,17 +1,24 @@
 import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import { toast } from "sonner";
+import { messages } from "@/i18n";
+import { revealNode } from "@/canvas/arrive";
 import { canvasStore } from "@/canvas/canvasStore";
-import { groupInfoOf, groupOf, insertIntoFrame } from "@/canvas/groups";
+import { groupInfoOf, groupOf, insertIntoFrame, withGroupFolded } from "@/canvas/groups";
 import { allowRemoval } from "@/canvas/removalGuard";
 import { createNodeElement, nodeKindOf } from "@/canvas/nodeElement";
-import { markForAutostart } from "@/nodes/terminal/registry";
+import { disposeTerminal, markForAutostart, relaunchTerminal } from "@/nodes/terminal/registry";
 import type { TerminalPayload } from "@/nodes/types";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { uiStore } from "@/store/ui";
+import { workspacesStore } from "@/store/workspaces";
+import { claudeInstalled } from "./agentsStore";
 import { cloneTerminalPayload } from "./clone";
 import { arrangeInFrame, freeCell } from "./groupLayout";
-import { nameForNewAgent } from "./naming";
+import { fleetMessages } from "./messages";
+import { nameForNewAgent, pantheonsForCopiedGroups } from "./naming";
+import { sceneAccess } from "./sceneAccess";
 
 export interface Point {
   x: number;
@@ -29,19 +36,20 @@ export async function addTerminal(
   center: Point,
   groupId: string | null = null,
 ): Promise<string | null> {
-  const api = canvasStore.getState().api;
-  if (!api) return null;
+  if (!sceneAccess(workspaceId)) return null;
   const element = createNodeElement("terminal", center);
   // The node row must exist before the process can save its scrollback.
   await nodesStore.getState().create(element.id, { workspaceId, kind: "terminal", payload });
   markForAutostart(element.id);
-  // Read after the wait: the scene may have changed meanwhile.
-  const elements = api.getSceneElementsIncludingDeleted();
+  // Read after the wait: the scene may have changed meanwhile, and the user may have left it.
+  const scene = sceneAccess(workspaceId);
+  if (!scene) return null;
+  const elements = scene.elements();
   const frame = groupId ? elements.find((e) => e.id === groupId && !e.isDeleted && groupInfoOf(e)) : undefined;
-  api.updateScene({
-    elements: frame ? joinGroup(elements, element, frame) : [...elements, element],
-    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-  });
+  scene.write(frame ? joinGroup(elements, element, frame) : [...elements, element]);
+  // Out of sight, Excalidraw would neither show it nor start its agent; in another workspace nothing mounts it at all (spec mission de nuit §6.1).
+  if (scene.shown) revealNode(element.id);
+  else void relaunchTerminal(element.id, payload, "new");
   return element.id;
 }
 
@@ -52,7 +60,7 @@ function joinGroup(elements: readonly ExcalidrawElement[], element: ExcalidrawEl
   return insertIntoFrame(
     elements,
     newElementWith(element, { x: placed.cell.x, y: placed.cell.y, frameId: frame.id }),
-    newElementWith(frame, { width: placed.frame.width, height: placed.frame.height }),
+    newElementWith(frame, { width: placed.frame.width, height: placed.frame.height, customData: withGroupFolded(frame.customData, false) }),
   );
 }
 
@@ -74,10 +82,20 @@ export async function duplicateTerminal(workspaceId: string, nodeId: string) {
 export async function adoptCopies(workspaceId: string, copies: readonly { id: string; sourceId: string }[]) {
   const api = canvasStore.getState().api;
   if (!api) return;
+  const refused = new Set<string>();
+  // A group copied whole takes a pantheon of its own: its agents are named from it.
+  const workspacePantheon = workspacesStore.getState().workspaces.find((w) => w.id === workspaceId)?.pantheon;
+  const pantheons = pantheonsForCopiedGroups(api.getSceneElementsIncludingDeleted(), new Set(copies.map((copy) => copy.id)), workspacePantheon);
   for (const { id, sourceId } of copies) {
     const source = nodesStore.getState().nodes[sourceId];
     if (!source) continue;
     if (source.kind === "orchestrator") {
+      // An orchestrator runs Claude Code: without it, the copy is taken back (spec première version §7.2).
+      if (!(await claudeInstalled())) {
+        toast.error(messages(fleetMessages).noClaude);
+        refused.add(id);
+        continue;
+      }
       // A copied orchestrator keeps its name; its session, created when shown, and its wires are its own.
       await nodesStore.getState().create(id, { workspaceId, kind: "orchestrator", payload: { name: source.payload.name } });
       continue;
@@ -85,13 +103,20 @@ export async function adoptCopies(workspaceId: string, copies: readonly { id: st
     markForAutostart(id);
     const frameId = api.getSceneElementsIncludingDeleted().find((e) => e.id === id)?.frameId;
     const group = canvasStore.getState().frames.find((f) => f.id === frameId);
-    const name = await nameForNewAgent(workspaceId, group?.group?.pantheon);
+    const name = await nameForNewAgent(workspaceId, (frameId ? pantheons.get(frameId) : undefined) ?? group?.group?.pantheon);
     await nodesStore.getState().create(id, { workspaceId, kind: "terminal", payload: cloneTerminalPayload(source.payload, name) });
   }
-  const ids = new Set(copies.map((copy) => copy.id));
-  const linked = api
-    .getSceneElementsIncludingDeleted()
-    .map((e) => (ids.has(e.id) ? newElementWith(e, { link: `openvibe://${nodeKindOf(e) ?? "terminal"}/${e.id}` }) : e));
+  if (refused.size) removeNodes([...refused]);
+  const ids = new Set(copies.map((copy) => copy.id).filter((id) => !refused.has(id)));
+  const scene = api.getSceneElementsIncludingDeleted();
+  const homes = new Set(scene.filter((e) => ids.has(e.id)).map((e) => e.frameId));
+  const linked = scene
+    .map((e) => (homes.has(e.id) && groupInfoOf(e)?.folded ? newElementWith(e, { customData: withGroupFolded(e.customData, false) }) : e))
+    .map((e) => {
+      const pantheon = pantheons.get(e.id);
+      if (pantheon) return newElementWith(e, { customData: { ...e.customData, openvibe: { ...(e.customData?.openvibe as object), pantheon } } });
+      return ids.has(e.id) ? newElementWith(e, { link: `openvibe://${nodeKindOf(e) ?? "terminal"}/${e.id}` }) : e;
+    });
   api.updateScene({ elements: alignCopies(linked, ids), captureUpdate: CaptureUpdateAction.NEVER });
 }
 
@@ -125,14 +150,24 @@ function alignCopies(elements: readonly ExcalidrawElement[], copyIds: ReadonlySe
 export function removeNodes(ids: readonly string[]) {
   const api = canvasStore.getState().api;
   if (!api) return;
-  allowRemoval(ids);
-  const removed = new Set(ids);
+  const elements = api.getSceneElementsIncludingDeleted();
+  // Only those really leaving: the guard forgets a pass when a node goes, so one already gone would keep its pass for later.
+  const removed = new Set(elements.filter((e) => ids.includes(e.id) && !e.isDeleted).map((e) => e.id));
+  allowRemoval(removed);
   api.updateScene({
-    elements: api
-      .getSceneElementsIncludingDeleted()
-      .map((e) => (removed.has(e.id) && !e.isDeleted ? newElementWith(e, { isDeleted: true }) : e)),
+    elements: elements.map((e) => (removed.has(e.id) ? newElementWith(e, { isDeleted: true }) : e)),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
+}
+
+/** Removes `ids` from a scene not on screen: no canvas will free their terminals (spec mission de nuit §6.1). */
+export function removeFromStoredScene(workspaceId: string, ids: ReadonlySet<string>) {
+  const scene = sceneAccess(workspaceId);
+  if (!scene || scene.shown) return;
+  const elements = scene.elements();
+  const terminals = elements.filter((e) => ids.has(e.id) && nodeKindOf(e) === "terminal").map((e) => e.id);
+  scene.write(elements.map((e) => (ids.has(e.id) && !e.isDeleted ? newElementWith(e, { isDeleted: true }) : e)));
+  for (const id of terminals) disposeTerminal(id);
 }
 
 export function removeNode(nodeId: string) {

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { BUDGET_COLOR } from "@/canvas/overlay/timeline";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AGENTS } from "@/fleet/catalog";
@@ -7,9 +7,10 @@ import { formatClock, formatDecimal } from "@/i18n/format";
 import { formatDuration } from "@/lib/format";
 import { useNow } from "@/lib/useNow";
 import { sessionOf, useNodes } from "@/store/nodes";
-import { currentLimit, formatUsd, limitTone, totals, type Limit, type Limits } from "@/usage/usage";
+import { currentLimit, formatUsd, limitTone, liveCacheSessions, totals, type Limit, type Limits } from "@/usage/usage";
 import { useUsage } from "@/usage/usageStore";
 import { shellMessages } from "./messages";
+import { TokensView } from "./TokensView";
 
 /** « 67,8 k », « 1,2 M » tokens. */
 function formatTokens(count: number): string {
@@ -57,7 +58,7 @@ export function UsageMeter() {
           title={limits ? u.titleWithLimits : u.titleWithoutLimits}
           className="flex h-6 items-center gap-2 rounded-[6px] px-1.5 font-mono text-[11.5px] text-ov-text-2 hover:bg-ov-hover hover:text-ov-text"
         >
-          {!limits?.fiveHour && !limits?.sevenDay ? (
+          {!limits?.fiveHour && !limits?.sevenDay && !limits?.models.length ? (
             u.title
           ) : (
             <>
@@ -81,7 +82,7 @@ export function UsageMeter() {
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[380px]">
-        <UsageDetail />
+        <UsageContent />
       </PopoverContent>
     </Popover>
   );
@@ -118,7 +119,13 @@ function LimitRow({ label, limit, now }: { label: string; limit: Limit; now: num
   );
 }
 
-function UsageDetail() {
+/** The usage detail, or the 30-day tokens it links to (spec Tokens §4). */
+function UsageContent() {
+  const [tokens, setTokens] = useState(false);
+  return tokens ? <TokensView onBack={() => setTokens(false)} /> : <UsageDetail onTokens={() => setTokens(true)} />;
+}
+
+function UsageDetail({ onTokens }: { onTokens: () => void }) {
   const t = useMessages(shellMessages);
   const u = t.usage;
   const limits = useCurrentLimits();
@@ -126,6 +133,7 @@ function UsageDetail() {
   const nodes = useNodes((s) => s.nodes);
   const now = useNow(30_000);
   const list = Object.values(sessions);
+  const warm = liveCacheSessions(list, new Set(Object.keys(nodes)));
   const sum = totals(list);
   const fable = limits?.models.find((m) => m.label === "Fable");
   const nameOf = (nodeId: string) => {
@@ -172,10 +180,9 @@ function UsageDetail() {
           ))}
         </Section>
       )}
-      {list.some((s) => s.cache) && (
+      {warm.length > 0 && (
         <Section title={u.cache}>
-          {list
-            .filter((s) => s.cache)
+          {warm
             .map((s) => (
               <Row key={s.sessionId} label={`${nameOf(s.nodeId)} · ${s.model?.name ?? ""}`}>
                 {s.cache!.warm && (s.cache!.expiresAt === null || s.cache!.expiresAt > now)
@@ -185,6 +192,13 @@ function UsageDetail() {
             ))}
         </Section>
       )}
+      <button
+        type="button"
+        onClick={onTokens}
+        className="self-start rounded-[6px] px-2 py-1 text-[12px] text-ov-accent hover:bg-ov-hover"
+      >
+        {u.tokensLink} →
+      </button>
       <p className="text-[10.5px] text-ov-text-3">{u.footnote}</p>
     </div>
   );

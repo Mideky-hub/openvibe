@@ -1,7 +1,9 @@
+import { openAccounts } from "@/accounts/store";
 import { setAgentsPanel } from "@/fleet/agentsPanelState";
 import { agentsStore } from "@/fleet/agentsStore";
 import { pauseAll, resumeAll, workspaceTerminalIds } from "@/fleet/broadcast";
 import { AGENTS } from "@/fleet/catalog";
+import { AGENT_INSTALLS } from "@/fleet/installCommands";
 import { launchAt, launchFour, newConsole, placeOrchestrator } from "@/fleet/quickActions";
 import type { AgentId } from "@/ipc/pty";
 import type { Command } from "../command";
@@ -15,9 +17,17 @@ const LAUNCHED: readonly AgentId[] = ["claude", "codex", "gemini", "qwen", "curs
 
 const section = sectionNamed((s) => s.agents);
 
-/** Like the Agent menu: an agent not found on this computer is listed greyed, with why. */
-const notFound = (agent: AgentId) => () =>
-  agentsStore.getState().agents.some((a) => a.id === agent && a.available) ? null : catalog().reasons.notFound(AGENTS[agent].binary);
+/** Before the first look nothing is known to be missing (the Shell has no binary name yet). */
+const missing = (agent: AgentId) => {
+  const { agents, loaded } = agentsStore.getState();
+  return loaded && !agents.some((a) => a.id === agent && a.available);
+};
+
+/** Like the Agent menu: a missing agent is offered for install (spec installation §4.1). */
+const installable = (agent: AgentId) => missing(agent) && agent in AGENT_INSTALLS;
+
+/** One that cannot be installed from here is listed greyed, with why. */
+const notFound = (agent: AgentId) => () => (missing(agent) && !installable(agent) ? catalog().reasons.notFound(AGENTS[agent].binary) : null);
 
 export const AGENT_COMMANDS: readonly Command[] = [
   ...LAUNCHED.map(
@@ -28,11 +38,19 @@ export const AGENT_COMMANDS: readonly Command[] = [
           section,
           available: inProject,
           disabled: notFound(agent),
-          // Ollama starts on a model: its menu opens on them (plan F2, décision 1).
-          run: (ctx) => (agent === "ollama" ? requestUi({ kind: "agentMenu", view: "ollama", at: ctx.at }) : launchAt(agent, ctx.at)),
+          run: (ctx) => {
+            // The command is read in the menu before it runs (spec installation §2).
+            if (installable(agent)) requestUi({ kind: "agentMenu", view: { install: agent }, at: ctx.at });
+            // Ollama starts on a model: its menu opens on them (plan F2, décision 1).
+            else if (agent === "ollama") requestUi({ kind: "agentMenu", view: "ollama", at: ctx.at });
+            else launchAt(agent, ctx.at);
+          },
         },
-        () => (agent === "ollama" ? catalog().commands["agent.ollama"].label : catalog().launch(AGENTS[agent].label)),
-        () => [AGENTS[agent].label, AGENTS[agent].vendor, ...catalog().launchKeywords],
+        () => {
+          if (installable(agent)) return catalog().install(AGENTS[agent].label);
+          return agent === "ollama" ? catalog().commands["agent.ollama"].label : catalog().launch(AGENTS[agent].label);
+        },
+        () => [AGENTS[agent].label, AGENTS[agent].vendor, ...catalog().launchKeywords, ...(installable(agent) ? catalog().installKeywords : [])],
       ),
   ),
   command("agent.custom", {
@@ -46,6 +64,7 @@ export const AGENT_COMMANDS: readonly Command[] = [
     // The ＋ menu's catalog; from the radial menu, the agent starts at its point (spec menu radial §4.1).
     run: (ctx) => requestUi({ kind: "agentMenu", view: "agents", at: ctx.at }),
   }),
+  command("agent.accounts", { section, available: inProject, run: () => openAccounts() }),
   command("agent.console", { section, available: inProject, run: (ctx) => newConsole(ctx.at) }),
   command("agent.four", { section, available: inProject, run: (ctx) => launchFour(ctx.at) }),
   command("agent.orchestrator", { section, available: inProject, run: (ctx) => placeOrchestrator(ctx.at) }),

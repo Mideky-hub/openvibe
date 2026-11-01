@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readTerminalPayload } from "@/nodes/types";
 import { buildSpawnSpec, defaultTitle, newConversation, newTerminalPayload, orchestratorSession, switchedAgent } from "./launch";
 
 const base = { title: "", cwd: "C:\\code\\openvibe", agent: "shell" as const, command: "", shell: "default" as const };
@@ -31,6 +32,26 @@ describe("newTerminalPayload", () => {
   it("keeps the Ollama model and mode", () => {
     const payload = newTerminalPayload({ ...base, agent: "ollama", ollama: { model: "llama3", mode: "chat" } });
     expect(payload.ollama).toEqual({ model: "llama3", mode: "chat" });
+  });
+});
+
+describe("a one-shot command (spec installation §7)", () => {
+  const input = { title: "t", cwd: "C:/a", agent: "custom", command: "npm i", shell: "cmd" } as const;
+
+  it("keeps the mark on the payload, only when asked", () => {
+    expect(newTerminalPayload({ ...input, oneShot: true }).oneShot).toBe(true);
+    expect("oneShot" in newTerminalPayload(input)).toBe(false);
+  });
+
+  it("survives a restart", () => {
+    expect(readTerminalPayload({ ...input, name: "", oneShot: true })?.oneShot).toBe(true);
+    expect(readTerminalPayload({ ...input, name: "" })?.oneShot).toBeUndefined();
+  });
+
+  it("is dropped when the terminal becomes another agent", () => {
+    const change = switchedAgent(newTerminalPayload({ ...input, oneShot: true }), "codex");
+    expect("oneShot" in change).toBe(true);
+    expect(change.oneShot).toBeUndefined();
   });
 });
 

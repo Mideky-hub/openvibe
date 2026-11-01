@@ -99,3 +99,69 @@ it("does not send a /command whose target is unknown to the selection instead (f
   expect(host.textContent).toContain("Cible inconnue : @thot/zues");
 });
 
+
+it("keeps an unknown name of @nobody/ze when Tab completes the last one (backlog 27 oct)", async () => {
+  await type("@nobody/ze");
+  await press("Tab");
+  expect(field().value).toBe("@nobody/zeus");
+  expect(chips()).toEqual([]);
+});
+
+it("keeps Escape for the kind of list it closed: @ does not close / (backlog 27 oct)", async () => {
+  await type("@");
+  await press("Escape");
+  expect(options()).toEqual([]);
+  await type("/");
+  expect(options().length).toBeGreaterThan(0);
+});
+
+it("leaves one space when a command is completed before the text (backlog 27 oct)", async () => {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field(), "/ef lance");
+    field().setSelectionRange(3, 3);
+    field().dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await press("Tab");
+  expect(field().value).toBe("/effort lance");
+});
+
+it("does not send a command after an unfinished mention (@thot/ /clear, backlog 27 oct)", async () => {
+  await act(async () => root.render(<CommandInput agents={agents} groups={[]} fallback={["d"]} placeholder="Consigne" emptyHint="Tape @" />));
+  await type("@thot/ /clear");
+  await press("Enter");
+  expect(sendCommand).not.toHaveBeenCalled();
+});
+
+it("starts the highlight again at the top when the caret moves (backlog 27 oct)", async () => {
+  await type("/c");
+  await press("ArrowDown");
+  await press("ArrowDown");
+  const selected = () => [...host.querySelectorAll('[role="option"]')].findIndex((o) => o.getAttribute("aria-selected") === "true");
+  expect(selected()).toBe(2);
+  await act(async () => {
+    field().focus();
+    field().setSelectionRange(1, 1);
+    field().dispatchEvent(new KeyboardEvent("keyup", { key: "ArrowLeft", bubbles: true }));
+  });
+  expect(selected()).toBe(0);
+});
+
+it("does not send on the Enter that ends an IME composition (plan B3)", async () => {
+  await type("@thot lance");
+  await act(async () => {
+    field().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, isComposing: true }));
+  });
+  expect(sendCommand).not.toHaveBeenCalled();
+  await press("Enter");
+  expect(sendCommand).toHaveBeenCalledTimes(1);
+});
+
+it("says why Envoyer is grey when the chosen group has no agent, not « Écris une consigne » (plan B3)", async () => {
+  const empty = { id: "g1", name: "Vide", x: 0, y: 0, width: 10, height: 10, group: { role: "general", pantheon: "egypt" }, memberIds: [] };
+  await act(async () => root.render(<CommandInput agents={agents} groups={[empty] as never} fallback={[]} placeholder="Consigne" emptyHint="Tape @" />));
+  await type("@vide lance les tests");
+  const send = host.querySelector<HTMLButtonElement>('button[aria-label="Envoyer"]')!;
+  expect(send.disabled).toBe(true);
+  expect(send.title).toBe("Aucun agent dans cette cible");
+  expect(host.textContent).toContain("Aucun agent dans cette cible");
+});

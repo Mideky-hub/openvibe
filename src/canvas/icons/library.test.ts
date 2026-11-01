@@ -85,3 +85,32 @@ describe("instantiate", () => {
     expect(instantiate([rect("c")], { x: 0, y: 0 }, newId)[0].groupIds).toEqual([]);
   });
 });
+
+describe("what a library may bring (backlog 27 oct)", () => {
+  it("drops embeddables, frames and images, and strips links, custom data and locks", () => {
+    const [item] = readLibrary(
+      { libraryItems: [{ name: "X", elements: [rect("a", { link: "https://evil", customData: { openvibe: {} }, locked: true }), { ...rect("b"), type: "embeddable" }, { ...rect("c"), type: "image" }, { ...rect("d"), type: "frame" }] }] },
+      meta,
+    );
+    expect(item.elements.map((e) => e.id)).toEqual(["a"]);
+    expect(item.elements[0]).not.toHaveProperty("link");
+    expect(item.elements[0]).not.toHaveProperty("customData");
+    expect(item.elements[0].locked).toBe(false);
+  });
+});
+
+describe("instantiate, rotation and seeds (backlog 27 oct)", () => {
+  it("centres by the turned bounds of a rotated shape", () => {
+    // The second one, turned a quarter, spans y 60 to 160: the whole spans y 0 to 160, centre 80.
+    const [first] = instantiate([rect("a", { width: 100, height: 20 }), rect("b", { y: 100, width: 100, height: 20, angle: Math.PI / 2 })], { x: 0, y: 0 }, () => "n");
+    expect(first.y).toBeCloseTo(-80);
+  });
+
+  it("gives each copy fresh drawing seeds", () => {
+    const ids = (() => { let n = 0; return () => `i${n++}`; })();
+    const [a] = instantiate([rect("a", { seed: 7 })], { x: 0, y: 0 }, ids);
+    const [b] = instantiate([rect("a", { seed: 7 })], { x: 0, y: 0 }, ids);
+    expect(a.seed).not.toBe(7);
+    expect(a.seed).not.toBe(b.seed);
+  });
+});

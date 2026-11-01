@@ -65,6 +65,29 @@ pub enum Role {
     Orchestrator,
 }
 
+/// What a mission lets its agents do unasked (spec mission de nuit §5.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Permission {
+    /// As usual: a dialog stops the agent until someone answers.
+    Ask,
+    /// Files without asking; a command still asks.
+    Edits,
+    /// Files and commands without asking; the rest is refused, never asked.
+    Work,
+}
+
+/// Makes every push fail in git itself, whatever the command looks like: the
+/// settings' rules only read its text (`git -C . push` passes them). The empty
+/// prefix rewrites every push URL to a transport that does not exist. A remote
+/// with an explicit `pushurl` is not rewritten: rule and environment each stop
+/// what the other misses, neither is a sandbox.
+pub const NO_PUSH_ENV: [(&str, &str); 3] = [
+    ("GIT_CONFIG_COUNT", "1"),
+    ("GIT_CONFIG_KEY_0", "url.openvibe-no-push:.pushInsteadOf"),
+    ("GIT_CONFIG_VALUE_0", ""),
+];
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaudeLaunch {
@@ -80,6 +103,12 @@ pub struct ClaudeLaunch {
     /// The model the orchestrator's router chose (`--model`).
     #[serde(default)]
     pub model: Option<String>,
+    /// A mission's choice; none outside a mission that made one.
+    #[serde(default)]
+    pub permission: Option<Permission>,
+    /// The profile's folder, for this terminal's `CLAUDE_CONFIG_DIR` (spec comptes §4).
+    #[serde(default)]
+    pub config_dir: Option<String>,
 }
 
 /// What the frontend asks for when it starts a terminal (spec §9).
@@ -393,6 +422,9 @@ fn ollama_command(launch: Option<&OllamaLaunch>, syntax: ShellSyntax) -> AppResu
     })
 }
 
+/// The longest model name or alias accepted for `--model`.
+const MAX_MODEL_LEN: usize = 64;
+
 fn claude_command(
     launch: Option<&ClaudeLaunch>,
     syntax: ShellSyntax,
@@ -422,7 +454,9 @@ fn claude_command(
     }
     if let Some(model) = launch.model.as_deref() {
         // Typed into a shell: a model's name, or an alias like `sonnet[1m]`, nothing else.
-        let valid = !model.is_empty()
+        // The first character is alphanumeric so the name can never read as a flag.
+        let valid = model.len() <= MAX_MODEL_LEN
+            && model.starts_with(|c: char| c.is_ascii_alphanumeric())
             && model
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '_' | '[' | ']'));
@@ -433,6 +467,13 @@ fn claude_command(
             )));
         }
         claude.push_str(&format!(" --model {}", quote(syntax, model)));
+    }
+    // `--permission-mode`, not `defaultMode` in the settings: Claude's docs confirm the flag for one session.
+    // Never `bypassPermissions`: its first use asks, and accepting writes to the user's settings.
+    match launch.permission {
+        Some(Permission::Edits) => claude.push_str(" --permission-mode acceptEdits"),
+        Some(Permission::Work) => claude.push_str(" --permission-mode dontAsk"),
+        Some(Permission::Ask) | None => {}
     }
     let remote = remote_flag(launch, syntax);
     if launch.mode == ClaudeMode::Continue {
@@ -481,6 +522,16 @@ fn codex_command(syntax: ShellSyntax, notify_url: Option<&str>, config: Option<&
     let (Some(url), Some(config)) = (notify_url, config) else {
         return "codex".into();
     };
+    // cmd drops `%`, `!`, `^` and `"` from what it is given (see `quote`): the
+    // path would be another one and curl would send no token. Without the
+    // hook, the terminal's output decides its activity.
+    if syntax == ShellSyntax::Cmd && config.to_string_lossy().contains(['%', '!', '^', '"']) {
+        log::warn!(
+            "codex notify not set: {} holds a character cmd cannot pass",
+            config.display()
+        );
+        return "codex".into();
+    }
     let curl = if cfg!(windows) { "curl.exe" } else { "curl" };
     let config = toml_literal(&config.to_string_lossy());
     let notify = format!("notify=['{curl}','-s','-K',{config},'-X','POST','{url}','-d']");
@@ -530,6 +581,17 @@ pub fn build_plan(
     let shell = resolve_shell(spec.shell, locate)?;
     let initial_input =
         agent_command(spec, shell.syntax, hooks)?.map(|command| format!("{command}\r"));
+    // A profile's folder reaches this terminal only; an invalid one is refused,
+    // never replaced by another account's (spec comptes §4).
+    let profile_dir = match spec.claude.as_ref().and_then(|c| c.config_dir.as_deref()) {
+        Some(dir) => Some((
+            "CLAUDE_CONFIG_DIR".to_string(),
+            crate::accounts::checked_dir(dir)?
+                .to_string_lossy()
+                .into_owned(),
+        )),
+        None => None,
+    };
     Ok(SpawnPlan {
         program: shell.program,
         args: shell.args,
@@ -542,6 +604,15 @@ pub fn build_plan(
         ]
         .into_iter()
         .chain(refreshed_path())
+        .chain(
+            spec.claude
+                .as_ref()
+                .and_then(|c| c.permission)
+                .iter()
+                .flat_map(|_| NO_PUSH_ENV)
+                .map(|(key, value)| (key.to_string(), value.to_string())),
+        )
+        .chain(profile_dir)
         .collect(),
         env_remove: removed_env(std::env::var_os("CLAUDECODE").is_some()),
         initial_input,
@@ -578,6 +649,8 @@ mod tests {
             role: Role::Agent,
             remote_control: None,
             model: None,
+            permission: None,
+            config_dir: None,
         })
     }
 
@@ -722,6 +795,8 @@ mod tests {
             role: Role::Agent,
             remote_control: None,
             model: None,
+            permission: None,
+            config_dir: None,
         });
         let err = agent_command(
             &spec(Agent::Claude, launch),
@@ -749,6 +824,8 @@ mod tests {
             role: Role::Agent,
             remote_control: None,
             model: None,
+            permission: None,
+            config_dir: None,
         })
     }
 
@@ -959,6 +1036,23 @@ mod tests {
     }
 
     #[test]
+    fn codex_gets_no_hook_rather_than_a_wrong_config_path_under_cmd() {
+        let hooks = AgentHooks {
+            codex_notify: Some("http://127.0.0.1:1/hook/codex/n1".into()),
+            curl_config: Some(PathBuf::from(r"C:\Users\100%Jean\curl.cfg")),
+            ..Default::default()
+        };
+        let under = |syntax| {
+            agent_command(&spec(Agent::Codex, None), syntax, &hooks)
+                .unwrap()
+                .unwrap()
+        };
+        assert_eq!(under(ShellSyntax::Cmd), "codex");
+        // PowerShell and POSIX shells keep the path as it is.
+        assert!(under(ShellSyntax::PowerShell).contains(r"100%Jean"));
+    }
+
+    #[test]
     fn codex_notifies_the_end_of_its_turns() {
         let curl = if cfg!(windows) { "curl.exe" } else { "curl" };
         let hooks = AgentHooks {
@@ -980,6 +1074,28 @@ mod tests {
         )
         .unwrap();
         assert_eq!(plain.as_deref(), Some("codex"));
+    }
+
+    #[test]
+    fn a_profile_s_folder_becomes_this_terminal_s_claude_config_dir_only() {
+        let folder = tempfile::tempdir().unwrap();
+        let launch = |dir: Option<String>| {
+            let mut launch = claude(ClaudeMode::New, "");
+            launch.as_mut().unwrap().config_dir = dir;
+            spec(Agent::Claude, launch)
+        };
+        let plan = |s: &SpawnSpec| build_plan("n", s, &nothing_on_path, &AgentHooks::default());
+        let with = plan(&launch(Some(folder.path().to_string_lossy().into_owned()))).unwrap();
+        assert!(
+            with.env
+                .iter()
+                .any(|(k, v)| k == "CLAUDE_CONFIG_DIR" && v == &folder.path().to_string_lossy())
+        );
+        let without = plan(&launch(None)).unwrap();
+        assert!(without.env.iter().all(|(k, _)| k != "CLAUDE_CONFIG_DIR"));
+        // An invalid folder refuses the start rather than falling back to another account.
+        assert!(plan(&launch(Some("relative/dir".into()))).is_err());
+        assert!(plan(&launch(Some("C:/a/../b".into()))).is_err());
     }
 
     #[test]
@@ -1140,6 +1256,62 @@ mod tests {
                 .kind(),
             "invalidInput"
         );
+        // Nor a name that would read as a flag, nor an endless one.
+        for bad in ["--dangerous", "-x", ".hidden", &"a".repeat(65)] {
+            assert_eq!(
+                with_model(ClaudeMode::New, bad).unwrap_err().kind(),
+                "invalidInput",
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn quotes_the_model_for_cmd_and_git_bash_too() {
+        let with = |syntax, model: &str| {
+            let mut launch = claude(ClaudeMode::Continue, "");
+            launch.as_mut().unwrap().model = Some(model.into());
+            agent_command(&spec(Agent::Claude, launch), syntax, &AgentHooks::default())
+                .unwrap()
+                .unwrap()
+        };
+        assert_eq!(
+            with(ShellSyntax::Cmd, "claude-haiku-5-5"),
+            "claude --model \"claude-haiku-5-5\" --continue"
+        );
+        assert_eq!(
+            with(ShellSyntax::Posix, "sonnet[1m]"),
+            "claude --model 'sonnet[1m]' --continue"
+        );
+    }
+
+    #[test]
+    fn quotes_paths_with_spaces_and_apostrophes_for_cmd_and_git_bash() {
+        let hooks = AgentHooks {
+            claude_settings: Some(PathBuf::from("C:/Users/Jean d'Arc/My Data/n1.json")),
+            ..AgentHooks::default()
+        };
+        let with = |syntax| {
+            agent_command(
+                &spec(Agent::Claude, claude(ClaudeMode::Continue, "")),
+                syntax,
+                &hooks,
+            )
+            .unwrap()
+            .unwrap()
+        };
+        assert_eq!(
+            with(ShellSyntax::Cmd),
+            "claude --settings \"C:/Users/Jean d'Arc/My Data/n1.json\" --continue"
+        );
+        assert_eq!(
+            with(ShellSyntax::Posix),
+            "claude --settings 'C:/Users/Jean d'\\''Arc/My Data/n1.json' --continue"
+        );
+        assert_eq!(
+            with(ShellSyntax::PowerShell),
+            "claude --settings 'C:/Users/Jean d''Arc/My Data/n1.json' --continue"
+        );
     }
 
     #[test]
@@ -1274,5 +1446,134 @@ mod tests {
         let path = std::env::join_paths([std::path::Path::new("nowhere"), dir.path()]).unwrap();
         assert_eq!(locate_in("fake-agent", &path), Some(file));
         assert_eq!(locate_in("other-agent", &path), None);
+    }
+
+    fn with_permission(permission: Option<Permission>) -> Option<ClaudeLaunch> {
+        claude(ClaudeMode::New, "Mon agent").map(|launch| ClaudeLaunch {
+            permission,
+            ..launch
+        })
+    }
+
+    fn command_with(permission: Option<Permission>) -> String {
+        claude_command(
+            with_permission(permission).as_ref(),
+            ShellSyntax::PowerShell,
+            &AgentHooks::default(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_missions_choice_is_passed_at_launch() {
+        assert!(!command_with(None).contains("--permission-mode"));
+        assert!(!command_with(Some(Permission::Ask)).contains("--permission-mode"));
+        assert!(command_with(Some(Permission::Edits)).contains(" --permission-mode acceptEdits"));
+        assert!(command_with(Some(Permission::Work)).contains(" --permission-mode dontAsk"));
+    }
+
+    #[test]
+    fn no_choice_ever_bypasses_permissions() {
+        for permission in [
+            None,
+            Some(Permission::Ask),
+            Some(Permission::Edits),
+            Some(Permission::Work),
+        ] {
+            assert!(!command_with(permission).contains("bypass"));
+            assert!(!command_with(permission).contains("dangerously"));
+        }
+    }
+
+    fn git(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> std::process::Output {
+        let mut command = std::process::Command::new("git");
+        command.arg("-C").arg(dir).args(args);
+        for (key, value) in env {
+            command.env(key, value);
+        }
+        command.output().unwrap()
+    }
+
+    #[test]
+    fn no_push_env_stops_a_push_in_git_itself() {
+        let dir = tempfile::tempdir().unwrap();
+        let remote = dir.path().join("remote.git");
+        let work = dir.path().join("work");
+        std::fs::create_dir(&work).unwrap();
+        assert!(
+            git(dir.path(), &["init", "--bare", "remote.git"], &[])
+                .status
+                .success()
+        );
+        assert!(git(&work, &["init"], &[]).status.success());
+        let identity = [
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "a",
+        ];
+        assert!(git(&work, &identity, &[]).status.success());
+        let url = remote.to_string_lossy().replace('\\', "/");
+        assert!(
+            git(&work, &["remote", "add", "origin", &url], &[])
+                .status
+                .success()
+        );
+        // By the remote's name, by its URL, and through -C, which the settings' rule cannot see.
+        assert!(
+            !git(
+                &work,
+                &["push", "origin", "HEAD:refs/heads/a"],
+                &NO_PUSH_ENV
+            )
+            .status
+            .success()
+        );
+        assert!(
+            !git(&work, &["push", &url, "HEAD:refs/heads/b"], &NO_PUSH_ENV)
+                .status
+                .success()
+        );
+        // The agent's other work goes on, and the barrier is only in this environment.
+        assert!(
+            git(&work, &["fetch", "origin"], &NO_PUSH_ENV)
+                .status
+                .success()
+        );
+        assert!(
+            git(&work, &["push", "origin", "HEAD:refs/heads/c"], &[])
+                .status
+                .success()
+        );
+    }
+
+    #[test]
+    fn a_mission_agent_starts_with_the_barrier_and_others_without() {
+        let plan_of = |permission| {
+            let dir = std::env::temp_dir();
+            let spec = SpawnSpec {
+                cwd: dir.to_string_lossy().into_owned(),
+                shell: ShellKind::Cmd,
+                agent: Agent::Claude,
+                command: String::new(),
+                claude: with_permission(permission),
+                ollama: None,
+            };
+            build_plan(
+                "n1",
+                &spec,
+                &|name: &str| Some(PathBuf::from(name)),
+                &AgentHooks::default(),
+            )
+            .unwrap()
+        };
+        let has = |plan: &SpawnPlan| plan.env.iter().any(|(key, _)| key == "GIT_CONFIG_KEY_0");
+        assert!(has(&plan_of(Some(Permission::Ask))));
+        assert!(has(&plan_of(Some(Permission::Work))));
+        assert!(!has(&plan_of(None)));
     }
 }

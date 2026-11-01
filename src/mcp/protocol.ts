@@ -26,6 +26,11 @@ const TOOLS: Record<string, string> = {
   merge: "fusionner",
   finish: "terminer",
   remote_control: "remote_control",
+  add_tasks: "add_tasks",
+  queue: "queue",
+  next_task: "next_task",
+  tickets: "tickets",
+  notes: "notes",
 };
 
 /** The former names, for the agent that still calls one: what it is called now. */
@@ -47,7 +52,7 @@ const ARGS: Record<string, Record<string, string>> = {
   terminer: { summary: "bilan" },
   remote_control: { on: "actif" },
 };
-const SUBTASK_ARGS: Record<string, string> = { title: "titre", brief: "consigne", level: "niveau" };
+const SUBTASK_ARGS: Record<string, string> = { title: "titre", brief: "consigne", level: "niveau", group: "groupe" };
 
 const STEP_IN: Record<string, StepState> = { in_progress: "en_cours", done: "fait", failed: "echec" };
 const REPORT_IN: Record<string, ReportStatus> = { done: "termine", blocked: "bloque", failed: "echec" };
@@ -80,6 +85,14 @@ export function internalCall(name: string, raw: Record<string, unknown>): { name
       if (typeof item !== "object" || item === null) return item;
       const task = renamed(item as Record<string, unknown>, SUBTASK_ARGS);
       task.agent = valueIn(AGENT_IN, task.agent);
+      if (task.niveau !== undefined) task.niveau = valueIn(LEVEL_IN, task.niveau);
+      return task;
+    });
+  }
+  if (internal === "add_tasks" && Array.isArray(args.tasks)) {
+    args.tasks = args.tasks.map((item) => {
+      if (typeof item !== "object" || item === null) return item;
+      const task = renamed(item as Record<string, unknown>, SUBTASK_ARGS);
       if (task.niveau !== undefined) task.niveau = valueIn(LEVEL_IN, task.niveau);
       return task;
     });

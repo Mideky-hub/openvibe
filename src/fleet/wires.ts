@@ -4,7 +4,7 @@ import { findTerminalAt } from "@/canvas/hitTest";
 import { nodeKindOf } from "@/canvas/nodeElement";
 import type { Point } from "./terminals";
 
-/** The orange of the wires (spec habillage §13). */
+/** The terracotta of the wires (spec identité §4.2, « Terre cuite »). */
 export const WIRE_COLOR = "#C2603F";
 
 /** Space between a wire's ends and the elements it joins. */
@@ -196,4 +196,42 @@ export function linkedAgents(links: Links, frames: readonly SceneFrame[]): Linke
   const inGroups = groups.flatMap((g) => g.memberIds);
   const directIds = links.nodeIds.filter((id) => !inGroups.includes(id));
   return { groups, directIds, agentIds: [...new Set([...inGroups, ...directIds])] };
+}
+
+/** What a wire can still join: an orchestrator, a terminal or a group's frame, alive. */
+function isWireEnd(element: ExcalidrawElement | undefined): boolean {
+  return element !== undefined && (nodeKindOf(element) === "orchestrator" ? !element.isDeleted : isWireTarget(element));
+}
+
+/**
+ * Wires with a missing end: ungrouping, closing a group or a terminal and
+ * Suppr on an orchestrator leave the orange arrow behind, unbound or bound to
+ * what is gone (plan B3). They go in the same update.
+ */
+export function orphanWires(elements: readonly ExcalidrawElement[]): string[] {
+  const byId = new Map(elements.map((e) => [e.id, e]));
+  return elements
+    .filter((e) => !e.isDeleted && e.type === "arrow" && isWire(e))
+    .filter((arrow) => {
+      const { startBinding, endBinding } = arrow as ExcalidrawArrowElement;
+      return ![startBinding, endBinding].every((b) => b && isWireEnd(byId.get(b.elementId)));
+    })
+    .map((arrow) => arrow.id);
+}
+
+/**
+ * Wires `orphanWires` deleted whose two ends are back: an undo restored the
+ * node (and, for Suppr, the binding) but not the wire, which was deleted
+ * outside the history. Only those the upkeep marked: a wire the user deleted
+ * stays deleted.
+ */
+export function revivableWires(elements: readonly ExcalidrawElement[]): string[] {
+  const byId = new Map(elements.map((e) => [e.id, e]));
+  return elements
+    .filter((e) => e.isDeleted && e.type === "arrow" && isWire(e) && (e.customData?.openvibe as { orphaned?: unknown }).orphaned === true)
+    .filter((arrow) => {
+      const { startBinding, endBinding } = arrow as ExcalidrawArrowElement;
+      return [startBinding, endBinding].every((b) => b && isWireEnd(byId.get(b.elementId)));
+    })
+    .map((arrow) => arrow.id);
 }

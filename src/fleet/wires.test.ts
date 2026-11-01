@@ -9,6 +9,8 @@ import {
   linkTargetAt,
   orchestratorLinks,
   orchestratorTargets,
+  orphanWires,
+  revivableWires,
   unmarkedWires,
   WIRE_COLOR,
   withWire,
@@ -102,5 +104,53 @@ describe("linkedAgents", () => {
       directIds: [lone.id],
       agentIds: [member.id, lone.id],
     });
+  });
+});
+
+describe("orphanWires (plan B3)", () => {
+  const withoutIds = (elements: ExcalidrawElement[], ...ids: string[]) =>
+    elements.map((e) => (ids.includes(e.id) ? ({ ...e, isDeleted: true } as ExcalidrawElement) : e));
+
+  it("lists the wires whose target or orchestrator is gone, whatever way it went", () => {
+    const wired = withWire(base, orchestrator.id, frame.id);
+    const wire = wired[wired.length - 1];
+    expect(orphanWires(wired)).toEqual([]);
+    expect(orphanWires(withoutIds(wired, frame.id))).toEqual([wire.id]);
+    expect(orphanWires(withoutIds(wired, orchestrator.id))).toEqual([wire.id]);
+    // Ungroup or Delete: the element left the scene, the arrow lost its binding.
+    expect(orphanWires(wired.filter((e) => e.id !== frame.id))).toEqual([wire.id]);
+    const unbound = wired.map((e) => (e.id === wire.id ? ({ ...e, endBinding: null } as ExcalidrawElement) : e));
+    expect(orphanWires(unbound)).toEqual([wire.id]);
+  });
+
+  it("keeps a plain arrow and an already deleted wire out of the list", () => {
+    const wired = withWire(base, orchestrator.id, frame.id);
+    const wire = wired[wired.length - 1];
+    const plainArrow = { ...handDrawn(orchestrator, lone), customData: undefined, endBinding: null } as ExcalidrawElement;
+    expect(orphanWires([...withoutIds(wired, frame.id, wire.id), plainArrow])).toEqual([]);
+  });
+
+  it("does not take an ungrouped frame for a gone target: a plain frame is no wire target", () => {
+    const wired = withWire(base, orchestrator.id, frame.id);
+    const ungrouped = wired.map((e) => (e.id === frame.id ? ({ ...e, customData: undefined } as ExcalidrawElement) : e));
+    expect(orphanWires(ungrouped)).toEqual([wired[wired.length - 1].id]);
+  });
+});
+
+describe("revivableWires (plan B3 undo)", () => {
+  it("lists a wire the upkeep deleted once both its ends are back, as an undo brings them", () => {
+    const wired = withWire(base, orchestrator.id, frame.id);
+    const wire = wired[wired.length - 1];
+    const dropped = { ...wire, isDeleted: true, customData: { openvibe: { kind: "wire", orphaned: true } } } as ExcalidrawElement;
+    const scene = [...wired.slice(0, -1), dropped];
+    expect(revivableWires(scene)).toEqual([wire.id]);
+    // Its target is still gone: nothing to bring back.
+    expect(revivableWires(scene.map((e) => (e.id === frame.id ? ({ ...e, isDeleted: true } as ExcalidrawElement) : e)))).toEqual([]);
+    // A wire the user deleted (no orphan mark) stays deleted.
+    const byUser = { ...dropped, customData: { openvibe: { kind: "wire" } } } as ExcalidrawElement;
+    expect(revivableWires([...wired.slice(0, -1), byUser])).toEqual([]);
+    // Unbound again (the end came back, not the binding): not yet.
+    const unbound = { ...dropped, endBinding: null } as ExcalidrawElement;
+    expect(revivableWires([...wired.slice(0, -1), unbound])).toEqual([]);
   });
 });

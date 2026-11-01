@@ -10,6 +10,10 @@ vi.mock("@/app/boot", () => ({ boot: () => Promise.reject(new Error("local serve
 vi.mock("@/shell/ProjectView", () => ({ ProjectView: () => null }));
 vi.mock("@/home/HomeScreen", () => ({ HomeScreen: () => null }));
 vi.mock("@/commands/Palette", () => ({ Palette: () => null }));
+vi.mock("@/accounts/AccountsDialog", () => ({ AccountsDialog: () => null }));
+vi.mock("@/loops/LoopsDialog", () => ({ LoopsDialog: () => null }));
+vi.mock("@/loops/LoopsIndicator", () => ({ LoopsIndicator: () => null }));
+vi.mock("@/presets/SavePresetDialog", () => ({ SavePresetDialog: () => null }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
