@@ -273,8 +273,15 @@ const takenTitles = (mission: Mission, withPlan: boolean) => [
   ...mission.members.flatMap((m) => [m.task, ...(m.done ?? [])]),
 ];
 
-/** `add_tasks`' arguments as tasks for the queue, or what is wrong (spec mission de nuit §4.2). */
-export function proposedTasks(args: Record<string, unknown>, mission: Mission, groups: readonly PlanGroup[]): QueuedTask[] | string {
+/** The card a task names, "" for none; null when it is not one of `cards`. */
+function namedCard(r: Record<string, unknown>, cards: readonly string[]): string | null {
+  if (r.card === undefined || r.card === null) return "";
+  const card = text(r.card);
+  return cards.includes(card) ? card : null;
+}
+
+/** `add_tasks`' arguments as tasks for the queue, or what is wrong (spec mission de nuit §4.2). `cards`: ids of the cards of its linked boards. */
+export function proposedTasks(args: Record<string, unknown>, mission: Mission, groups: readonly PlanGroup[], cards: readonly string[] = []): QueuedTask[] | string {
   const e = messages(agentMessages).plan;
   const raw = args.tasks;
   if (!Array.isArray(raw) || raw.length === 0) return e.atLeastOne;
@@ -289,8 +296,10 @@ export function proposedTasks(args: Record<string, unknown>, mission: Mission, g
     const wanted = text(r.groupe);
     const group = wanted ? groups.find((g) => sameName(g.name, wanted)) : undefined;
     if (wanted && !group) return e.notLinkedGroup(i + 1, wanted);
+    const card = namedCard(r, cards);
+    if (card === null) return e.card(i + 1, String(r.card));
     taken.push(fields.title);
-    tasks.push({ ...fields, ...(group ? { group: { id: group.id, name: group.name } } : {}) });
+    tasks.push({ ...fields, ...(group ? { group: { id: group.id, name: group.name } } : {}), ...(card ? { card } : {}) });
   }
   return tasks;
 }
@@ -331,8 +340,8 @@ export function proposedPlan(
     if (wanted && known !== NEW_AGENT) return e.groupForNew(n);
     const group = wanted ? groups.find((g) => sameName(g.name, wanted)) : undefined;
     if (wanted && !group) return e.notLinkedGroup(n, wanted);
-    const card = r.card === undefined || r.card === null ? "" : text(r.card);
-    if (r.card !== undefined && r.card !== null && !cards.includes(card)) return e.card(n, String(r.card));
+    const card = namedCard(r, cards);
+    if (card === null) return e.card(n, String(r.card));
     plan.push({ ...fields, agent: known, ...(group ? { group: { id: group.id, name: group.name } } : {}), ...(card ? { card } : {}) });
   }
   return { name, task, plan };

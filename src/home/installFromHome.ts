@@ -4,7 +4,7 @@ import { installAgent } from "@/fleet/installAgent";
 import { messages } from "@/i18n";
 import type { AgentId } from "@/ipc/pty";
 import { projectsStore, recentProject } from "@/store/projects";
-import { workspacesStore } from "@/store/workspaces";
+import { isCode, workspacesStore } from "@/store/workspaces";
 import { addProject } from "./addProject";
 import { homeMessages } from "./messages";
 
@@ -22,6 +22,11 @@ export async function installFromHome(agent: AgentId) {
     toast.error(messages(homeMessages).noAgent.openFailed(String(error)));
     return;
   }
-  const workspaceId = workspacesStore.getState().activeId;
-  if (projectsStore.getState().view === "project" && workspaceId) whenSceneReady(workspaceId, () => void installAgent(agent));
+  const { workspaces, activeId, select } = workspacesStore.getState();
+  // A project left on its code workspace reopens there, and that one has no scene to wait for.
+  const onCode = isCode(workspaces.find((w) => w.id === activeId));
+  const workspaceId = onCode ? workspaces.find((w) => !isCode(w))?.id : activeId;
+  if (projectsStore.getState().view !== "project" || !workspaceId) return;
+  if (onCode) select(workspaceId);
+  whenSceneReady(workspaceId, () => void installAgent(agent));
 }

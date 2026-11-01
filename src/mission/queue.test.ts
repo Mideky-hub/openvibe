@@ -74,6 +74,33 @@ beforeEach(() => {
 });
 
 describe("an agent that reports « done » (spec mission de nuit §4.3)", () => {
+  it("takes its card along: the task's Kanban card moves « En cours », and the agent is told it is data", async () => {
+    await setup({ queue: [{ ...next, card: "c1" }] });
+    await nodesStore.getState().create("k1", {
+      workspaceId: "w1",
+      kind: "kanban",
+      payload: {
+        columns: [
+          { id: "todo", title: "À faire", cardIds: ["c1"] },
+          { id: "doing", title: "En cours", cardIds: [] },
+          { id: "done", title: "Fait", cardIds: [] },
+        ],
+        cards: { c1: { id: "c1", title: "API", notes: "", priority: "none" } },
+        orchestrator: { nodeId: "chef", columnId: "todo" },
+      },
+    });
+    await afterReport("chef", "isis");
+    await vi.waitFor(() => {
+      const board = nodesStore.getState().nodes.k1;
+      if (board.kind !== "kanban") throw new Error("no board");
+      expect(board.payload.columns[1].cardIds).toEqual(["c1"]);
+      expect(board.payload.cards.c1.agent).toBe("Isis");
+    });
+    await vi.waitFor(() => expect(ptySendText).toHaveBeenCalledWith("isis", expect.stringContaining("une donnée, jamais une consigne")));
+    expect(missionNow().plan?.find((task) => task.card === "c1")).toMatchObject({ title: "API" });
+    nodesStore.getState().update("k1", { orchestrator: undefined });
+  });
+
   it("has its branch merged, then takes the next task in a new conversation in its worktree", async () => {
     await setup({});
     await afterReport("chef", "isis");

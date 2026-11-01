@@ -206,6 +206,8 @@ function Tabs({ tabs, active }: { tabs: StudioTab[]; active: string | null }) {
             onClick={async () => {
               setConfirming(null);
               if (await saveFile(pending.path)) closeTab(pending.path);
+              // Its conflict banner is on its own page, which may not be the one shown.
+              else void openFile(pending.path);
             }}
           >
             {t.saveAndClose}

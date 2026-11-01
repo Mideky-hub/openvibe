@@ -14,8 +14,10 @@ use uuid::Uuid;
 
 /// A file over this is neither opened nor saved.
 pub const MAX_BYTES: u64 = 2 * 1024 * 1024;
-/// Outside a repository nothing says what is generated or private: these are not walked.
-const SKIPPED: [&str; 6] = [".git", "node_modules", "target", ".ssh", ".aws", ".gnupg"];
+/// Keys and credentials live in these, wherever they sit.
+const PRIVATE_FOLDERS: [&str; 3] = [".ssh", ".aws", ".gnupg"];
+/// Outside a repository nothing says what is generated: these are not walked.
+const GENERATED: [&str; 3] = [".git", "node_modules", "target"];
 const MAX_DEPTH: usize = 32;
 /// Private keys and stores, by extension.
 const SECRET_EXTENSIONS: [&str; 7] = ["pem", "key", "p12", "pfx", "keystore", "jks", "ppk"];
@@ -86,12 +88,22 @@ fn binary(file: &str) -> String {
     tr!("fichier binaire : {file}", "binary file: {file}")
 }
 
+/// Windows ignores the spaces and what follows a dot; `COM¹` to `COM³` are ports
+/// too, as are the console's `CONIN$` and `CONOUT$`.
 fn is_device_name(name: &str) -> bool {
-    let stem = name.split('.').next().unwrap_or(name).to_ascii_uppercase();
-    let numbered = (stem.starts_with("COM") || stem.starts_with("LPT"))
-        && stem.len() == 4
-        && stem.ends_with(|c: char| c.is_ascii_digit());
-    numbered || matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+    let stem = name.split('.').next().unwrap_or(name);
+    let stem = stem.trim_end_matches(' ').to_ascii_uppercase();
+    let numbered = ["COM", "LPT"].iter().any(|port| {
+        stem.strip_prefix(port).is_some_and(|number| {
+            number.len() == 1 && number.starts_with(|c: char| c.is_ascii_digit())
+                || matches!(number, "¹" | "²" | "³")
+        })
+    });
+    numbered
+        || matches!(
+            stem.as_str(),
+            "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+        )
 }
 
 /// Whether Windows would take `name` as it is. A `:` is a drive or an NTFS
@@ -205,22 +217,24 @@ fn is_secret(name: &str) -> bool {
         || extension.is_some_and(|e| SECRET_EXTENSIONS.contains(&e))
 }
 
+/// An untracked file nothing would hide: no `.gitignore` names it, and it was never committed.
+fn is_loose_secret(file: &str) -> bool {
+    let mut parts = file.split('/').rev();
+    parts.next().is_some_and(is_secret) || parts.any(|folder| PRIVATE_FOLDERS.contains(&folder))
+}
+
 /// The files of a git repository (ignored ones left out) as entries, folders included.
 /// Run in `project`, not at the repository's top: the project may be a subfolder.
 fn git_tree(project: &Path) -> Option<Vec<TreeEntry>> {
-    let listed = review::git(
+    let tracked = review::git(project, &["ls-files", "--cached", "-z"]).ok()?;
+    let others = review::git(
         project,
-        &[
-            "ls-files",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-            "-z",
-        ],
+        &["ls-files", "--others", "--exclude-standard", "-z"],
     )
     .ok()?;
-    let files: BTreeSet<&str> = listed
+    let files: BTreeSet<&str> = tracked
         .split('\0')
+        .chain(others.split('\0').filter(|file| !is_loose_secret(file)))
         // `--cached` still names a tracked file that was deleted.
         .filter(|p| !p.is_empty() && project.join(p).is_file())
         .collect();
@@ -260,7 +274,7 @@ fn walk(dir: &Path, prefix: &str, depth: usize, out: &mut Vec<TreeEntry>) {
             format!("{prefix}/{name}")
         };
         if kind.is_dir() {
-            if SKIPPED.contains(&name.as_str()) {
+            if GENERATED.contains(&name.as_str()) || PRIVATE_FOLDERS.contains(&name.as_str()) {
                 continue;
             }
             out.push(entry(&path, "dir"));
@@ -348,10 +362,8 @@ pub fn write(
     }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|err| err.to_string())?;
-        // Checked again once it exists: nothing moved it out meanwhile.
-        let base = std::fs::canonicalize(root).map_err(|err| err.to_string())?;
-        let parent = std::fs::canonicalize(parent).map_err(|err| err.to_string())?;
-        if !parent.starts_with(&base) {
+        // Checked again once it exists: nothing moved it elsewhere meanwhile, `.git` included.
+        if resolve(root, file)? != path {
             return Err(refused(file));
         }
     }
@@ -434,7 +446,12 @@ mod tests {
             "sub/b.txt::$DATA",
             "NUL",
             "con.txt",
+            "con .txt",
             "sub/COM1",
+            "COM¹",
+            "lpt³.txt",
+            "CONIN$",
+            "conout$.log",
             "a.txt.",
             "a.txt ",
         ] {
@@ -908,6 +925,22 @@ mod tests {
                 "untracked.txt"
             ]
         );
+    }
+
+    #[test]
+    fn a_repository_hides_the_loose_secrets_but_not_what_it_tracks() {
+        let dir = project(&[
+            (".env", b"x"),
+            (".env.example", b"x"),
+            ("deep/server.pem", b"x"),
+            ("deep/.ssh/config", b"x"),
+            ("main.rs", b"x"),
+        ]);
+        if !git(dir.path(), &["init"]) {
+            return; // git is not installed on this machine
+        }
+        assert!(git(dir.path(), &["add", ".env.example", "main.rs"]));
+        assert_eq!(files(dir.path()), [".env.example", "main.rs"]);
     }
 
     #[test]

@@ -515,57 +515,70 @@ mod tests {
         })
     }
 
-    /// Runs the real script under bash; None when there is no bash to run it.
-    fn run_status_script(url: &str, input: &[u8]) -> Option<(Vec<u8>, std::time::Duration)> {
+    /// Found before the real curl: it keeps what it is sent and holds on until
+    /// `release` exists, or the folder is gone: a failed test cleans up at once,
+    /// and a curl left waiting would keep `cargo test`'s output open forever.
+    const HELD_CURL: &str = "#!/bin/sh\n\
+cat > sent.txt\n\
+until [ -e release ] || [ ! -e statusline.sh ]; do sleep 0.05; done\n\
+: > finished\n";
+
+    /// Only a stall of the whole machine reaches this: a pass is never a matter of time.
+    const STUCK: std::time::Duration = std::time::Duration::from_secs(120);
+
+    #[test]
+    fn the_status_script_keeps_the_trailing_newlines_and_does_not_wait_for_curl() {
         use std::io::Write;
         use std::process::{Command, Stdio};
+        let Some(bash) = real_bash() else {
+            return; // no bash on this machine
+        };
         let dir = tempfile::tempdir().unwrap();
-        let script = dir.path().join("statusline.sh");
-        std::fs::write(&script, STATUS_SCRIPT).unwrap();
-        let out = dir.path().join("out.txt");
-        let user = format!("cat > '{}'", out.to_string_lossy().replace('\\', "/"));
-        let started = std::time::Instant::now();
-        let mut child = Command::new(real_bash()?)
-            .arg(script.to_string_lossy().replace('\\', "/"))
-            .arg(url)
-            .arg(
-                dir.path()
-                    .join("none.cfg")
-                    .to_string_lossy()
-                    .replace('\\', "/"),
-            )
-            .arg(user)
+        std::fs::write(dir.path().join("statusline.sh"), STATUS_SCRIPT).unwrap();
+        let curl = dir.path().join("curl");
+        std::fs::write(&curl, HELD_CURL).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&curl, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let input = b"{\"a\":1}\n\n";
+        let mut child = Command::new(bash)
+            .current_dir(dir.path())
+            // This bash and its tools before any other: PATH may lead to System32's first.
+            .args([
+                "-c",
+                "PATH=\"$PWD:${BASH%/*}:$PATH\" exec \"$BASH\" statusline.sh \"$@\"",
+            ])
+            .args(["bash", "http://127.0.0.1:1/status/n1", "none.cfg"])
+            .arg("cat > out.txt")
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .ok()?;
+            .unwrap();
         child.stdin.take().unwrap().write_all(input).unwrap();
-        child.wait().ok()?;
-        let elapsed = started.elapsed();
-        // A script that ran must have written: only a missing bash skips the test.
-        Some((
-            std::fs::read(out).expect("the status script wrote nothing"),
-            elapsed,
-        ))
-    }
 
-    #[test]
-    fn the_status_script_keeps_the_trailing_newlines_and_does_not_wait_for_curl() {
-        // A server that accepts and never answers: curl would wait its full second.
-        let silent = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let url = format!(
-            "http://127.0.0.1:{}/status/n1",
-            silent.local_addr().unwrap().port()
-        );
-        let input = b"{\"a\":1}\n\n";
-        let Some((seen, elapsed)) = run_status_script(&url, input) else {
-            return; // no bash on this machine
-        };
-        assert_eq!(seen, input, "the user's line must get the JSON as sent");
-        assert!(
-            elapsed < std::time::Duration::from_millis(900),
-            "{elapsed:?}"
+        // curl is let go after the script has ended, never before: a script
+        // that waited for it would hold both forever.
+        let (ended, end) = std::sync::mpsc::channel();
+        std::thread::spawn(move || ended.send(child.wait()));
+        let exit = end.recv_timeout(STUCK);
+        let release = dir.path().join("release");
+        std::fs::write(&release, b"").unwrap();
+        assert!(exit.is_ok(), "the script waits for curl");
+
+        let finished = dir.path().join("finished");
+        let gave_up = std::time::Instant::now() + STUCK;
+        while !finished.exists() {
+            assert!(std::time::Instant::now() < gave_up, "curl never finished");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert_eq!(std::fs::read(dir.path().join("sent.txt")).unwrap(), input);
+        assert_eq!(
+            std::fs::read(dir.path().join("out.txt")).unwrap(),
+            input,
+            "the user's line must get the JSON as sent"
         );
     }
 

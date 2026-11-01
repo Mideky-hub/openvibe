@@ -72,6 +72,7 @@ export function orchestratorTools() {
                 budget_min: { type: "integer", minimum: 1 },
                 level: { type: "string", enum: ["low", "medium", "high", "extreme"], description: d.planLevel },
                 group: { type: "string", description: d.taskGroup },
+                card: { type: "string", description: d.taskCard },
               },
               required: ["title", "brief", "budget_min"],
             },
@@ -213,7 +214,8 @@ function addTasks(orchestratorId: string, mission: Mission, args: Record<string,
   if (mission.state === "terminee") return refused(t().orchestrator.finished);
   const grouped = Array.isArray(args.tasks) && args.tasks.some((s) => Boolean((s as Record<string, unknown> | null)?.groupe));
   if (grouped && !canvasKnown(orchestratorId)) return refused(t().orchestrator.hiddenWorkspace);
-  const tasks = proposedTasks(args, mission, linkedGroups(orchestratorId));
+  const cards = linkedBoards(orchestratorId).flatMap(({ board }) => Object.keys(board.cards));
+  const tasks = proposedTasks(args, mission, linkedGroups(orchestratorId), cards);
   if (typeof tasks === "string") return refused(tasks);
   const queue = [...(mission.queue ?? []), ...tasks];
   setMission(orchestratorId, { queue });
@@ -223,7 +225,7 @@ function addTasks(orchestratorId: string, mission: Mission, args: Record<string,
 
 function describeQueue(mission: Mission): ToolResult {
   return json({
-    waiting: (mission.queue ?? []).map((s) => ({ title: s.title, brief: s.brief, budget_min: s.budgetMin, level: s.level ? outLevel(s.level) : null, group: s.group?.name ?? null })),
+    waiting: (mission.queue ?? []).map((s) => ({ title: s.title, brief: s.brief, budget_min: s.budgetMin, level: s.level ? outLevel(s.level) : null, group: s.group?.name ?? null, card: s.card ?? null })),
     free_agents: freeMembers(mission).map((m) => m.name),
   });
 }
@@ -243,7 +245,7 @@ const timeText = (spent: number | undefined, budget: number) => (spent === undef
 function describeBoards(orchestratorId: string): ToolResult {
   const boards = linkedBoards(orchestratorId);
   if (boards.length === 0) return said(t().orchestrator.noBoard);
-  return json(boards.map(({ nodeId, board }) => boardView(nodeId, board)));
+  return json({ note: t().orchestrator.boardNote, boards: boards.map(({ nodeId, board }) => boardView(nodeId, board)) });
 }
 
 function describeTeam(orchestratorId: string, mission: Mission): ToolResult {

@@ -44,11 +44,10 @@ export function placeOrchestrator(at?: Point) {
 
 /**
  * « Se connecter » of a Claude profile (spec comptes §5): a visible Claude terminal started with that
- * profile, where the user logs in. False when there is no project to place it in.
+ * profile, where the user logs in. False when there is no canvas to place it on: no project, or the code workspace.
  */
 export async function launchLogin(accountId: string): Promise<boolean> {
   if (!workspacesStore.getState().activeId) return false;
   const center = viewportCenter(canvasStore.getState().view);
-  await launchAgent("claude", { ...defaultLaunchOptions(), accountId }, center);
-  return true;
+  return (await launchAgent("claude", { ...defaultLaunchOptions(), accountId }, center)) !== null;
 }

@@ -1,4 +1,5 @@
 import { messages } from "@/i18n";
+import { startMissionCards } from "@/kanban/orchestrate";
 import { agentMessages } from "@/mcp/messages";
 import { nodesStore } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
@@ -66,7 +67,8 @@ function take(orchestratorId: string, mission: Mission, member: Member, report: 
   const brief = oneLine(task.brief);
   const text = t().lines.nextSubTask(mission.name ?? "", task.title, `${brief}${/[.!?]$/.test(brief) ? "" : "."}`, task.budgetMin, member.branch, mission.branch ?? "");
   // A new conversation: one task's context must not spill into the next, and its steps start over.
-  void assign(orchestratorId, next, withTicketNote(mission, text, task), restartIn(member.nodeId, member.worktree, model, mission.permission));
+  void startMissionCards(orchestratorId, [next], [subTask]).catch(() => undefined);
+  void assign(orchestratorId, next, withTicketNote(orchestratorId, mission, text, task), restartIn(member.nodeId, member.worktree, model, mission.permission));
   return t().lines.taken(member.name, task.title, queue.length);
 }
 

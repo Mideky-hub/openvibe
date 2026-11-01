@@ -37,6 +37,8 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 - A relaunched terminal keeps its saved output, and an empty capture never replaces it; two starts of the same terminal can no longer race.
 - Updates: a check no longer closes the update being installed, and an install never goes over unsaved studio changes.
 - Remote Control never types `/remote-control` after a half-written draft; a Loop never types into a shell whose Claude has quit.
+- Kanban: a card's text stays data wherever it reaches an orchestrator or an agent. A card from GitHub is never sent to a plain shell, and dropping a card on an agent waiting for an answer no longer confirms its dialog.
+- Kanban and missions: a queued task can carry its card, which then moves with it, and an issue follows its card when you are in another project.
 - Orchestrator and mission: events wait while you type in the orchestrator, `reassign` and `extend` refuse agents that cannot take them, overrun lines are told again if the app closed before they were heard, and changing a project's folder moves its orchestrators too.
 - Groups: a group copied whole gets a pantheon of its own, a folded group never hides a selectable agent, and a new group is fitted at a readable zoom instead of 40 %.
 - Review: the toasts no longer cover *Send*, a nested repository is skipped, and a git warning on an empty diff is no error.

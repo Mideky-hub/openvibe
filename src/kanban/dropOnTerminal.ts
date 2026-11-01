@@ -1,9 +1,9 @@
 import { toast } from "sonner";
 import { canvasStore } from "@/canvas/canvasStore";
 import { findTerminalAt } from "@/canvas/hitTest";
+import { sendToAgents } from "@/fleet/broadcast";
 import { sceneOf } from "@/fleet/placement";
 import { messages } from "@/i18n";
-import { ptySendText } from "@/ipc/pty";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { cardText } from "./board";
@@ -64,7 +64,11 @@ export function terminalAtClient(client: { x: number; y: number }): string | nul
   return findTerminalAt(api.getSceneElements(), scene.x, scene.y)?.id ?? null;
 }
 
-/** Types the card's text into a running terminal, then Enter (issue #29). */
+/**
+ * Types the card's text into a running terminal, then Enter (issue #29). A card
+ * from GitHub may hold anybody's text: its note comes first, so that it cannot
+ * open on a `/command`, and a plain shell would run it, line by line.
+ */
 export async function sendCardToTerminal(nodeId: string, cardId: string, terminalId: string): Promise<boolean> {
   const t = messages(kanbanMessages);
   const record = nodesStore.getState().nodes[nodeId];
@@ -76,14 +80,17 @@ export async function sendCardToTerminal(nodeId: string, cardId: string, termina
     toast.error(t.notRunning(name));
     return false;
   }
-  try {
-    await ptySendText(terminalId, cardText(card));
-    toast.success(t.sent(name));
-    return true;
-  } catch (error) {
-    toast.error(t.sendFailed(String(error)));
+  if (card.github && terminal?.agent === "shell") {
+    toast.error(t.notInShell);
     return false;
   }
+  const text = card.github ? `${t.fromIssue}\n\n${cardText(card)}` : cardText(card);
+  // Enter would answer an open dialog: `sendToAgents` leaves that agent alone.
+  const { sent, waiting } = await sendToAgents([terminalId], text);
+  if (sent > 0) toast.success(t.sent(name));
+  else if (waiting.length > 0) toast.error(t.waiting(name));
+  else toast.error(t.notRunning(name));
+  return sent > 0;
 }
 
 /** A card dropped outside its board: on a terminal, its text goes to the agent. */
