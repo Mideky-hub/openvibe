@@ -7,14 +7,16 @@ export const useStudioOpen = () => useStore(studioStore, (s) => s.open);
 export const openStudio = () => studioStore.setState({ open: true });
 export const closeStudio = () => studioStore.setState({ open: false });
 
-let hold: (() => boolean) | null = null;
+let guard: { check: () => boolean; unsaved: () => boolean } | null = null;
 
-/** While the studio is open, `check` tells whether the window must wait for it. */
-export function guardQuit(check: () => boolean): () => void {
-  hold = check;
+/** While a dialog holds a file, `check` asks whether the window must wait for it (and asks the user); `unsaved` only tells. */
+export function guardQuit(check: () => boolean, unsaved: () => boolean = () => false): () => void {
+  const mine = { check, unsaved };
+  guard = mine;
   return () => {
-    if (hold === check) hold = null;
+    if (guard === mine) guard = null;
   };
 }
 
-export const holdQuit = () => hold?.() ?? false;
+export const holdQuit = () => guard?.check() ?? false;
+export const hasUnsavedWork = () => guard?.unsaved() ?? false;

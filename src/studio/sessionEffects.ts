@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { FileSession } from "./fileSession";
+import { isDirty, type FileSession } from "./fileSession";
 import { guardQuit } from "./studioStore";
 
 /** Agents write by every means there is: the disk is compared this often (spec studio code §3). */
@@ -17,7 +17,14 @@ export function useFileSessionEffects(session: FileSession) {
     };
   }, [session]);
 
-  useEffect(() => guardQuit(() => session.getState().holdQuit()), [session]);
+  useEffect(
+    () =>
+      guardQuit(
+        () => session.getState().holdQuit(),
+        () => isDirty(session.getState()),
+      ),
+    [session],
+  );
 
   useEffect(() => {
     // In the capture phase, wherever the keyboard is (the tree, the search panel): else WebView2 offers to save the page.

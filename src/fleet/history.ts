@@ -41,7 +41,14 @@ export const historyStore = createStore<HistoryState>()((set, get) => ({
   load: async (projectId) => {
     if (get().projectId === projectId) return;
     set({ projectId, entries: [], loaded: false });
-    const saved = await getSetting<unknown>(historyKey(projectId)).catch(() => null);
+    let saved: unknown;
+    try {
+      saved = await getSetting<unknown>(historyKey(projectId));
+    } catch (error) {
+      // Left unloaded: this session's commands stay in memory, nothing is saved over the unread list.
+      console.warn("command history not read", error);
+      return;
+    }
     if (get().projectId !== projectId) return;
     const before = saved === null || !Array.isArray(saved) ? [] : saved.filter((entry): entry is string => typeof entry === "string");
     // Commands sent while the history was being read go after the saved ones, and are saved with them.

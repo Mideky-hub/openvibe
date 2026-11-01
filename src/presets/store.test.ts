@@ -56,3 +56,14 @@ it("removes a preset and saves the rest", async () => {
   expect(presetsStore.getState().presets).toEqual([]);
   expect(saved[saved.length - 1]?.value).toEqual({ version: 1, presets: [] });
 });
+
+it("saves nothing over a list it could not read: a busy database must not wipe the presets (review)", async () => {
+  mockIPC((cmd, args) => {
+    if (cmd === "get_setting") throw { kind: "db", message: "database is locked" };
+    if (cmd === "set_setting") saved.push(args as { key: string; value: unknown });
+  });
+  await expect(presetsStore.getState().save(preset("Tests", "2"))).rejects.toThrow();
+  await expect(presetsStore.getState().remove("1")).rejects.toThrow();
+  expect(saved).toEqual([]);
+  expect(presetsStore.getState().loaded).toBe(false);
+});
