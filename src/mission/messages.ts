@@ -56,8 +56,8 @@ export const missionMessages = defineMessages(
       permission: "Autorisations des agents",
       permissions: { work: "Fichiers et commandes", edits: "Fichiers", ask: "Demander" },
       permissionHelp: {
-        work: "sans demander ; le reste est refusé, jamais demandé.",
-        edits: "sans demander ; une commande demande, et l'agent attend.",
+        work: "Les agents lancent n'importe quelle commande sans demander : le réseau et les comptes connectés sur ce PC leur sont ouverts.",
+        edits: "sans demander ; un agent s'arrête à sa première commande, jusqu'à ton retour.",
         ask: "comme d'habitude ; chaque dialogue arrête l'agent jusqu'à ton retour.",
       },
       noPush: "git push reste interdit dans tous les cas. Tes réglages ne sont pas modifiés.",
@@ -137,8 +137,8 @@ export const missionMessages = defineMessages(
       permission: "Agents' permissions",
       permissions: { work: "Files and commands", edits: "Files", ask: "Ask" },
       permissionHelp: {
-        work: "unasked; anything else is refused, never asked.",
-        edits: "unasked; a command asks, and the agent waits.",
+        work: "Agents run any command unasked: the network and the accounts logged in on this PC are open to them.",
+        edits: "unasked; an agent stops at its first command, until you are back.",
         ask: "as usual; each dialog stops the agent until you are back.",
       },
       noPush: "git push stays forbidden in every case. Your settings are not changed.",

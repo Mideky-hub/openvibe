@@ -13,7 +13,8 @@ import { blockers, usageWarning } from "./overnightChecks";
 import { missionOf } from "./store";
 
 const FIELD = "w-20 rounded bg-ov-field px-2 py-1 text-sm text-ov-text outline-none";
-const PERMISSIONS: readonly Permission[] = ["work", "edits", "ask"];
+/** From the tightest to the most open: commands stay an explicit choice (review). */
+const PERMISSIONS: readonly Permission[] = ["ask", "edits", "work"];
 
 /** « Mission de nuit » (spec mission de nuit §5.1): how long the user is away, and what the team works from. */
 export function OvernightDialog({ nodeId, open, onOpenChange }: { nodeId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -23,8 +24,8 @@ export function OvernightDialog({ nodeId, open, onOpenChange }: { nodeId: string
   const [agents, setAgents] = useState(String(maxAgents ?? 4));
   const [kind, setKind] = useState<"github" | "backlog">("github");
   const [label, setLabel] = useState(DEFAULT_LABEL);
-  const [auto, setAuto] = useState(true);
-  const [permission, setPermission] = useState<Permission>("work");
+  const [auto, setAuto] = useState(false);
+  const [permission, setPermission] = useState<Permission>("edits");
   const project = useNodes((s) => sessionOf(s.nodes[nodeId])?.cwd);
   const [checks, setChecks] = useState<ProjectChecks | null>(null);
   useEffect(() => {
