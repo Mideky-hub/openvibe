@@ -37,3 +37,9 @@ it("leaves the router's model and Remote Control behind: they were the source's 
   expect(copy.remoteControl).toBeUndefined();
 });
 
+it("copies a one-shot terminal as a plain shell: an install never runs again unasked (review)", () => {
+  const install: TerminalPayload = { ...claude, agent: "custom", command: "irm https://x | iex", oneShot: true, claudeSessionId: undefined };
+  const copy = cloneTerminalPayload(install, "Osiris");
+  expect(copy).toMatchObject({ agent: "shell", command: "", cwd: "C:/api", shell: "cmd" });
+  expect(copy.oneShot).toBeUndefined();
+});
