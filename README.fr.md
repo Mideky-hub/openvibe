@@ -106,7 +106,7 @@ L'orchestrateur est une session Claude Code qui joue le rôle de manager d'équi
 2. **Vous lancez la mission.** OpenVibe crée la branche de mission `openvibe/<mission>`, ainsi qu'une branche et un worktree par agent, à côté de votre dépôt. Puis il confie à chaque agent sa sous-tâche.
 3. **Les agents rendent compte.** Chaque agent Claude déclare ses étapes, qui s'affichent en frise sous son terminal, et rend compte quand il a fini. Un agent peut confier une partie de son travail à ses propres sous-agents.
 4. **L'orchestrateur surveille le temps.** Il est prévenu quand une sous-tâche atteint son budget. Au double du budget, vous recevez une notification et la barre passe au rouge. Personne n'est arrêté automatiquement : l'orchestrateur peut prolonger, interrompre ou réattribuer.
-5. **Il fusionne.** Les branches terminées sont fusionnées dans la branche de mission ; en cas de conflit, la fusion est annulée et signalée. OpenVibe **ne pousse jamais** et **ne fusionne jamais dans votre propre branche**.
+5. **Il fusionne.** Les branches terminées sont fusionnées dans la branche de mission ; en cas de conflit, la fusion est annulée et signalée. Les étapes propres à une mission **ne poussent jamais** et **ne fusionnent jamais dans votre propre branche**. La fenêtre git ne pousse que lorsque vous cliquez sur *Pousser*, et un agent qui lance des commandes dans un terminal n'est limité que par ses permissions.
 
 Avec le **routeur de modèles**, le niveau de chaque sous-tâche choisit le modèle de son agent :
 
