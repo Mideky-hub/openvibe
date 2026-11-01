@@ -428,6 +428,12 @@ it("keeps the task an agent finished when reassign gives it another one", async 
   expect(missionNow().members.find((m) => m.name === "Horus")?.past).toEqual([{ task: "Login", status: "termine", summary: "Login fait", merged: true, spentMin: 10, budgetMin: 20, branch: "openvibe/auth-horus" }]);
 });
 
+it("carries what an agent left to check into what it went through", async () => {
+  await setup({ members: [member("isis", "Isis", { report: { ...done, check: "Le bouton" } })] });
+  await afterReport("chef", "isis");
+  expect(missionNow().members[0].past?.[0].check).toBe("Le bouton");
+});
+
 it("keeps the mission's permissions through a new conversation, and launches with them", async () => {
   await setup({ permission: "work" });
   await afterReport("chef", "isis");

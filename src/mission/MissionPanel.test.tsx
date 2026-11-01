@@ -88,6 +88,42 @@ it("opens « Mission de nuit » from its settings, and marks a night (spec missi
   expect(host.querySelector("header")?.textContent).toContain("de nuit");
 });
 
+it("shows the morning report of a night, what to check first (spec mission de nuit §6.2)", async () => {
+  await show({
+    state: "terminee", overnight: true, budgetMin: 480, startedAt: 0, endedAt: 60 * 60_000, summary: "Bilan", handChecks: ["Relire la migration"],
+    queue: [{ title: "Docs", brief: "b", budgetMin: 10 }],
+    members: [
+      { nodeId: "a", name: "Isis", task: "Login", budgetMin: 20, linked: false, branch: "openvibe/nuit-isis", worktree: "w", sentAt: 0, merged: true, report: { summary: "Login fait", status: "termine", at: 10 * 60_000 } },
+      { nodeId: "b", name: "Horus", task: "API", budgetMin: 20, linked: false, branch: "openvibe/nuit-horus", worktree: "w", sentAt: 0, report: { summary: "Coincé", status: "bloque", at: 5 * 60_000 } },
+      { nodeId: "c", name: "Thot", task: "Tests", budgetMin: 20, linked: false, branch: "b", worktree: "w", sentAt: 0 },
+    ],
+  });
+  const report = host.querySelector("[data-morning]")!.textContent;
+  expect(report).toContain("Rapport du matin");
+  expect(report).toContain("60 / 480 min");
+  expect(report).toContain("À vérifier à la main (1)");
+  expect(report).toContain("Relire la migration");
+  expect(report).toContain("Fait (1)");
+  expect(report).toContain("openvibe/nuit-isis");
+  expect(report).toContain("Échoué ou bloqué (1)");
+  expect(report).toContain("bloqué");
+  expect(report).toContain("Pas fini (1)");
+  expect(report).toContain("Restées dans la file : Docs");
+});
+
+it("shows it in English", async () => {
+  langStore.setState({ lang: "en" });
+  await show({ state: "terminee", overnight: true, budgetMin: 60, startedAt: 0, endedAt: 60_000, summary: "x", members: [{ nodeId: "a", name: "Isis", task: "Login", budgetMin: 20, linked: false, branch: "b", worktree: "w", sentAt: 0, report: { summary: "ok", status: "echec", at: 1 } }] });
+  const report = host.querySelector("[data-morning]")!.textContent;
+  expect(report).toContain("Morning report");
+  expect(report).toContain("Failed or blocked (1)");
+});
+
+it("shows no morning report outside a night", async () => {
+  await show({ state: "terminee", summary: "x", members: [] });
+  expect(host.querySelector("[data-morning]")).toBeNull();
+});
+
 it("shows the tasks waiting in the queue (spec mission de nuit §4)", async () => {
   await show({ state: "plan", name: "Auth", plan: [{ title: "Login", brief: "Fais le login", agent: "Isis", budgetMin: 20 }], queue: [{ title: "API", brief: "b", budgetMin: 30 }, { title: "Docs", brief: "b", budgetMin: 10 }] });
   expect(host.querySelector("[data-queue]")?.textContent).toContain("En attente (2)");

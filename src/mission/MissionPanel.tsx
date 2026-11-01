@@ -14,6 +14,8 @@ import { uiStore, useUi } from "@/store/ui";
 import { cleanMission, launchMission } from "./launch";
 import { budgetBar, budgetOf, MAX_AGENTS, memberTime, type Mission } from "./mission";
 import { missionMessages } from "./messages";
+import { morningShown } from "./morning";
+import { MorningReportView } from "./MorningReportView";
 import { OvernightDialog } from "./OvernightDialog";
 import { LEVELS, modelLabel } from "./router";
 import { agentState, missionOf, setMission } from "./store";
@@ -22,6 +24,7 @@ import { agentState, missionOf, setMission } from "./store";
 export function MissionPanel({ nodeId }: { nodeId: string }) {
   const t = useMessages(missionMessages);
   const mission = useNodes((s) => missionOf(s.nodes[nodeId]));
+  const now = useNow(60_000);
   if (!mission) return null;
   return (
     <section data-mission={nodeId} className="flex max-h-[45%] shrink-0 flex-col gap-2 overflow-y-auto border-t border-ov-line px-3 py-2 text-xs text-ov-text-2">
@@ -39,6 +42,7 @@ export function MissionPanel({ nodeId }: { nodeId: string }) {
           {mission.error}
         </p>
       )}
+      {morningShown(mission, now) && <MorningReportView mission={mission} />}
       {(mission.state === "en_cours" || mission.state === "terminee") && <Team mission={mission} />}
       {mission.queue && mission.queue.length > 0 && <Queue mission={mission} />}
       {mission.state === "terminee" && <Summary nodeId={nodeId} summary={mission.summary ?? ""} />}

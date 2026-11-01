@@ -29,6 +29,16 @@ export const missionMessages = defineMessages(
     total: (total: number, budget: number | undefined) => `${total} min d'agents${budget ? ` · ${budget} min de temps réel` : ""}`,
     waitingTasks: (count: number) => `En attente (${count})`,
     nightBadge: "de nuit",
+    morning: {
+      title: "Rapport du matin",
+      time: (elapsed: number, away: number | undefined) => `${elapsed}${away ? ` / ${away}` : ""} min`,
+      count: (title: string, count: number) => `${title} (${count})`,
+      check: "À vérifier à la main",
+      done: "Fait",
+      failed: "Échoué ou bloqué",
+      unfinished: "Pas fini",
+      waiting: (tasks: string) => `Restées dans la file : ${tasks}`,
+    },
     nightButton: "Mission de nuit…",
     overnight: {
       title: "Mission de nuit",
@@ -100,6 +110,16 @@ export const missionMessages = defineMessages(
     total: (total: number, budget: number | undefined) => `${total} agent minutes${budget ? ` · ${budget} min of real time` : ""}`,
     waitingTasks: (count: number) => `Waiting (${count})`,
     nightBadge: "overnight",
+    morning: {
+      title: "Morning report",
+      time: (elapsed: number, away: number | undefined) => `${elapsed}${away ? ` / ${away}` : ""} min`,
+      count: (title: string, count: number) => `${title} (${count})`,
+      check: "To check by hand",
+      done: "Done",
+      failed: "Failed or blocked",
+      unfinished: "Not finished",
+      waiting: (tasks: string) => `Left in the queue: ${tasks}`,
+    },
     nightButton: "Overnight run…",
     overnight: {
       title: "Overnight run",
