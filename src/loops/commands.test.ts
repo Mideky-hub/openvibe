@@ -11,7 +11,7 @@ vi.mock("@excalidraw/excalidraw", () => ({}));
 vi.mock("./live", async () => {
   const { createLoopsStore } = await import("./store");
   const store = createLoopsStore(
-    { now: () => 0, isLive: () => true, activityOf: () => undefined, screenOf: () => "", send: async () => ({ sent: 0 }) },
+    { now: () => 0, isLive: () => true, activityOf: () => undefined, screenOf: () => "", canReceive: () => true, send: async () => ({ sent: 0 }) },
     { read: async () => null, write: async () => undefined },
     { setInterval: () => 0 as never, clearInterval: () => undefined },
   );

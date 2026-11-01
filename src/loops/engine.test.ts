@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Activity } from "@/ipc/activity";
-import { COOLDOWN_MS, createLoopEngine, type EngineDeps, type LoopRuntime } from "./engine";
+import { acceptsInstruction, COOLDOWN_MS, createLoopEngine, type EngineDeps, type LoopRuntime } from "./engine";
 import type { LoopDef } from "./model";
 
 const MIN = 60_000;
 let now: number;
 let activities: Record<string, Activity | undefined>;
 let screens: Record<string, string>;
+const gone = new Set<string>();
 let live: Set<string>;
 let sent: { ids: string[]; text: string }[];
 let reach: number | null;
@@ -17,6 +18,7 @@ const deps = (): EngineDeps => ({
   isLive: (id) => live.has(id),
   activityOf: (id) => activities[id],
   screenOf: (id) => screens[id] ?? "",
+  canReceive: (id) => !gone.has(id),
   send: async (ids, text) => {
     sent.push({ ids, text });
     return { sent: reach ?? ids.length };
@@ -338,5 +340,62 @@ describe("the timing race: an agent is closed between the check and the send", (
     now += 10 * MIN;
     await e.tick();
     expect(sent).toEqual([{ ids: ["b"], text: "fais un point" }]);
+  });
+});
+
+describe("a terminal whose Claude has quit (review)", () => {
+  const def: LoopDef = { id: "q", name: "Q", instruction: "del build", targets: ["a", "b"], trigger: { kind: "interval", minutes: 1 }, maxRuns: 2 };
+
+  it("gets nothing typed, and the others still do", async () => {
+    gone.clear();
+    gone.add("a");
+    now = 0;
+    live = new Set(["a", "b"]);
+    activities = {};
+    screens = {};
+    sent = [];
+    reach = null;
+    runtimes = {};
+    const engine = createLoopEngine(deps(), (id, runtime) => (runtimes[id] = runtime));
+    engine.start(def);
+    now = MIN;
+    await engine.tick();
+    expect(sent).toEqual([{ ids: ["b"], text: "del build" }]);
+    gone.clear();
+  });
+
+  it("is no run when no target can take it", async () => {
+    gone.clear();
+    gone.add("a");
+    gone.add("b");
+    now = 0;
+    live = new Set(["a", "b"]);
+    activities = {};
+    screens = {};
+    sent = [];
+    reach = null;
+    runtimes = {};
+    const engine = createLoopEngine(deps(), (id, runtime) => (runtimes[id] = runtime));
+    engine.start(def);
+    now = MIN;
+    await engine.tick();
+    expect(sent).toEqual([]);
+    expect(runtimes.q.runs).toBe(0);
+    gone.clear();
+  });
+});
+
+describe("what a terminal can take", () => {
+  const box = "Some answer\n──────────\n❯ \n──────────\n  ? for shortcuts";
+
+  it("needs Claude's input box for a Claude terminal: its shell would run the text", () => {
+    expect(acceptsInstruction("claude", box)).toBe(true);
+    expect(acceptsInstruction("claude", "PS C:\\code> ")).toBe(false);
+    expect(acceptsInstruction("claude", "")).toBe(false);
+  });
+
+  it("leaves the other agents as they were", () => {
+    expect(acceptsInstruction("codex", "anything")).toBe(true);
+    expect(acceptsInstruction(undefined, "")).toBe(true);
   });
 });
