@@ -2,6 +2,8 @@
 
 Date : 2026-10-31. Idée du backlog : « Studios (modales ouvertes depuis le rail droit) », partie **Code**, réduite à l'édition à la main. Identité visuelle : spec identité.
 
+> Note du 2026-11-01 : le Code Studio publié en 1.1.0-beta.1 (un onglet d'espace de code) a remplacé la modale de cette spec. Ses règles de fichiers (§3, §4) sont reprises dans la version publiée ; l'interface décrite ici ne l'est pas.
+
 ## 1. Objectif
 
 Corriger un fichier à la main sans quitter OpenVibe, alors que des agents travaillent dans le même dossier. La règle qui commande tout le reste : **ni le studio ni un agent ne perd un travail en silence**.

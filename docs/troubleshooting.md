@@ -34,9 +34,9 @@ The meter in the top bar reads Claude Code's usage through a small script run by
 
 The view reads the `.jsonl` logs that Claude Code keeps under `~/.claude/projects` (or under the folder named by `CLAUDE_CONFIG_DIR`), for the last 30 days, in UTC days. It stays empty if Claude Code has not run on this PC, if its folder is somewhere else, or if its history was cleared. For a very large history OpenVibe stops at fixed limits (number of files, bytes read, time) and says the figures are a minimum. Only Claude Code is read; Codex is not supported yet. The view never shows conversation text.
 
-## The code studio refuses to save
+## Code Studio refuses to save
 
-OpenVibe never overwrites what an agent wrote meanwhile. If the file changed on the disk since you opened it, the studio says so and offers to **reload** (your edits are lost) or to **overwrite** with your version. If the file was deleted, it offers to recreate it. A project outside a git repository lists its files from the folder itself, up to a limit.
+OpenVibe never overwrites what an agent wrote meanwhile. If the file changed on the disk since you opened it, the studio says so and offers to **reload** (your edits are lost) or to **overwrite** with your version. If the file was deleted, it offers to recreate it or to close it without keeping your edits. A project outside a git repository lists its files from the folder itself, up to a limit.
 
 ## An agent has disappeared from a group
 

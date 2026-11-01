@@ -21,6 +21,9 @@ Règles : lancer le build de développement avec `--config` (ses propres donnée
 
 ### Studio de code
 - Un agent modifie un fichier ouvert dans le studio : le studio le dit, et n'écrase rien en silence.
+- Modifier un fichier sans l'enregistrer, changer de projet, revenir : l'onglet et ses modifications sont là.
+- Fermer la fenêtre avec des onglets non enregistrés, depuis un canvas comme depuis l'accueil : la question arrive, *Enregistrer*, *Ne pas enregistrer* et *Annuler* font ce qu'ils disent.
+- Un fichier YAML ou Go s'ouvre coloré (langage chargé à la demande) ; la première ouverture du Code Studio ne fige pas la fenêtre.
 - Hors dépôt Git : les secrets (`.env`…) ne sont pas dans la liste.
 - Un gros fichier et un fichier binaire sont refusés avec un message.
 

@@ -12,7 +12,6 @@ Ce qui est reporté. La spec en cours est `docs/superpowers/specs/2026-10-24-ope
 - Avoir une option Routeur dans l'orchestrateur, qui attribue pour chaque agent un modèle faible pour les tâches faibles Haiku 5.5, moyen Sonnet 5.5, elevé Opus, extrême Fable 5.1
 - Permettre d'activer le remote-control sur plusieurs terminaux, à l'unité ou au travers de l'orchestrateur pour gérer et avoir accès aux workflows à distance.
 
-- Ajouter une fonctionnalités IDE pour modifier manuellement le code.
 - Faciliter l'installation des agents (Claude Code, Gemini, Qwen Code, Cursor, Ollama, Aider etc... en un clic depuis l'interface, et permettre de configurer/installer des modèles locaux facilement sur Ollama)
 - Permettre à un orchestrateur, quand il est lié à plusieurs groupes, de donner du travail au groupe qui lui semble le plus pertinent. Quand il a des groupes (frontend, backend, design etc...), Il distribue sans vraiment de distinction les tâches attribuées. L'idée est d'avoir des groupes spécialisée.
 - Ajouter des foncitonnalitée de prise de notes et de gestion de mémoires types obsidian, attribuables à des groupes comme contexte optionnel, que toi au l'orchestrateur peut utiliser comme base potentielle de documentation supplémentaires. Avec une fonctionnalités d'affichage par graphique.
@@ -22,7 +21,6 @@ Ce qui est reporté. La spec en cours est `docs/superpowers/specs/2026-10-24-ope
 
 ### Widgets du canvas (remplacent les nœuds Note, Kanban et Git Watcher de la spec V1)
 
-- **Kanban « Board »** : colonnes éditables avec compteur et menu, état vide, ajout de colonne ; fenêtre « Nouvelle carte » (titre, notes, échéance Aujourd'hui / Demain / Semaine prochaine ou date, priorité Aucune / Basse / Moyenne / Haute) ; cartes avec barre de priorité et puces ; glisser entre colonnes ; glisser une carte vers un terminal (spec V1 §6.9). Vidéo : node-kanban.
 - **Calendrier** : grille mensuelle, aujourd'hui en orange, Nouveau / Aujourd'hui / navigation, fenêtre d'événement (date, journée entière, 6 couleurs, notes), glisser un événement d'un jour à l'autre. Vidéo : node-kanban.
 - **Checklist d'objectifs** : état vide « Aucun objectif », « Ajouter un objectif ». Vidéo : node-kanban.
 - **Post-it** : papier ligné ocre, coin corné, police manuscrite, panneau PAPIER (9 couleurs, ordre, dupliquer, supprimer) ; remplace le nœud Note. Vidéo : node-kanban.
@@ -35,7 +33,6 @@ Ce qui est reporté. La spec en cours est `docs/superpowers/specs/2026-10-24-ope
 
 ### Studios (modales ouvertes depuis le rail droit)
 
-- **Code** : arbre du dépôt, éditeur coloré (CodeMirror), Enregistrer, « Insérer » qui pose un nœud fichier sur le canvas. Vidéo : studio-code.
 - **Markdown** : arbre `docs/`, vues Lecture / Source / Graphe de liens, « Ajouter au board », export PDF ; nœud avec « Ouvrir dans le studio ». Vidéo : studio-markdown.
 - **Documents** : document rédigé par un agent CLI (modèle, effort Rapide / Équilibré / Approfondi, flux en direct, Stop), rendu « papier », export PDF. Vidéo : studio-documents.
 - **Diagrammes** : l'agent dessine des éléments Excalidraw natifs (modèle, style Encre / Coloré, presets « Architecture », « Flux de données »…, prompt, formes de départ). Vidéo : studio-diagrams.
@@ -211,7 +208,9 @@ Ce qui est reporté. La spec en cours est `docs/superpowers/specs/2026-10-24-ope
 
 ### Studio de code et notes
 - Course entre la vérification et le renommage d'un fichier (studio et notes).
-- Studio : « Insérer » (nœud fichier sur le canvas) absent ; un seul fichier ouvert à la fois.
+- Code Studio : changer d'onglet refait l'éditeur, donc perd l'historique d'annulation et la position (comme en 1.1.0-beta.1).
+- Code Studio : seul l'onglet affiché est comparé au disque ; les autres le sont en revenant dessus, et à l'écriture de toute façon.
+- Code Studio : les onglets d'un projet retiré restent en mémoire jusqu'à la fermeture.
 - Notes : renommer et supprimer une note ne sont pas proposés.
 - Le glisser et la molette du graphe ne sont pas testés ; la remise à zéro du graphe n'a pas de test.
 
