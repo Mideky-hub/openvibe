@@ -385,6 +385,57 @@ mod tests {
         assert_eq!(backups_in(dir.path()), 0);
     }
 
+    /// 1.0.0-beta.1 stopped at v2: every table's rows reach the last schema, and a copy stays behind.
+    #[test]
+    fn a_base_of_the_first_beta_climbs_to_the_last_schema_without_loss() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("openvibe.db");
+        base_at_version(&path, 2);
+        {
+            let conn = Connection::open(&path).unwrap();
+            let (_, workspace) = raw_workspace(&conn);
+            conn.execute_batch(&format!(
+                "INSERT INTO nodes (id, workspace_id, kind, payload_json, updated_at) VALUES
+                   ('t1', '{workspace}', 'terminal', '{{\"cwd\":\"C:/p\"}}', 1),
+                   ('o1', '{workspace}', 'orchestrator', '{{\"name\":\"Chef\"}}', 2),
+                   ('n1', '{workspace}', 'note', '{{}}', 3);
+                 INSERT INTO terminal_scrollback VALUES ('t1', x'4142', 4);
+                 INSERT INTO scenes VALUES ('{workspace}', '[1]', '{{}}', 5);
+                 INSERT INTO scene_files VALUES ('{workspace}', 'f1', 'image/png', 'data:,', 6);
+                 INSERT INTO settings VALUES ('theme', '\"dark\"');"
+            ))
+            .unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        let copy = Connection::open(backup_path(&path, 2)).unwrap();
+        let copied: i64 = copy
+            .query_row("SELECT count(*) FROM nodes", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(copied, 3);
+        db.with(|conn| {
+            let count = |sql: &str| conn.query_row(sql, [], |r| r.get::<_, i64>(0));
+            assert_eq!(count("PRAGMA user_version")?, MIGRATIONS.len() as i64);
+            assert_eq!(count("SELECT count(*) FROM nodes")?, 3);
+            assert_eq!(
+                count("SELECT count(*) FROM terminal_scrollback WHERE data = x'4142'")?,
+                1
+            );
+            assert_eq!(
+                count("SELECT count(*) FROM scenes WHERE elements_json = '[1]'")?,
+                1
+            );
+            assert_eq!(count("SELECT count(*) FROM scene_files")?, 1);
+            assert_eq!(count("SELECT count(*) FROM settings")?, 1);
+            assert_eq!(
+                count("SELECT count(*) FROM workspaces WHERE kind = 'canvas'")?,
+                1
+            );
+            assert_eq!(count("SELECT count(*) FROM pragma_foreign_key_check")?, 0);
+            Ok(())
+        })
+        .unwrap();
+    }
+
     /// What the night added lives in payloads and settings: a 1.1.0-beta.1 base needs no step.
     #[test]
     fn a_base_of_the_published_version_opens_as_it_is() {

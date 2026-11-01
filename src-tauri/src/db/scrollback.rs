@@ -60,7 +60,10 @@ mod tests {
         // The logger is the whole process's: the tests running alongside log here too.
         fn log(&self, record: &log::Record) {
             if record.target().ends_with("db::scrollback") {
-                self.0.lock().unwrap().push(record.args().to_string());
+                // Never `unwrap` here: a failed assertion below poisons the lock, and a
+                // logger that panics takes down whichever thread logs.
+                let mut lines = self.0.lock().unwrap_or_else(|held| held.into_inner());
+                lines.push(record.args().to_string());
             }
         }
         fn flush(&self) {}
