@@ -4,8 +4,7 @@ import { studioRead } from "@/ipc/studio";
 import { useMessages } from "@/i18n";
 import { useNodes } from "@/store/nodes";
 import { projectsStore } from "@/store/projects";
-import { isMarkdown } from "@/studio/languages";
-import { renderMarkdown } from "@/studio/markdown";
+import { isMarkdown, renderMarkdown } from "@/studio/markdown";
 import { nodesMessages } from "../messages";
 
 type Content = { state: "loading" } | { state: "ready"; text: string } | { state: "error"; message: string };
@@ -18,13 +17,11 @@ export function FileNode({ nodeId }: { nodeId: string }) {
   const [content, setContent] = useState<Content>({ state: "loading" });
 
   const load = useCallback(() => {
-    // The backend wants the project folder, as Code Studio passes it.
-    const { projects, activeId } = projectsStore.getState();
-    const project = projects.find((p) => p.id === activeId)?.path;
+    const project = projectsStore.getState().activeId;
     if (!project || !path) return;
     setContent({ state: "loading" });
     studioRead(project, path).then(
-      (text) => setContent({ state: "ready", text }),
+      ({ text }) => setContent({ state: "ready", text }),
       (error: unknown) => setContent({ state: "error", message: String(error) }),
     );
   }, [path]);

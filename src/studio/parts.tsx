@@ -27,7 +27,7 @@ export function Message({ children }: { children: ReactNode }) {
 }
 
 /** The disk no longer holds what the buffer knows: only the user decides (spec studio code §3). */
-export function DiskBanner({ session, disk }: { session: FileSession; disk: NonNullable<SessionState["disk"]> }) {
+export function DiskBanner({ session, disk, onDrop }: { session: FileSession; disk: NonNullable<SessionState["disk"]>; onDrop?: () => void }) {
   const t = useMessages(studioMessages);
   const { reload, overwrite, dropFile } = session.getState();
   const gone = disk.version === null;
@@ -41,7 +41,7 @@ export function DiskBanner({ session, disk }: { session: FileSession; disk: NonN
       <span className="min-w-0 flex-1">{gone ? t.deletedOnDisk : t.changedOnDisk}</span>
       {gone ? (
         <>
-          <button type="button" className={action} onClick={dropFile}>
+          <button type="button" className={action} onClick={onDrop ?? dropFile}>
             {t.drop}
           </button>
           <button type="button" className={action} onClick={() => void overwrite()}>

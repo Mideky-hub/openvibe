@@ -13,7 +13,7 @@ for (const [path, exports] of Object.entries(modules)) {
 }
 
 /** Words that are the same in both languages on purpose. */
-const SAME = /^(Interface en français|Interface in English|Claude Code, Codex, Gemini CLI…|Session \(5 h\)|OpenVibe|Remote Control|Claude Code|Claude|Codex|Gemini CLI|Studio Code|Git|Shell|Ollama|Aider|Cursor|Tokens?|Notes?|Description|Support|Local|Non|Offline|Total|Extra|Ok|OK|Plan|Code|Image|Source|Module|Format|Description|Version|Original|Standard|Mode|Photo|Index|Serveur|Terminal|Concepts|Backend|Frontend|[A-Za-z0-9 ./:×·…→←%+-]{0,3})$/;
+const SAME = /^(Interface en français|Interface in English|Claude Code, Codex, Gemini CLI…|Session \(5 h\)|OpenVibe|Remote Control|Claude Code|Claude|Codex|Gemini CLI|Code Studio|Git|Shell|Ollama|Aider|Cursor|Tokens?|Notes?|Description|Support|Local|Non|Offline|Total|Extra|Ok|OK|Plan|Code|Image|Source|Module|Format|Description|Version|Original|Standard|Mode|Photo|Index|Serveur|Terminal|Concepts|Backend|Frontend|[A-Za-z0-9 ./:×·…→←%+-]{0,3})$/;
 
 type Path = string;
 function walk(fr: unknown, en: unknown, path: Path, problems: string[]) {

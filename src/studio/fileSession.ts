@@ -1,5 +1,5 @@
 import { createStore } from "zustand";
-import type { OpenedFile, WriteOutcome } from "./ipc";
+import type { OpenedFile, WriteOutcome } from "@/ipc/studio";
 import { detectEol, toLf, withEol, type Eol } from "./text";
 
 export interface StudioIo {
@@ -61,6 +61,9 @@ export const isDirty = (s: Pick<SessionState, "draft" | "baseline">) => s.draft 
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
+/** A tab closes from the tab bar and quits through the store: its session leaves nothing. */
+const NO_EXITS: SessionExits = { onClose: () => undefined, onQuit: () => undefined };
+
 const empty = { refused: null, baseline: "", draft: "", version: null, eol: "\n", disk: null, error: null } as const;
 
 /**
@@ -68,7 +71,7 @@ const empty = { refused: null, baseline: "", draft: "", version: null, eol: "\n"
  * every write goes through the version the buffer knows, and nothing here
  * replaces a buffer holding changes without being told to.
  */
-export function createFileSession(io: StudioIo, exits: SessionExits) {
+export function createFileSession(io: StudioIo, exits: SessionExits = NO_EXITS) {
   // Moves at every read or write of the buffer: the answer to an older question is dropped.
   let generation = 0;
   let revisions = 0;

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Code2, Eye, File, Folder, FolderTree, PanelTopOpen, RotateCw, Save, X } from "lucide-react";
+import { useStore } from "zustand";
 import { useTheme } from "@/app/theme";
 import { useMessages } from "@/i18n";
 import { studioTree, type TreeEntry } from "@/ipc/studio";
@@ -9,16 +10,16 @@ import { TOP_ROW_HEIGHT } from "@/shell/layout";
 import { useProjects } from "@/store/projects";
 import { CodeEditor } from "./CodeEditor";
 import { insertFileNode } from "./insert";
-import { isMarkdown } from "./languages";
-import { renderMarkdown } from "./markdown";
+import { isDirty as sessionIsDirty } from "./fileSession";
+import { isMarkdown, renderMarkdown } from "./markdown";
 import { studioMessages } from "./messages";
+import { DiskBanner, errorText } from "./parts";
+import { useDiskWatch, useSaveKey } from "./sessionEffects";
 import { closeStudio, closeTab, editFile, isDirty, openFile, openStudio, saveFile, useStudio, type StudioTab } from "./studioStore";
 import { ancestors, baseName, buildTree, toggle, visibleRows } from "./tree";
 
 /** The tree shows this many lines at most; the filter finds the others. */
 const MAX_ROWS = 2000;
-
-const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /**
  * The code workspace (issue #49): a workspace tab whose page is an IDE instead
@@ -26,7 +27,7 @@ const errorText = (error: unknown) => (error instanceof Error ? error.message : 
  * files stay when another tab is shown.
  */
 export function CodeWorkspace() {
-  const project = useProjects((s) => s.projects.find((p) => p.id === s.activeId)?.path ?? null);
+  const project = useProjects((s) => s.projects.find((p) => p.id === s.activeId)?.id ?? null);
   useEffect(() => {
     if (!project) return;
     openStudio(project);
@@ -38,7 +39,7 @@ export function CodeWorkspace() {
 
 function StudioContent({ project }: { project: string }) {
   const t = useMessages(studioMessages);
-  const name = useProjects((s) => s.projects.find((p) => p.path === project)?.name) ?? baseName(project.replace(/\\/g, "/"));
+  const name = useProjects((s) => s.projects.find((p) => p.id === project)?.name) ?? "";
   const tabs = useStudio((s) => s.tabs);
   const active = useStudio((s) => s.active);
   const tab = tabs.find((x) => x.path === active) ?? null;
@@ -50,20 +51,17 @@ function StudioContent({ project }: { project: string }) {
     void openFile(path);
   };
 
-  // Ctrl+S outside the editor; the editor's own shortcut has already been handled.
-  const onKeyDown = (e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s" && !e.defaultPrevented) {
-      e.preventDefault();
-      if (active) void saveFile(active);
-    }
-  };
+  // A dialog over the workspace has its own Ctrl+S (the notes), or none.
+  useSaveKey(() => {
+    if (active && !document.querySelector('[role="dialog"]')) void saveFile(active);
+  });
+  useDiskWatch(tab?.session ?? null);
 
   // The rail on the right (activities) keeps its column.
   return (
     <div
       data-code-workspace
       aria-label={t.title(name)}
-      onKeyDown={onKeyDown}
       className="absolute inset-0 flex gap-2.5 pb-3 pl-3 pr-[66px] text-ov-text"
       style={{ paddingTop: TOP_ROW_HEIGHT + 12 }}
     >
@@ -183,38 +181,9 @@ function Tabs({ tabs, active }: { tabs: StudioTab[]; active: string | null }) {
   return (
     <>
       <div role="tablist" className="flex h-10 shrink-0 items-end gap-0.5 overflow-x-auto border-b border-ov-line px-2">
-        {tabs.map((tab) => {
-          const name = baseName(tab.path);
-          const dirty = isDirty(tab);
-          return (
-            <div
-              key={tab.path}
-              role="tab"
-              aria-selected={tab.path === active}
-              data-tab={tab.path}
-              title={tab.path}
-              className={cn(
-                "group flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-t-[8px] pl-3 pr-1 text-[12.5px] text-ov-text-2 hover:bg-ov-hover",
-                tab.path === active && "bg-ov-tab-on text-ov-text",
-              )}
-              onClick={() => void openFile(tab.path)}
-              onAuxClick={(e) => e.button === 1 && close(tab)}
-            >
-              <span className="max-w-48 truncate">{name}</span>
-              {dirty && <span data-dirty aria-label={t.modified} title={t.modified} className="size-2 rounded-full bg-ov-accent" />}
-              <IconButton
-                label={t.closeTab(name)}
-                className="size-5"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  close(tab);
-                }}
-              >
-                <X />
-              </IconButton>
-            </div>
-          );
-        })}
+        {tabs.map((tab) => (
+          <TabItem key={tab.path} tab={tab} active={tab.path === active} onClose={() => close(tab)} />
+        ))}
       </div>
       {pending && (
         <div role="alert" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-ov-line bg-ov-surface-2 px-3 py-2 text-[12.5px]">
@@ -247,18 +216,58 @@ function Tabs({ tabs, active }: { tabs: StudioTab[]; active: string | null }) {
   );
 }
 
+function TabItem({ tab, active, onClose }: { tab: StudioTab; active: boolean; onClose: () => void }) {
+  const t = useMessages(studioMessages);
+  const name = baseName(tab.path);
+  const dirty = useStore(tab.session, sessionIsDirty);
+  return (
+    <div
+      role="tab"
+      aria-selected={active}
+      data-tab={tab.path}
+      title={tab.path}
+      className={cn(
+        "group flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-t-[8px] pl-3 pr-1 text-[12.5px] text-ov-text-2 hover:bg-ov-hover",
+        active && "bg-ov-tab-on text-ov-text",
+      )}
+      onClick={() => void openFile(tab.path)}
+      onAuxClick={(e) => e.button === 1 && onClose()}
+    >
+      <span className="max-w-48 truncate">{name}</span>
+      {dirty && <span data-dirty aria-label={t.modified} title={t.modified} className="size-2 rounded-full bg-ov-accent" />}
+      <IconButton
+        label={t.closeTab(name)}
+        className="size-5"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+      >
+        <X />
+      </IconButton>
+    </div>
+  );
+}
+
 function FilePane({ tab }: { tab: StudioTab }) {
   const t = useMessages(studioMessages);
   const theme = useTheme();
+  const { draft, disk, error, file, loading, refused, revision, saving } = useStore(tab.session);
   const markdown = isMarkdown(tab.path);
   const [preview, setPreview] = useState(false);
-  const dirty = isDirty(tab);
+  const dirty = useStore(tab.session, sessionIsDirty);
   const previewing = markdown && preview;
 
-  if (tab.status === "loading") return <Message>{t.readingFile}</Message>;
-  if (tab.status === "error") return <Message>{t.readFailed(tab.error ?? "")}</Message>;
+  if (loading || !file) return <Message>{t.readingFile}</Message>;
+  if (refused) return <Message>{t.readFailed(refused)}</Message>;
   return (
     <>
+      {disk && <DiskBanner session={tab.session} disk={disk} onDrop={() => closeTab(tab.path)} />}
+      {error && (
+        <p role="status" className="shrink-0 border-b border-ov-line px-3 py-1.5 text-[12px] text-ov-danger">
+          {t.failed(error)}
+        </p>
+      )}
       <div className="flex h-9 shrink-0 items-center gap-1.5 border-b border-ov-line px-3">
         <span className="min-w-0 truncate font-mono text-[11px] text-ov-text-3">{tab.path}</span>
         {dirty && <span className="shrink-0 text-[11px] text-ov-accent">{t.modified}</span>}
@@ -271,21 +280,22 @@ function FilePane({ tab }: { tab: StudioTab }) {
           <ToolbarButton label={t.insert} title={t.insertTitle} onClick={() => void insertFileNode(tab.path)}>
             <PanelTopOpen />
           </ToolbarButton>
-          <AccentButton className="h-7" disabled={!dirty || tab.saving} title={t.save} onClick={() => void saveFile(tab.path)}>
+          <AccentButton className="h-7" disabled={!dirty || saving} title={t.save} onClick={() => void saveFile(tab.path)}>
             <Save />
-            {tab.saving ? t.saving : t.save.replace(/ \(.*\)$/, "")}
+            {saving ? t.saving : t.save.replace(/ \(.*\)$/, "")}
           </AccentButton>
         </span>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
         {previewing ? (
           <div data-preview className="h-full overflow-auto px-6 py-4 text-[13.5px] leading-relaxed">
-            {renderMarkdown(tab.content)}
+            {renderMarkdown(draft)}
           </div>
         ) : (
           <CodeEditor
             path={tab.path}
-            initial={tab.content}
+            text={draft}
+            revision={revision}
             theme={theme}
             onChange={(content) => editFile(tab.path, content)}
             onSave={() => void saveFile(tab.path)}

@@ -55,8 +55,8 @@ function PaletteBody() {
   const presets = usePresets((s) => s.presets);
   const loops = useMemo(() => loopCommands(), []);
   const commands = useMemo(() => [...COMMANDS, ...presetCommands(presets), ...loops], [presets, loops]);
-  const projectPath = useProjects((s) => (s.view === "project" ? (s.projects.find((p) => p.id === s.activeId)?.path ?? null) : null));
-  const fileIndex = useFileIndex(mode === "goTo" ? projectPath : null);
+  const projectId = useProjects((s) => (s.view === "project" ? s.activeId : null));
+  const fileIndex = useFileIndex(mode === "goTo" ? projectId : null);
   const fileQuery = parseFileQuery(search);
   // Files only while searching: the project's whole tree would bury the nodes.
   const files = mode === "goTo" && fileQuery.text ? rankFiles(fileIndex.files, fileQuery.text, FILE_LIMIT) : [];
