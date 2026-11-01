@@ -22,11 +22,21 @@ function match(key: string, ctrl: boolean, shift: boolean): Shortcut | null {
  * AltGr, never makes a shortcut, nor does a key typed during an IME composition.
  */
 export function shortcutOf(event: KeyLike): Shortcut | null {
-  if (event.isComposing || event.altKey || event.metaKey) return null;
-  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
-  const shortcut = match(key, event.ctrlKey, event.shiftKey);
+  const shortcut = recognized(event);
   if (!shortcut || (event.repeat && !REPEATABLE.has(shortcut))) return null;
   return shortcut;
+}
+
+function recognized(event: KeyLike): Shortcut | null {
+  if (event.isComposing || event.altKey || event.metaKey) return null;
+  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+  return match(key, event.ctrlKey, event.shiftKey);
+}
+
+/** The shortcut a held key repeats while it does not repeat: consumed, not run (plan F1). */
+export function heldShortcutOf(event: KeyLike): Shortcut | null {
+  const shortcut = recognized(event);
+  return shortcut && event.repeat && !REPEATABLE.has(shortcut) ? shortcut : null;
 }
 
 /**

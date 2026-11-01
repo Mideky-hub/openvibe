@@ -25,8 +25,11 @@ const fail = (what: Failure) => (error: unknown) => {
   toast.error(t.failed(t.tabs[what], String(error)));
 };
 
-function WorkspaceTab(props: { workspace: Workspace; active: boolean; canRemove: boolean }) {
-  const { workspace, active, canRemove } = props;
+/** The tab being dragged (a drag stays inside this row). */
+let dragged: string | null = null;
+
+function WorkspaceTab(props: { workspace: Workspace; active: boolean; canRemove: boolean; index: number; count: number }) {
+  const { workspace, active, canRemove, index, count } = props;
   const t = useMessages(shellMessages).tabs;
   const [editing, setEditing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -60,6 +63,20 @@ function WorkspaceTab(props: { workspace: Workspace; active: boolean; canRemove:
     <div
       data-tab={workspace.id}
       data-active={active}
+      draggable
+      onDragStart={(e) => {
+        dragged = workspace.id;
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+      }}
+      onDragOver={(e) => {
+        if (dragged && dragged !== workspace.id) e.preventDefault();
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        if (dragged && dragged !== workspace.id) void workspacesStore.getState().move(dragged, index);
+        dragged = null;
+      }}
+      onDragEnd={() => (dragged = null)}
       onContextMenu={(e) => {
         e.preventDefault();
         setMenuOpen(true);
@@ -77,6 +94,12 @@ function WorkspaceTab(props: { workspace: Workspace; active: boolean; canRemove:
         className="flex items-center self-stretch"
         onClick={() => workspacesStore.getState().select(workspace.id)}
         onDoubleClick={() => setEditing(true)}
+        // Alt+←/→: the keyboard's way to reorder (the drag's alternative).
+        onKeyDown={(e) => {
+          if (!e.altKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+          e.preventDefault();
+          void workspacesStore.getState().move(workspace.id, index + (e.key === "ArrowLeft" ? -1 : 1));
+        }}
       >
         {isCode(workspace) && <Code2 data-code-icon aria-hidden className="mr-1.5 size-3.5 shrink-0 text-ov-accent" />}
         <span className="max-w-40 truncate">{workspace.name}</span>
@@ -111,6 +134,12 @@ function WorkspaceTab(props: { workspace: Workspace; active: boolean; canRemove:
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           <DropdownMenuItem onSelect={() => setEditing(true)}>{t.rename}</DropdownMenuItem>
+          <DropdownMenuItem disabled={index === 0} onSelect={() => void workspacesStore.getState().move(workspace.id, index - 1)}>
+            {t.moveLeft}
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={index === count - 1} onSelect={() => void workspacesStore.getState().move(workspace.id, index + 1)}>
+            {t.moveRight}
+          </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!canRemove}
             variant="destructive"
@@ -142,9 +171,11 @@ export function WorkspaceTabs() {
       className="ov-glass-strong flex w-full items-end gap-0.5 overflow-x-auto overflow-y-hidden rounded-none border-x-0 border-t-0 px-2.5 [scrollbar-width:none]"
       style={{ height: TABS_HEIGHT }}
     >
-      {workspaces.map((workspace) => (
+      {workspaces.map((workspace, index) => (
         <WorkspaceTab
           key={workspace.id}
+          index={index}
+          count={workspaces.length}
           workspace={workspace}
           active={workspace.id === activeId}
           canRemove={removable(workspaces, workspace)}

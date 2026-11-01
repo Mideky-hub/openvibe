@@ -1,13 +1,16 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { ptySendText, ptyWrite } from "@/ipc/pty";
 import { freshText } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { terminalStatusStore } from "@/store/terminalStatus";
-import { remoteDeps, remoteStore, setRemoteControl } from "./remoteControl";
+import { remoteActions } from "./RemoteButton";
+import { remoteDeps, remoteStore, setRemoteControl, setRemoteControlAll } from "./remoteControl";
 
+vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), warning: vi.fn() }) }));
 vi.mock("@/ipc/pty", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/ipc/pty")>()), ptySendText: vi.fn(), ptyWrite: vi.fn() }));
 vi.mock("@/nodes/terminal/registry", () => ({ freshText: vi.fn(), terminalText: vi.fn(() => "  /remote-control is active · https://claude.ai/code/session_OLD") }));
 
@@ -99,5 +102,33 @@ describe("setRemoteControl on a running session (spec maj §2)", () => {
     expect(typed).toEqual(["/remote-control", "/remote-control", "\x1b[A", "\x1b[A", "\r"]);
     expect(remoteStore.getState().links.isis).toBeUndefined();
     expect(terminalOf(nodesStore.getState().nodes.isis)?.remoteControl).toBeUndefined();
+  });
+});
+
+describe("links and toasts (backlog 27 oct)", () => {
+  it("shows an error, not an active session, when a started session shows no link in time", async () => {
+    await setRemoteControl("isis", true);
+    screen = ["  Claude Code v2.1.304", ...PROMPT].join(String.fromCharCode(10));
+    terminalStatusStore.getState().set("isis", { state: "stopped" });
+    terminalStatusStore.getState().set("isis", { state: "running" });
+    await vi.waitFor(() => expect(remoteStore.getState().links.isis?.state).toBe("error"));
+  });
+
+  it("forgets the link of a node removed from the canvas", async () => {
+    remoteStore.getState().set("isis", { state: "on", url: URL });
+    terminalStatusStore.getState().remove("isis");
+    expect(remoteStore.getState().links.isis).toBeUndefined();
+  });
+
+  it("says « next start » for a stopped session in a group, not « turned on »", async () => {
+    terminalStatusStore.getState().set("isis", { state: "stopped" });
+    await setRemoteControlAll(["isis"], true);
+    expect(vi.mocked(toast).mock.calls.map((c) => c[0]).join("|")).toContain("prochain démarrage");
+  });
+
+  it("offers Cut and Retry while the state is an error", () => {
+    expect(remoteActions({ state: "error", error: "x" }, false)).toEqual(["turnOff", "retry"]);
+    expect(remoteActions(undefined, false)).toEqual(["turnOn"]);
+    expect(remoteActions({ state: "on" }, true)).toEqual(["turnOff"]);
   });
 });

@@ -1,4 +1,3 @@
-use crate::tr;
 use serde::Serialize;
 use tauri::ipc::{Channel, Response};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -27,6 +26,9 @@ impl OutputSink for ChannelSink {
 struct PtyExitEvent {
     node_id: String,
     exit_code: Option<u32>,
+    /// The process that exited, as `pty_spawn` returned it: an event whose pid
+    /// is not the terminal's current one comes from an older process.
+    pid: Option<u32>,
 }
 
 /// Re-reads Windows' PATH so an agent installed meanwhile is found.
@@ -47,15 +49,18 @@ pub async fn pty_spawn(
 ) -> AppResult<Option<u32>> {
     // Refused before anything else: a second start must leave the live
     // session's MCP token and launch files alone (seen in the app, H3).
-    if pty.is_running(&node_id) {
-        return Err(AppError::InvalidInput(tr!(
-            "le terminal {node_id} tourne déjà",
-            "terminal {node_id} is already running"
-        )));
-    }
+    // Claimed, not just checked: two starts racing would else both pass, and the
+    // second one's token would replace the live session's (backlog B2).
+    let _claim = pty.claim_start(&node_id)?;
     let mut spec = spec;
+    // The profile's folder, else OpenVibe's environment (spec comptes §4): where
+    // this terminal's Claude keeps its conversations and settings.
+    let profile_dir = match spec.claude.as_ref().and_then(|c| c.config_dir.as_deref()) {
+        Some(dir) => Some(crate::accounts::checked_dir(dir)?),
+        None => None,
+    };
     if let Some(claude) = spec.claude.as_mut() {
-        let config = claude_settings::claude_config_dir();
+        let config = claude_settings::config_dir_for(profile_dir.as_deref());
         let cwd = std::path::Path::new(&spec.cwd);
         let mode =
             transcripts::launch_mode(claude.mode, &claude.session_id, cwd, config.as_deref());
@@ -70,7 +75,9 @@ pub async fn pty_spawn(
         &node_id,
         spec.agent,
         role,
+        spec.claude.as_ref().and_then(|c| c.permission),
         std::path::Path::new(&spec.cwd),
+        profile_dir.as_deref(),
     );
     if spec.agent == Agent::Claude
         && role == Role::Orchestrator
@@ -95,6 +102,16 @@ pub async fn pty_spawn(
     let output_id = node_id.clone();
     let exit_app = app.clone();
     agents::started(&app, &node_id);
+    // A relaunch keeps what the terminal's screen still shows: the buffer starts
+    // from the saved output, so its first save does not replace it (backlog R1).
+    match app
+        .state::<Db>()
+        .with(|conn| scrollback::load(conn, &node_id))
+    {
+        Ok(Some(history)) => pty.seed_history(&node_id, history),
+        Ok(None) => {}
+        Err(err) => log::warn!("saved output of {node_id} not read: {err}"),
+    }
     let spawned = pty.spawn(
         &node_id,
         plan,
@@ -102,10 +119,14 @@ pub async fn pty_spawn(
         Box::new(ChannelSink(on_data)),
         Box::new(move || agents::output(&output_app, &output_id)),
         move |info| {
-            agents::ended(&exit_app, &exited_id);
+            // A relaunch may already run under this id: its tracking, settings
+            // and token are not this exit's to clear.
+            if !exit_app.state::<PtyManager>().is_running(&exited_id) {
+                agents::ended(&exit_app, &exited_id);
+            }
             // Saved before the event so a restore right after the exit finds it.
             let saved = exit_app.state::<Db>().with(|conn| {
-                scrollback::save(conn, &exited_id, &info.scrollback.data, info.scrollback.at)
+                scrollback::save_logged(conn, &exited_id, &info.scrollback.data, info.scrollback.at)
             });
             if let Err(err) = saved {
                 log::error!("scrollback of {exited_id} not saved: {err}");
@@ -116,6 +137,7 @@ pub async fn pty_spawn(
                 PtyExitEvent {
                     node_id: exited_id,
                     exit_code: info.code,
+                    pid: info.pid,
                 },
             );
         },
@@ -223,6 +245,11 @@ pub async fn list_agents() -> AppResult<Vec<AgentInfo>> {
 }
 
 #[tauri::command]
+pub async fn npm_available() -> AppResult<bool> {
+    Ok(catalog::npm_available(&which_locate))
+}
+
+#[tauri::command]
 pub async fn list_ollama_models() -> AppResult<Vec<String>> {
     tauri::async_runtime::spawn_blocking(catalog::ollama_models)
         .await
@@ -244,7 +271,8 @@ pub fn flush_scrollbacks(app: &AppHandle, all: bool) {
     };
     let db = app.state::<Db>();
     for (node_id, capture) in batch {
-        let saved = db.with(|conn| scrollback::save(conn, &node_id, &capture.data, capture.at));
+        let saved =
+            db.with(|conn| scrollback::save_logged(conn, &node_id, &capture.data, capture.at));
         if let Err(err) = saved {
             log::error!("scrollback of {node_id} not saved: {err}");
         }

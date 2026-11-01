@@ -1,7 +1,10 @@
-import { expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { canvasStore } from "@/canvas/canvasStore";
 import { nodesStore, type NodeRecord } from "@/store/nodes";
 import { NEW_MISSION } from "./mission";
-import { memberBudgets, memberOf, setOrchestratorClosed } from "./store";
+import { rememberScene, forgetScene } from "@/canvas/sceneCache";
+import { workspacesStore } from "@/store/workspaces";
+import { agentGroup, canvasKnown, linkedClaudeAgents, linkedGroups, memberBudgets, memberOf, orchestratorShown, setOrchestratorClosed, workspaceCanvas } from "./store";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
 
@@ -31,6 +34,34 @@ it("forgets the mission of a closed orchestrator until an undo brings it back (s
   expect(memberOf("isis")?.orchestratorId).toBe("chef");
 });
 
+describe("what the orchestrator reads of the groups (spec groupes spécialisés §3)", () => {
+  const frame = (id: string, name: string, memberIds: string[], speciality?: string) => ({
+    id, name, x: 0, y: 0, width: 10, height: 10, memberIds, group: { role: "general" as const, pantheon: "egyptian", ...(speciality ? { speciality } : {}) },
+  });
+
+  beforeEach(() => {
+    nodesStore.setState({ nodes: {} });
+    canvasStore.setState({
+      frames: [frame("g1", "Interface", ["isis"], "Frontend"), frame("g2", "Serveur", ["horus"]), frame("g3", "Loin", ["seth"], "Tests")],
+      links: { chef: { groupIds: ["g1", "g2"], nodeIds: [] } },
+    });
+  });
+
+  it("lists the groups wired to it, with or without a speciality", () => {
+    expect(linkedGroups("chef")).toEqual([
+      { id: "g1", name: "Interface", speciality: "Frontend" },
+      { id: "g2", name: "Serveur", speciality: null },
+    ]);
+    expect(linkedGroups("autre")).toEqual([]);
+  });
+
+  it("tells an agent's group and speciality; outside a group, nothing", () => {
+    expect(agentGroup("isis")).toEqual({ group: "Interface", speciality: "Frontend" });
+    expect(agentGroup("horus")).toEqual({ group: "Serveur", speciality: null });
+    expect(agentGroup("seul")).toEqual({ group: null, speciality: null });
+  });
+});
+
 it("draws no budget bar for a closed orchestrator's mission (final review R3)", () => {
   const member = { nodeId: "isis", name: "Isis", task: "Login", budgetMin: 10, linked: false, branch: "b", worktree: "w", sentAt: 0 };
   const nodes: Record<string, NodeRecord> = {
@@ -40,4 +71,64 @@ it("draws no budget bar for a closed orchestrator's mission (final review R3)", 
   expect(memberBudgets(nodes, 60 * 60_000)).toEqual({});
   setOrchestratorClosed("chef", false);
   expect(memberBudgets(nodes, 60 * 60_000)).toEqual({ isis: { spent: 60, budget: 10 } });
+});
+
+describe("a workspace not on screen (spec mission de nuit §6.1)", () => {
+  const terminal = { title: "", name: "Isis", agent: "claude" as const, cwd: "C:/", shell: "default" as const, command: "" };
+  const frame = { id: "g1", type: "frame", name: "Interface", x: 0, y: 0, width: 10, height: 10, isDeleted: false, frameId: null, customData: { openvibe: { kind: "group", role: "frontend", pantheon: "norse", speciality: "Frontend" } } };
+  const isis = { id: "isis", type: "embeddable", isDeleted: false, frameId: "g1", x: 0, y: 0, width: 1, height: 1, customData: { kind: "terminal" } };
+  const chef = { id: "chef", type: "embeddable", isDeleted: false, frameId: null, x: 0, y: 0, width: 1, height: 1, customData: { kind: "orchestrator" } };
+  const wire = { id: "w", type: "arrow", isDeleted: false, frameId: null, startBinding: { elementId: "chef" }, endBinding: { elementId: "g1" } };
+
+  beforeEach(() => {
+    nodesStore.setState({ nodes: { chef: { workspaceId: "w1", kind: "orchestrator", payload: { name: "Chef" } }, isis: { workspaceId: "w1", kind: "terminal", payload: terminal } } });
+    workspacesStore.setState({ activeId: "w2" });
+    canvasStore.setState({ frames: [], links: {} });
+    rememberScene("w1", [frame, isis, chef, wire] as never, {} as never, {}, []);
+  });
+
+  it("reads wires and groups from its stored scene, not from the canvas on screen", () => {
+    expect(linkedClaudeAgents("chef")).toEqual([{ nodeId: "isis", name: "Isis" }]);
+    expect(linkedGroups("chef")).toEqual([{ id: "g1", name: "Interface", speciality: "Frontend" }]);
+    expect(agentGroup("isis")).toEqual({ group: "Interface", speciality: "Frontend" });
+    expect(workspaceCanvas("w1").frames.map((f) => f.id)).toEqual(["g1"]);
+    expect(canvasKnown("chef")).toBe(true);
+  });
+
+  it("is unknown only when its scene was never read", () => {
+    forgetScene("w1");
+    expect(canvasKnown("chef")).toBe(false);
+    expect(linkedClaudeAgents("chef")).toEqual([]);
+  });
+
+  it("reads the live canvas when it is the one on screen", () => {
+    workspacesStore.setState({ activeId: "w1" });
+    canvasStore.setState({ api: {} as never });
+    expect(linkedClaudeAgents("chef")).toEqual([]);
+    expect(canvasKnown("chef")).toBe(true);
+    canvasStore.setState({ api: null });
+    forgetScene("w1");
+  });
+
+  it("reads its stored scene from the home screen: the workspace is still the active one, no canvas is mounted (review)", () => {
+    workspacesStore.setState({ activeId: "w1" });
+    expect(orchestratorShown("chef")).toBe(false);
+    expect(linkedClaudeAgents("chef")).toEqual([{ nodeId: "isis", name: "Isis" }]);
+    forgetScene("w1");
+  });
+});
+
+it("does not offer an agent already in another running mission (backlog H2)", () => {
+  const member = { name: "Isis", task: "Login", budgetMin: 10, linked: true, branch: "b", worktree: "w", sentAt: 0 };
+  const terminal = { title: "", name: "Isis", agent: "claude" as const, cwd: "C:/", shell: "default" as const, command: "" };
+  nodesStore.setState({
+    nodes: {
+      isis: { workspaceId: "w1", kind: "terminal", payload: terminal },
+      busy: { workspaceId: "w1", kind: "orchestrator", payload: { name: "Busy", mission: { ...NEW_MISSION, state: "en_cours", members: [{ ...member, nodeId: "isis" }] } } },
+      free: { workspaceId: "w1", kind: "orchestrator", payload: { name: "Free" } },
+    },
+  });
+  canvasStore.setState({ api: {} as never, links: { busy: { nodeIds: ["isis"], groupIds: [] }, free: { nodeIds: ["isis"], groupIds: [] } }, frames: [] });
+  expect(linkedClaudeAgents("free")).toEqual([]);
+  expect(linkedClaudeAgents("busy").map((a) => a.nodeId)).toEqual(["isis"]);
 });

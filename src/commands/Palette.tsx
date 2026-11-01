@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Command } from "cmdk";
 import { FileText } from "lucide-react";
 import { useMessages } from "@/i18n";
@@ -14,6 +14,10 @@ import { GoToRow } from "./GoToRow";
 import { goTo } from "./goToRun";
 import { commandsMessages } from "./messages";
 import { closePalette, modeOf, setPaletteQuery, stripPrefix, usePalette } from "./paletteState";
+import { agentsStore, useAgents } from "@/fleet/agentsStore";
+import { loopCommands } from "@/loops/commands";
+import { presetCommands } from "@/presets/commands";
+import { presetsStore, usePresets } from "@/presets/store";
 import { rememberFunction, useRecentFunctions } from "./recent";
 import { COMMANDS } from "./registry";
 import { useGoToData } from "./useGoToData";
@@ -38,16 +42,28 @@ function PaletteBody() {
   const mode = modeOf(query);
   const search = stripPrefix(query);
   const goToData = useGoToData();
+  // « Lancer … » greys the agents not found: look again when the functions open, and follow the answer.
+  useAgents((s) => s.agents);
+  useEffect(() => {
+    if (mode !== "functions") return;
+    void agentsStore.getState().load().catch(() => undefined);
+    void presetsStore.getState().load().catch(() => undefined);
+  }, [mode]);
   const recent = useRecentFunctions();
   const goToList = mode === "goTo" ? goToSections(goToData.items, search) : [];
-  const projectPath = useProjects((s) => (s.view === "project" ? (s.projects.find((p) => p.id === s.activeId)?.path ?? null) : null));
-  const fileIndex = useFileIndex(mode === "goTo" ? projectPath : null);
+  // The saved team presets add their lines to the registry's (spec presets §3).
+  const presets = usePresets((s) => s.presets);
+  const loops = useMemo(() => loopCommands(), []);
+  const commands = useMemo(() => [...COMMANDS, ...presetCommands(presets), ...loops], [presets, loops]);
+  const projectId = useProjects((s) => (s.view === "project" ? s.activeId : null));
+  const fileIndex = useFileIndex(mode === "goTo" ? projectId : null);
   const fileQuery = parseFileQuery(search);
   // Files only while searching: the project's whole tree would bury the nodes.
   const files = mode === "goTo" && fileQuery.text ? rankFiles(fileIndex.files, fileQuery.text, FILE_LIMIT) : [];
   // `App.tsx:42`, a dot or a slash: a file is sought, its section comes first.
   const filesFirst = fileQuery.line !== undefined || /[./]/.test(fileQuery.text);
-  const functionList = mode === "functions" && context ? functionSections(COMMANDS, context, search, recent) : [];
+  const goToBusy = mode === "goTo" && (goToData.loading || (fileIndex.loading && fileQuery.text !== ""));
+  const functionList = mode === "functions" && context ? functionSections(commands, context, search, recent) : [];
   const keys =
     mode === "goTo"
       ? (filesFirst ? [...files.map(fileKey), ...goToList.flatMap((s) => s.items.map((i) => i.key))] : [...goToList.flatMap((s) => s.items.map((i) => i.key)), ...files.map(fileKey)])
@@ -72,6 +88,8 @@ function PaletteBody() {
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.preventDefault();
+              // Placement and link modes end on Escape at the window: not this one.
+              e.stopPropagation();
               closePalette();
             }
             // The keyboard never leaves an open palette.
@@ -134,8 +152,8 @@ function PaletteBody() {
                   ))}
                 </Command.Group>
               ))}
-            {mode === "goTo" && (goToData.loading || (fileIndex.loading && fileQuery.text !== "")) && <div className="px-2.5 py-1.5 text-[11.5px] text-ov-text-3">{t.loading}</div>}
-            <Command.Empty className="px-2.5 py-3 text-[12.5px] text-ov-text-3">{t.empty}</Command.Empty>
+            {goToBusy && <div className="px-2.5 py-1.5 text-[11.5px] text-ov-text-3">{t.loading}</div>}
+            {!goToBusy && <Command.Empty className="px-2.5 py-3 text-[12.5px] text-ov-text-3">{t.empty}</Command.Empty>}
           </Command.List>
           <footer className="border-t border-ov-line px-3.5 py-1.5 text-[11px] text-ov-text-2">{t.footer}</footer>
         </Command>

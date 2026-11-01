@@ -1,4 +1,5 @@
 import { afterEach, expect, it } from "vitest";
+import { accountsMessages } from "@/accounts/messages";
 import { appMessages } from "@/app/messages";
 import { catalogMessages } from "@/commands/catalog/messages";
 import { missionMessages } from "@/mission/messages";
@@ -39,4 +40,12 @@ it("tells in English that the local server is down, and names a new orchestrator
   langStore.setState({ lang: "fr" });
   expect(messages(appMessages).hooksDown).toBe("États des agents approximatifs : serveur local indisponible");
   expect(messages(nodesMessages).orchestrator.defaultName).toBe("Orchestrateur");
+});
+
+it("says what OpenVibe really reads in a Claude profile's folder (review)", () => {
+  const fr = accountsMessages.fr.description;
+  const en = accountsMessages.en.description;
+  expect(fr).not.toContain("ne lit rien");
+  expect(en).not.toContain("reads nothing");
+  for (const text of [fr, en]) expect(text).toContain("settings.json");
 });

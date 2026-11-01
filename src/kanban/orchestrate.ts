@@ -4,6 +4,7 @@ import { addOrchestrator } from "@/fleet/orchestrators";
 import { messages } from "@/i18n";
 import { notify } from "@/mission/events";
 import type { Member, SubTask } from "@/mission/mission";
+import { missionOf } from "@/mission/store";
 import type { KanbanAgentStatus, KanbanPayload } from "@/nodes/types";
 import { nodesStore } from "@/store/nodes";
 import { moveCardWithGithub } from "./github";
@@ -60,6 +61,9 @@ export async function planWithOrchestrator(boardId: string, columnId: string, or
   return true;
 }
 
+/** The project of the orchestrator's mission, which may not be the one on screen. */
+const missionFolder = (orchestratorId: string) => missionOf(nodesStore.getState().nodes[orchestratorId])?.project;
+
 /** The board holding a card among those handed to the orchestrator. */
 function boardWithCard(orchestratorId: string, cardId: string): string | null {
   return linkedBoards(orchestratorId).find(({ board }) => board.cards[cardId])?.nodeId ?? null;
@@ -75,7 +79,7 @@ export async function startMissionCards(orchestratorId: string, members: readonl
     const started = board ? startCard(board, task.card, member.name, t().inProgress) : null;
     if (!boardId || !started) continue;
     nodesStore.getState().update(boardId, { columns: started.board.columns, cards: started.board.cards });
-    await moveCardWithGithub(boardId, task.card, started.columnId);
+    await moveCardWithGithub(boardId, task.card, started.columnId, undefined, missionFolder(orchestratorId));
   }
 }
 
@@ -98,7 +102,7 @@ export async function finishMissionCard(orchestratorId: string, plan: readonly S
   const agent = found.board.cards[found.card].agent;
   if (agent) saveCards(found.boardId, found.board, setCardAgent(found.board, found.card, agent));
   const target = doneTarget(boardOf(found.boardId) ?? found.board, found.card);
-  if (target) await moveCardWithGithub(found.boardId, found.card, target);
+  if (target) await moveCardWithGithub(found.boardId, found.card, target, undefined, missionFolder(orchestratorId));
 }
 
 /** A member reported blocked or failed: its card stays « En cours », its chip on alert. */

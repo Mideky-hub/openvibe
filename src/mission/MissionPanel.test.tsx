@@ -67,9 +67,68 @@ it("turns the model router on, and shows each sub-task's level and model (spec m
 it("shows the plan and gives the go-ahead (spec §7.3)", async () => {
   await show({ state: "plan", name: "Auth", task: "Ajoute l'authentification", budgetMin: 60, plan: [{ title: "Login", brief: "Fais le login", agent: "Isis", budgetMin: 20 }] });
   expect(host.textContent).toContain("Fais le login");
-  expect(host.textContent).toContain("Total 20 min / 60");
+  expect(host.textContent).toContain("20 min d'agents · 60 min de temps réel");
   await act(async () => button("Lancer la mission").click());
   expect(launchMission).toHaveBeenCalledWith("chef");
+});
+
+it("shows the group a new agent will join (spec groupes spécialisés §3)", async () => {
+  await show({ state: "plan", name: "Auth", plan: [{ title: "Style", brief: "Fais le style", agent: "nouveau", budgetMin: 20, group: { id: "g1", name: "Interface" } }] });
+  expect(host.textContent).toContain("nouveau → Interface · 20 min");
+});
+
+it("opens « Mission de nuit » from its settings, and marks a night (spec mission de nuit §5.1)", async () => {
+  await show();
+  expect(host.textContent).toContain("Mission de nuit…");
+  await act(async () => button("Mission de nuit…").click());
+  expect(document.body.textContent).toContain("Préparer la nuit");
+  await act(async () => root.unmount());
+  host.remove();
+  await show({ overnight: true });
+  expect(host.querySelector("header")?.textContent).toContain("de nuit");
+});
+
+it("shows the morning report of a night, what to check first (spec mission de nuit §6.2)", async () => {
+  await show({
+    state: "terminee", overnight: true, budgetMin: 480, startedAt: 0, endedAt: 60 * 60_000, summary: "Bilan", handChecks: ["Relire la migration"],
+    queue: [{ title: "Docs", brief: "b", budgetMin: 10 }],
+    members: [
+      { nodeId: "a", name: "Isis", task: "Login", budgetMin: 20, linked: false, branch: "openvibe/nuit-isis", worktree: "w", sentAt: 0, merged: true, report: { summary: "Login fait", status: "termine", at: 10 * 60_000 } },
+      { nodeId: "b", name: "Horus", task: "API", budgetMin: 20, linked: false, branch: "openvibe/nuit-horus", worktree: "w", sentAt: 0, report: { summary: "Coincé", status: "bloque", at: 5 * 60_000 } },
+      { nodeId: "c", name: "Thot", task: "Tests", budgetMin: 20, linked: false, branch: "b", worktree: "w", sentAt: 0 },
+    ],
+  });
+  const report = host.querySelector("[data-morning]")!.textContent;
+  expect(report).toContain("Rapport du matin");
+  expect(report).toContain("60 / 480 min");
+  expect(report).toContain("À vérifier à la main (1)");
+  expect(report).toContain("Relire la migration");
+  expect(report).toContain("Fait (1)");
+  expect(report).toContain("openvibe/nuit-isis");
+  expect(report).toContain("Échoué ou bloqué (1)");
+  expect(report).toContain("bloqué");
+  expect(report).toContain("Pas fini (1)");
+  expect(report).toContain("Restées dans la file : Docs");
+});
+
+it("shows it in English", async () => {
+  langStore.setState({ lang: "en" });
+  await show({ state: "terminee", overnight: true, budgetMin: 60, startedAt: 0, endedAt: 60_000, summary: "x", members: [{ nodeId: "a", name: "Isis", task: "Login", budgetMin: 20, linked: false, branch: "b", worktree: "w", sentAt: 0, report: { summary: "ok", status: "echec", at: 1 } }] });
+  const report = host.querySelector("[data-morning]")!.textContent;
+  expect(report).toContain("Morning report");
+  expect(report).toContain("Failed or blocked (1)");
+});
+
+it("shows no morning report outside a night", async () => {
+  await show({ state: "terminee", summary: "x", members: [] });
+  expect(host.querySelector("[data-morning]")).toBeNull();
+});
+
+it("shows the tasks waiting in the queue (spec mission de nuit §4)", async () => {
+  await show({ state: "plan", name: "Auth", plan: [{ title: "Login", brief: "Fais le login", agent: "Isis", budgetMin: 20 }], queue: [{ title: "API", brief: "b", budgetMin: 30 }, { title: "Docs", brief: "b", budgetMin: 10 }] });
+  expect(host.querySelector("[data-queue]")?.textContent).toContain("En attente (2)");
+  expect(host.querySelector("[data-queue]")?.textContent).toContain("API");
+  expect(host.querySelector("[data-queue]")?.textContent).toContain("Docs");
 });
 
 it("shows no runaway time for a mission ended before end times were kept", async () => {
@@ -95,6 +154,17 @@ it("shows the team's reports and the summary, and cleans the mission (spec §7.7
   await act(async () => button("Nettoyer la mission").click());
   expect(cleanMission).toHaveBeenCalledWith("chef");
   expect(toast.success).toHaveBeenCalledWith("Worktrees retirés : auth-isis, auth");
+});
+
+it("shows the sub-tasks an agent finished before taking another (backlog H3)", async () => {
+  await show({
+    state: "en_cours",
+    name: "Auth",
+    members: [{ nodeId: "isis", name: "Isis", task: "Login", budgetMin: 20, linked: true, branch: "b", worktree: "C:/w", sentAt: 0, done: ["API", "Docs"] }],
+  });
+  const finished = host.querySelector('[data-member="Isis"] [data-finished]');
+  expect(finished?.textContent).toContain("2");
+  expect(finished?.getAttribute("title")).toBe("Déjà finies : API, Docs");
 });
 
 it("shows the mission panel in English", async () => {

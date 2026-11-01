@@ -54,7 +54,24 @@ export interface Remark {
   line?: number;
   /** `old`: a removed line, numbered in the file before the changes. */
   side?: "old";
+  /** The text of the line when the remark was written: the number alone drifts after a refresh. */
+  lineText?: string;
   text: string;
+}
+
+/**
+ * The row of `lines` a remark belongs to: the line of that number whose text is
+ * still the same, else the first line of the same side with that text, else the
+ * number alone when the remark has no text. -1 when the line is gone.
+ */
+export function remarkRow(lines: readonly DiffLine[], remark: Remark): number {
+  const removed = remark.side === "old";
+  const numberOf = (l: DiffLine) => (removed ? l.old : l.new);
+  const onSide = (l: DiffLine) => (removed ? l.kind === "del" : l.kind !== "del" && l.kind !== "hunk" && l.kind !== "meta");
+  const same = (l: DiffLine) => remark.lineText === undefined || l.text === remark.lineText;
+  const exact = lines.findIndex((l) => onSide(l) && numberOf(l) === remark.line && same(l));
+  if (exact >= 0 || remark.lineText === undefined) return exact;
+  return lines.findIndex((l) => onSide(l) && l.text === remark.lineText);
 }
 
 /** What the agent reads: every remark, then what to do with them. */
@@ -62,7 +79,8 @@ export function reviewMessage(remarks: readonly Remark[]): string {
   const said = messages(agentMessages).review;
   const items = remarks.map((r) => {
     const where = r.line === undefined ? r.file : r.side === "old" ? said.removedLine(r.file, r.line) : `${r.file}:${r.line}`;
-    return `- ${where} — ${r.text.replace(/\s*\n\s*/g, " ").trim()}`;
+    const quoted = r.lineText?.trim() ? ` \`${r.lineText.trim().slice(0, 80)}\`` : "";
+    return `- ${where}${quoted} — ${r.text.replace(/\s*\n\s*/g, " ").trim()}`;
   });
   return [said.intro, ...items, said.outro].join("\n");
 }

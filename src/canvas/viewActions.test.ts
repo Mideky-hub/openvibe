@@ -20,7 +20,7 @@ beforeEach(() => {
 it("fits the whole scene, and leaves an empty one alone (« Ajuster »)", () => {
   withScene([{ id: "a" }]);
   fitScene();
-  expect(scrollToContent).toHaveBeenCalledWith([{ id: "a" }], { fitToViewport: true, viewportZoomFactor: 0.9, animate: true });
+  expect(scrollToContent).toHaveBeenCalledWith([{ id: "a" }], { fitToViewport: true, viewportZoomFactor: 0.9, animate: true, canvasOffsets: { top: 72, bottom: 60 } });
   withScene([]);
   fitScene();
   expect(scrollToContent).toHaveBeenCalledTimes(1);

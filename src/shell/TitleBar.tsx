@@ -22,7 +22,9 @@ export function TitleBar({ leading, center, trailing }: { leading: ReactNode; ce
       style={{ height: TITLE_BAR_HEIGHT, gridTemplateColumns: "minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr)" }}
     >
       <div className="flex h-full items-center gap-2">
-        <Logo />
+        <span data-tauri-drag-region="" className="flex h-full items-center">
+          <Logo />
+        </span>
         {leading}
         <div data-tauri-drag-region="" className="h-full flex-1" />
       </div>

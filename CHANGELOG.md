@@ -6,6 +6,47 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ### Fixed
 - The README model-router tables now use the effort IDs accepted by the orchestrator (`low`, `medium`, `high`, `extreme`), with French labels alongside them in the French README.
+## [1.2.0-beta.1] - 2026-11-01
+
+### Added
+- **Notes:** per-project Markdown notes (plain files in the project's `.openvibe/notes/`), a graph of the links between them, notes per group, and a note list agents are told about. Open them from the rail, the palette or a group's menu.
+- **Install agents from the interface:** from the home screen or the palette, in a visible terminal, with a prerequisites check first, and Ollama models pulled the same way. Nothing is ever installed without being asked.
+- **Question notice:** when an agent waits on a question, OpenVibe previews the question, and raises a Windows notification if you are not looking. A setting turns the notification off. Gemini CLI's hooks are heard too.
+- **Specialised groups:** give a group a speciality from its menu; the orchestrator is told each agent's group and speciality and matches sub-tasks to them.
+- **Folding groups:** fold a group into its label from the chevron or the palette; going to an agent inside it unfolds it.
+- **Tab reordering:** drag project tabs, or use Alt+arrows or the tab menu; the order is saved per project.
+- **Team presets:** save a team of groups and orchestrators and deploy it again from the palette, with undo for a deletion.
+- **Loops:** a window to run a prompt again on a trigger, with stop conditions, spending guards, a running indicator and *Stop all*.
+- **Claude accounts:** several Claude profiles, a login terminal per profile, *Use*, and an account chip on the terminals that use one.
+- **Tokens:** a 30-day view of your tokens per day and per agent, read from Claude's local logs (read-only; Claude only, days counted in UTC).
+- **A git window**, opened from the branch chip: changed files, diffs, a tick per file to commit exactly those, history, and a *Pousser* button that names its target. Discarding asks first and says what is lost.
+- **Overnight run:** checks before a night, a morning report, and a PC kept awake while the mission works.
+- **Mission task queue:** follow-ups are queued for the agents instead of being typed into their terminals.
+- **Per-mission permissions:** choose what the agents of a mission may do.
+- **A discreet exit button** in the zen and reading modes.
+
+### Changed
+- **Code Studio:** saving never goes over a file that changed on disk: an agent's change is reloaded by itself when you have none, and otherwise a banner lets you reload or overwrite, and a file deleted meanwhile can be dropped or recreated. Files are written atomically and keep their line endings, the tree leaves out secrets and `.git`, and quitting or updating asks first about unsaved tabs.
+- The global time budget is now counted in real time for every mission, and the queue gives no new task once it is spent.
+- Missions keep working when their project is not the one on screen.
+- Only one OpenVibe runs at a time: a second launch brings the first window back.
+
+### Fixed
+- A program on your PC can no longer freeze or crash OpenVibe's local server with a slow, malformed or panicking request; every call is answered once.
+- Text sent by agents can no longer smuggle escape sequences or invisible characters into what OpenVibe shows or types, and an agent is told that a task may come from a stranger's text.
+- The git window does exactly what you confirmed: a commit, a discard or a push no longer includes anything else, and a push sends only the commits the button counted.
+- The `gh` commands that reach the remote are denied to agents like `git push`; the README says plainly that this stops accidents and is not a security boundary.
+- A mission's agents no longer keep their permissions when copied, and an agent already in a running mission is not offered to another.
+- A list that could not be read (loops, presets, command history) is never overwritten with an empty one; a refused save is reported instead of lost.
+- A relaunched terminal keeps its saved output, and an empty capture never replaces it; two starts of the same terminal can no longer race.
+- Updates: a check no longer closes the update being installed, and an install never goes over unsaved studio changes.
+- Remote Control never types `/remote-control` after a half-written draft; a Loop never types into a shell whose Claude has quit.
+- Kanban: a card's text stays data wherever it reaches an orchestrator or an agent. A card from GitHub is never sent to a plain shell, and dropping a card on an agent waiting for an answer no longer confirms its dialog.
+- Kanban and missions: a queued task can carry its card, which then moves with it, and an issue follows its card when you are in another project.
+- Orchestrator and mission: events wait while you type in the orchestrator, `reassign` and `extend` refuse agents that cannot take them, overrun lines are told again if the app closed before they were heard, and changing a project's folder moves its orchestrators too.
+- Groups: a group copied whole gets a pantheon of its own, a folded group never hides a selectable agent, and a new group is fitted at a readable zoom instead of 40 %.
+- Review: the toasts no longer cover *Send*, a nested repository is skipped, and a git warning on an empty diff is no error.
+- Many small interface fixes: the command palette and `@` commands (names, Escape, double spaces), the saved theme painted before the first render, translated messages, and the keyboard going back to the canvas after menus.
 
 ## [1.1.0-beta.1] - 2026-10-28
 

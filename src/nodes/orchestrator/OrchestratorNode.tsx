@@ -26,7 +26,9 @@ import { useTerminalStatus, type TerminalStatus } from "@/store/terminalStatus";
 import { frameStyle, WAITING_GLOW } from "../terminal/frame";
 import { orchestratorSession } from "../terminal/launch";
 import { markForAutostart } from "../terminal/registry";
+import { MissingNode } from "../terminal/MissingNode";
 import { ResumeCard } from "../terminal/ResumeCard";
+import { keepFieldWheel } from "./keepWheel";
 import { HeaderButton } from "../terminal/TerminalHeader";
 import { useTerminalHost } from "../terminal/useTerminalHost";
 import { ToolsUnavailable } from "./ToolsUnavailable";
@@ -55,19 +57,19 @@ export function OrchestratorNode({ nodeId }: { nodeId: string }) {
     markForAutostart(nodeId);
   }, [nodeId]);
   useTerminalHost(nodeId, hostRef, session !== undefined);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const shown = record?.kind === "orchestrator";
+  useEffect(() => (rootRef.current ? keepFieldWheel(rootRef.current) : undefined), [shown]);
 
   if (record?.kind !== "orchestrator") {
-    return (
-      <div className="grid h-full place-items-center rounded-xl border border-ov-line bg-ov-surface text-sm text-ov-text-2">
-        {t.notFound}
-      </div>
-    );
+    return <MissingNode text={t.notFound} />;
   }
 
   const linked = linkedAgents(links, frames);
   const waiting = status.state === "running" && activity?.activity === "waiting";
   return (
     <div
+      ref={rootRef}
       data-orchestrator={nodeId}
       className="relative flex h-full flex-col overflow-hidden rounded-xl bg-ov-surface-2"
       style={frameStyle("var(--ov-accent)", selected, waiting)}

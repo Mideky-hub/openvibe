@@ -34,7 +34,8 @@ export async function loadAgentsPanel() {
 }
 
 export function setAgentsPanel(open: boolean) {
-  agentsPanelStore.setState({ open });
+  // Reopened from the rail, the panel shows everyone: a filter left by a counter is not remembered.
+  agentsPanelStore.setState((s) => ({ open, filter: open && !s.open ? "all" : s.filter }));
   void setSetting(AGENTS_PANEL_KEY, open ? "open" : "closed").catch((error: unknown) => {
     toast.error(messages(fleetMessages).settingNotSaved(String(error)));
   });
@@ -46,6 +47,6 @@ export function setAgentsFilter(filter: FleetFilter) {
 
 /** A counter of the title bar: the panel, on what it counts. */
 export function showAgents(filter: FleetFilter) {
-  setAgentsFilter(filter);
   setAgentsPanel(true);
+  setAgentsFilter(filter);
 }

@@ -1,28 +1,28 @@
 import { showNode } from "@/canvas/arrive";
-import { canvasStore } from "@/canvas/canvasStore";
 import { pauseAgents } from "@/fleet/broadcast";
 import { GROUP_GAP, groupGrid } from "@/fleet/groupLayout";
-import { closeGroup, launchGroup } from "@/fleet/groups";
+import { closeGroup, closeStoredGroup, launchGroup, showGroups } from "@/fleet/groups";
 import { defaultLaunchOptions } from "@/fleet/launchAgent";
 import { nextName } from "@/fleet/names";
 import { namesInWorkspace, pantheonForNewGroup } from "@/fleet/naming";
 import { linkOrchestrator } from "@/fleet/orchestrators";
-import { addTerminal } from "@/fleet/terminals";
+import { sceneAccess } from "@/fleet/sceneAccess";
+import { addTerminal, removeFromStoredScene, removeNodes } from "@/fleet/terminals";
 import { messages } from "@/i18n";
 import { missionAddAgent, missionCleanup, missionDiscard, missionMerge, missionPrepare, type Cleanup, type Worktree } from "@/ipc/mission";
-import { ptySendText, ptyWrite } from "@/ipc/pty";
+import { ptySendText, ptyWrite, type Permission } from "@/ipc/pty";
 import { newConversation, newTerminalPayload } from "@/nodes/terminal/launch";
 import { freshText, quietFor, relaunchTerminal, stopTerminal } from "@/nodes/terminal/registry";
-import { reassignMissionCard, startMissionCards } from "@/kanban/orchestrate";
+import { linkedBoards, reassignMissionCard, startMissionCards } from "@/kanban/orchestrate";
 import { agentMessages } from "@/mcp/messages";
 import { outReport } from "@/mcp/protocol";
 import { nodesStore, sessionOf, terminalOf } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { notify } from "./events";
-import { NEW_AGENT, NEW_MISSION, oneLine, sameName, type Member, type Mission, type SubTask } from "./mission";
+import { NEW_AGENT, NEW_MISSION, oneLine, pastTask, sameName, type Member, type Mission, type SubTask } from "./mission";
 import { whenReady } from "./ready";
 import { modelFor } from "./router";
-import { linkedClaudeAgents, missionOf, orchestratorShown, setMission, updateMember } from "./store";
+import { canvasKnown, linkedClaudeAgents, linkedGroups, missionOf, orchestratorShown, setMission, updateMember, workspaceCanvas } from "./store";
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const t = () => messages(agentMessages);
@@ -32,6 +32,16 @@ export function subTaskText(mission: string, task: SubTask, branch: string, hand
   const brief = oneLine(task.brief);
   const text = t().lines.subTask(mission, task.title, `${brief}${/[.!?]$/.test(brief) ? "" : "."}`, task.budgetMin, branch);
   return handover ? `${text} ${handover}` : text;
+}
+
+/**
+ * What an agent is told of a task that may come from a ticket or from a Kanban
+ * card, which GitHub may have filled: the orchestrator's note stops at the
+ * orchestrator (spec mission de nuit §5.1). A linked board counts whether the
+ * task names its card or not: `card` is optional, the card's text was still read.
+ */
+export function withTicketNote(orchestratorId: string, mission: Mission, text: string, task?: { card?: string }): string {
+  return mission.tickets || task?.card || linkedBoards(orchestratorId).length > 0 ? `${text} ${t().lines.ticketData}` : text;
 }
 
 /** What the next agent learns of the previous one (spec §7.2 reassign). */
@@ -44,29 +54,39 @@ export function handoverText(from: Member): string {
 /**
  * A linked agent moves to `cwd` in a new conversation: a Claude session does
  * not resume from another folder (spec §7.3). It takes `model`, the router's,
- * or none to go back to Claude's own (spec maj §3).
+ * or none to go back to Claude's own (spec maj §3); likewise for what its
+ * mission lets it do unasked (spec mission de nuit §5.3).
  */
-function restartIn(nodeId: string, cwd: string, model?: string): Promise<void> {
+export function restartIn(nodeId: string, cwd: string, model?: string, permission?: Permission): Promise<void> {
   const payload = terminalOf(nodesStore.getState().nodes[nodeId]);
   if (!payload) return Promise.resolve();
-  const patch = { cwd, model, ...newConversation() };
+  const patch = { cwd, model, permission, ...newConversation() };
   nodesStore.getState().update(nodeId, patch);
   return relaunchTerminal(nodeId, { ...payload, ...patch }, "new");
 }
 
 /** Right of the orchestrator, tops aligned; `launchGroup` moves it down past what it would cover. */
-function besideOrchestrator(orchestratorId: string, count: number) {
-  const element = canvasStore.getState().api?.getSceneElements().find((e) => e.id === orchestratorId);
+function besideOrchestrator(orchestratorId: string, workspaceId: string, count: number) {
+  const element = sceneAccess(workspaceId)?.elements().find((e) => e.id === orchestratorId && !e.isDeleted);
   if (!element) return undefined;
   const grid = groupGrid(count);
   return { x: element.x + element.width + GROUP_GAP + grid.width / 2, y: element.y + grid.height / 2 };
 }
 
-function newNames(workspaceId: string, pantheon: string, count: number): string[] {
-  const names: string[] = [];
-  const taken = namesInWorkspace(workspaceId);
-  for (let i = 0; i < count; i++) names.push(nextName(pantheon, [...taken, ...names]));
-  return names;
+const frameCenter = (frame: { x: number; y: number; width: number; height: number }) => ({ x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 });
+
+/** The terminal of an agent created for the mission, in its worktree. */
+const agentPayload = (name: string, cwd: string, model?: string, permission?: Permission) => ({
+  ...newTerminalPayload({ ...defaultLaunchOptions(), cwd, agent: "claude" }, name),
+  ...(model ? { model } : {}),
+  ...(permission ? { permission } : {}),
+});
+
+/** Like a linked agent, a group chosen in the plan may be gone at the go-ahead (spec groupes spécialisés §4). */
+function checkGroups(orchestratorId: string, plan: readonly SubTask[]) {
+  const linked = linkedGroups(orchestratorId);
+  const lost = plan.find((task) => task.group && !linked.some((g) => g.id === task.group?.id));
+  if (lost?.group) throw new Error(t().launch.groupLost(lost.group.name));
 }
 
 type Team = Required<Pick<Mission, "project" | "slug" | "branch" | "worktree">> & Pick<Mission, "frameId" | "members">;
@@ -81,17 +101,21 @@ async function formTeam(orchestratorId: string, workspaceId: string, project: st
   const agents = plan.map((task) => (task.agent === NEW_AGENT ? null : (linked.find((a) => sameName(a.name, task.agent)) ?? null)));
   const lost = plan.find((task, i) => task.agent !== NEW_AGENT && !agents[i]);
   if (lost) throw new Error(t().launch.unlinked(lost.agent));
+  checkGroups(orchestratorId, plan);
   const pantheon = pantheonForNewGroup(workspaceId);
-  const fresh = newNames(workspaceId, pantheon, agents.filter((a) => a === null).length);
+  const taken = namesInWorkspace(workspaceId);
+  const pantheonOf = (task: SubTask) => workspaceCanvas(workspaceId).frames.find((f) => f.id === task.group?.id)?.group?.pantheon ?? pantheon;
   const made: Worktree[] = [];
+  const joined: string[] = [];
+  let frameId: string | undefined;
   try {
     const root = await missionPrepare(project, mission.name ?? "mission");
     made.push(root);
     const members: Member[] = [];
-    let next = 0;
     for (const [i, task] of plan.entries()) {
       const agent = agents[i];
-      const name = agent?.name ?? fresh[next++];
+      const name = agent?.name ?? nextName(pantheonOf(task), taken);
+      taken.push(name);
       const tree = await missionAddAgent(project, root.slug, name);
       made.push(tree);
       const model = modelFor(mission, task);
@@ -104,43 +128,62 @@ async function formTeam(orchestratorId: string, workspaceId: string, project: st
         branch: tree.branch,
         worktree: tree.path,
         ...(model ? { model } : {}),
+        ...(task.group ? { group: task.group.id } : {}),
       });
     }
-    // Its canvas is the one on screen only: the user may have left it during the git work (final review H2).
-    if (!orchestratorShown(orchestratorId)) throw new Error(t().launch.leftWorkspace);
-    const created = members.filter((m) => !m.linked);
-    let frameId: string | undefined;
+    // Shown or not, its scene must be known to take the team (spec mission de nuit §6.1).
+    if (!canvasKnown(orchestratorId)) throw new Error(t().launch.leftWorkspace);
+    checkGroups(orchestratorId, plan);
+    const created = members.filter((m) => !m.linked && !m.group);
     if (created.length > 0) {
       const group = await launchGroup(
         { name: `Mission ${mission.name}`, role: "general", agents: created.map(() => "claude" as const) },
         defaultLaunchOptions(),
-        besideOrchestrator(orchestratorId, created.length),
-        { pantheon, names: created.map((m) => m.name), cwds: created.map((m) => m.worktree), models: created.map((m) => m.model) },
+        besideOrchestrator(orchestratorId, workspaceId, created.length),
+        { pantheon, names: created.map((m) => m.name), cwds: created.map((m) => m.worktree), models: created.map((m) => m.model), permission: mission.permission, workspaceId },
       );
       if (!group) throw new Error(t().launch.groupFailed);
       created.forEach((member, i) => (member.nodeId = group.nodeIds[i]));
       frameId = group.frameId;
       linkOrchestrator(orchestratorId, group.frameId);
     }
+    for (const [i, member] of members.entries()) {
+      const group = plan[i].group;
+      if (!group) continue;
+      const frame = workspaceCanvas(workspaceId).frames.find((f) => f.id === group.id);
+      if (!frame) throw new Error(t().launch.groupLost(group.name));
+      const nodeId = await addTerminal(workspaceId, agentPayload(member.name, member.worktree, member.model, mission.permission), frameCenter(frame), frame.id);
+      if (!nodeId) throw new Error(t().launch.groupFailed);
+      member.nodeId = nodeId;
+      joined.push(nodeId);
+    }
+    // launchGroup framed its own group only, and an agent out of sight does not start.
+    if (joined.length > 0 && orchestratorShown(orchestratorId)) showGroups([...new Set(members.flatMap((m) => m.group ?? []).concat(frameId ?? []))]);
     // Linked agents move only once the whole team exists (final review H2).
-    for (const member of members) if (member.linked) restarts.set(member.nodeId, restartIn(member.nodeId, member.worktree, member.model));
+    for (const member of members) if (member.linked) restarts.set(member.nodeId, restartIn(member.nodeId, member.worktree, member.model, mission.permission));
     return { project, slug: root.slug, branch: root.branch, worktree: root.path, frameId, members };
   } catch (error) {
+    // Its terminals first: no agent may sit in a folder that goes.
+    removeTeam(orchestratorId, workspaceId, frameId, joined);
     // What this launch made goes, so the plan can be launched again; never forced (final review H2).
     if (made.length > 0) await missionDiscard(project, made).catch(() => undefined);
     throw error;
   }
 }
 
-/** Types its sub-task in a member's terminal once it is ready (spec §7.3). */
-async function assign(
-  orchestratorId: string,
-  member: Member,
-  mission: string,
-  task: SubTask,
-  restarted: Promise<void> = Promise.resolve(),
-  handover?: string,
-) {
+/** The mission's group and the agents that joined other groups leave the canvas, on screen or not. */
+function removeTeam(orchestratorId: string, workspaceId: string, frameId: string | undefined, joined: readonly string[]) {
+  if (orchestratorShown(orchestratorId)) {
+    if (joined.length > 0) removeNodes(joined);
+    if (frameId) closeGroup(frameId);
+    return;
+  }
+  if (joined.length > 0) removeFromStoredScene(workspaceId, new Set(joined));
+  if (frameId) closeStoredGroup(workspaceId, frameId);
+}
+
+/** Types `text`, its sub-task, in a member's terminal once it is ready (spec §7.3). */
+export async function assign(orchestratorId: string, member: Member, text: string, restarted: Promise<void> = Promise.resolve()) {
   const id = member.nodeId;
   // Before its relaunch ends, its screen and silence are the previous session's (final review H2).
   await restarted.catch(() => undefined);
@@ -155,7 +198,7 @@ async function assign(
     notify(orchestratorId, t().lines.notReady(member.name));
     return;
   }
-  await ptySendText(id, subTaskText(mission, task, member.branch, handover));
+  await ptySendText(id, text);
   updateMember(orchestratorId, id, { sentAt: Date.now() });
 }
 
@@ -166,7 +209,7 @@ export async function launchMission(orchestratorId: string): Promise<void> {
   const session = sessionOf(record);
   if (!record || !mission || !session || mission.state !== "plan" || !mission.plan?.length) return;
   // The router was turned on after the plan: without levels, every agent would get Claude's default model (final review maj §3).
-  if (mission.router && mission.plan.some((task) => !task.level)) {
+  if (mission.router && [...mission.plan, ...(mission.queue ?? [])].some((task) => !task.level)) {
     const error = t().lines.levelsMissing;
     setMission(orchestratorId, { error });
     notify(orchestratorId, t().lines.proposeLevels(error));
@@ -187,22 +230,53 @@ export async function launchMission(orchestratorId: string): Promise<void> {
   notify(orchestratorId, t().lines.goAhead(names, team.branch));
   const plan = mission.plan;
   void startMissionCards(orchestratorId, team.members, plan).catch(() => undefined);
-  team.members.forEach((member, i) => void assign(orchestratorId, member, mission.name ?? "", plan[i], restarts.get(member.nodeId)));
+  team.members.forEach((member, i) => void assign(orchestratorId, member, withTicketNote(orchestratorId, mission, subTaskText(mission.name ?? "", plan[i], member.branch), plan[i]), restarts.get(member.nodeId)));
 }
 
 /** `finish` (spec §7.7): created agents close, linked ones go back to the project. */
 export function endMission(orchestratorId: string, summary: string) {
-  const mission = missionOf(nodesStore.getState().nodes[orchestratorId]);
-  if (mission?.state !== "en_cours") return;
+  const record = nodesStore.getState().nodes[orchestratorId];
+  const mission = missionOf(record);
+  if (!record || mission?.state !== "en_cours") return;
   // Ended first: the agents stopping now are no events.
   setMission(orchestratorId, { state: "terminee", summary, endedAt: Date.now() });
   for (const member of mission.members) if (member.linked && mission.project) void restartIn(member.nodeId, mission.project);
-  if (orchestratorShown(orchestratorId)) {
-    if (mission.frameId) closeGroup(mission.frameId);
+  // Those who joined a group go alone: it stays, with its own agents (spec groupes spécialisés §4).
+  const joined = mission.members.filter((m) => !m.linked && m.group).map((m) => m.nodeId);
+  if (canvasKnown(orchestratorId)) {
+    removeTeam(orchestratorId, record.workspaceId, mission.frameId, joined);
     return;
   }
-  // Away from its workspace its canvas cannot change: the created agents stop, freeing their worktrees (final review H2).
+  // Its scene was never read: the created agents stop, freeing their worktrees (final review H2).
   for (const member of mission.members) if (!member.linked) stopTerminal(member.nodeId);
+}
+
+/** The merges under way, by mission worktree: git merges one branch at a time there. */
+const merging = new Map<string, Promise<unknown>>();
+
+function oneMergeAtATime<T>(worktree: string, merge: () => Promise<T>): Promise<T> {
+  const turn = (merging.get(worktree) ?? Promise.resolve()).then(merge, merge);
+  merging.set(worktree, turn.catch(() => undefined));
+  return turn;
+}
+
+/** Merges one member's branch into the mission's: what to say of it, and whether its branch is in. */
+export function mergeMember(orchestratorId: string, worktree: string, member: Member): Promise<{ line: string; merged: boolean; uncommitted: boolean }> {
+  const m = t().merge;
+  return oneMergeAtATime(worktree, async () => {
+    try {
+      const { merge, uncommitted } = await missionMerge(worktree, member.worktree, member.branch);
+      const note = uncommitted ? m.uncommitted : "";
+      if (merge.kind === "conflict") return { line: m.conflict(member.name, merge.files.join(", "), note), merged: false, uncommitted };
+      const said = merge.kind === "merged" ? m.merged : member.merged ? m.already : m.empty;
+      // It may have taken another task meanwhile: that one is not merged.
+      const now = missionOf(nodesStore.getState().nodes[orchestratorId])?.members.find((other) => other.nodeId === member.nodeId);
+      if (now?.task === member.task && now.report?.at === member.report?.at) updateMember(orchestratorId, member.nodeId, { merged: true });
+      return { line: m.line(member.name, said, note), merged: true, uncommitted };
+    } catch (error) {
+      return { line: m.failed(member.name, errorText(error)), merged: false, uncommitted: false };
+    }
+  });
 }
 
 /** `merge` (spec §7.6): the branches of the agents done since the last merge. */
@@ -215,21 +289,7 @@ export async function mergeMission(orchestratorId: string): Promise<string> {
   const ready = mission.members.filter((m) => m.report?.status === "termine" && !m.handedTo);
   if (ready.length === 0) return m.nothing;
   const lines: string[] = [];
-  for (const member of ready) {
-    try {
-      const { merge, uncommitted } = await missionMerge(mission.worktree, member.worktree, member.branch);
-      const note = uncommitted ? m.uncommitted : "";
-      if (merge.kind === "conflict") {
-        lines.push(m.conflict(member.name, merge.files.join(", "), note));
-        continue;
-      }
-      const said = merge.kind === "merged" ? m.merged : member.merged ? m.already : m.empty;
-      updateMember(orchestratorId, member.nodeId, { merged: true });
-      lines.push(m.line(member.name, said, note));
-    } catch (error) {
-      lines.push(m.failed(member.name, errorText(error)));
-    }
-  }
+  for (const member of ready) lines.push((await mergeMember(orchestratorId, mission.worktree, member)).line);
   return `${m.header(mission.branch ?? "")}\n${lines.join("\n")}`;
 }
 
@@ -238,7 +298,10 @@ export async function cleanMission(orchestratorId: string): Promise<Cleanup | st
   const mission = missionOf(nodesStore.getState().nodes[orchestratorId]);
   if (mission?.state !== "terminee") return t().launch.notFinished;
   const next: Mission = { ...NEW_MISSION, maxAgents: mission.maxAgents };
-  if (mission.budgetMin !== undefined) next.budgetMin = mission.budgetMin;
+  // A night's budget is that night's absence, no setting for the next mission.
+  if (mission.budgetMin !== undefined && !mission.overnight) next.budgetMin = mission.budgetMin;
+  // The router is a setting like the budget: the next mission keeps it checked.
+  if (mission.router) next.router = true;
   try {
     return mission.project && mission.slug ? await missionCleanup(mission.project, mission.slug, mission.members.map((m) => m.name)) : { removed: [], kept: [] };
   } catch (error) {
@@ -252,9 +315,13 @@ export async function cleanMission(orchestratorId: string): Promise<Cleanup | st
 /** A new agent for a handed-over sub-task: its worktree, its terminal in the mission's group, started now. */
 async function newMember(orchestratorId: string, workspaceId: string, mission: Mission, task: SubTask): Promise<Member | string> {
   if (!mission.project || !mission.slug) return t().launch.noFolder;
-  const frame = canvasStore.getState().frames.find((f) => f.id === mission.frameId);
+  const { frames } = workspaceCanvas(workspaceId);
+  // The sub-task's group if it still exists, else the mission's (spec groupes spécialisés §4).
+  const chosen = frames.find((f) => f.id === task.group?.id);
+  const frame = chosen ?? frames.find((f) => f.id === mission.frameId);
   const pantheon = frame?.group?.pantheon ?? pantheonForNewGroup(workspaceId);
-  const [name] = newNames(workspaceId, pantheon, 1);
+  // A closed member's name is free on the canvas, not in git: its branch is still there.
+  const name = nextName(pantheon, [...namesInWorkspace(workspaceId), ...mission.members.map((m) => m.name)]);
   let tree: Worktree;
   try {
     tree = await missionAddAgent(mission.project, mission.slug, name);
@@ -262,16 +329,15 @@ async function newMember(orchestratorId: string, workspaceId: string, mission: M
     return errorText(error);
   }
   const model = modelFor(mission, task);
-  const payload = { ...newTerminalPayload({ ...defaultLaunchOptions(), cwd: tree.path, agent: "claude" }, name), ...(model ? { model } : {}) };
   let nodeId: string | null = null;
   if (frame) {
-    nodeId = await addTerminal(workspaceId, payload, { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 }, frame.id);
+    nodeId = await addTerminal(workspaceId, agentPayload(name, tree.path, model, mission.permission), frameCenter(frame), frame.id);
   } else {
     const group = await launchGroup(
       { name: `Mission ${mission.name}`, role: "general", agents: ["claude"] },
       defaultLaunchOptions(),
-      besideOrchestrator(orchestratorId, 1),
-      { pantheon, names: [name], cwds: [tree.path], models: [model] },
+      besideOrchestrator(orchestratorId, workspaceId, 1),
+      { pantheon, names: [name], cwds: [tree.path], models: [model], permission: mission.permission, workspaceId },
     );
     if (group) {
       nodeId = group.nodeIds[0];
@@ -284,8 +350,18 @@ async function newMember(orchestratorId: string, workspaceId: string, mission: M
     return t().reassign.createFailed;
   }
   // Shown, it starts like any new agent; a second start would break its session (seen in the app, H3).
-  if (frame) showNode(nodeId);
-  return { nodeId, name, task: task.title, budgetMin: task.budgetMin, linked: false, branch: tree.branch, worktree: tree.path, ...(model ? { model } : {}) };
+  if (frame && orchestratorShown(orchestratorId)) showNode(nodeId);
+  return {
+    nodeId,
+    name,
+    task: task.title,
+    budgetMin: task.budgetMin,
+    linked: false,
+    branch: tree.branch,
+    worktree: tree.path,
+    ...(model ? { model } : {}),
+    ...(chosen ? { group: chosen.id } : {}),
+  };
 }
 
 /** `reassign` (spec §7.2): to a member who reported, or to a new agent; it gets the previous one's report and branch. */
@@ -299,7 +375,9 @@ export async function reassignTask(orchestratorId: string, fromNodeId: string, t
   if (!from || !task) return r.notFound;
   let to: Member;
   if (sameName(target, NEW_AGENT)) {
-    if (!orchestratorShown(orchestratorId)) return r.hidden;
+    if (!canvasKnown(orchestratorId)) return r.hidden;
+    // A handed-away agent's session stays open: only the running ones count against the cap.
+    if (mission.members.filter((m) => isRunning(m.nodeId)).length >= mission.maxAgents) return r.teamFull(mission.maxAgents);
     const made = await newMember(orchestratorId, record.workspaceId, mission, task);
     if (typeof made === "string") return made;
     to = made;
@@ -307,6 +385,8 @@ export async function reassignTask(orchestratorId: string, fromNodeId: string, t
     const found = mission.members.find((m) => sameName(m.name, target) && m.nodeId !== from.nodeId && !m.handedTo);
     if (!found) return r.notOther(target);
     if (!found.report) return r.notDone(found.name);
+    // A stopped session would only say « n'a pas démarré » a minute later.
+    if (!isRunning(found.nodeId)) return r.targetStopped(found.name);
     // Its entry takes the new sub-task: its finished work must be in the mission's branch first (final review H3).
     const finished = found.report.status === "termine";
     if (finished && !found.merged) return r.notMerged(found.name, found.task);
@@ -320,6 +400,7 @@ export async function reassignTask(orchestratorId: string, fromNodeId: string, t
       sentAt: undefined,
       merged: undefined,
       done: finished ? [...(found.done ?? []), found.task] : found.done,
+      past: [...(found.past ?? []), pastTask(found, found.report)],
     };
   }
   const latest = missionOf(nodesStore.getState().nodes[orchestratorId]) ?? mission;
@@ -331,6 +412,6 @@ export async function reassignTask(orchestratorId: string, fromNodeId: string, t
   if (isRunning(from.nodeId)) {
     void ptySendText(from.nodeId, t().lines.handedAway(from.task, to.name)).catch(() => undefined);
   }
-  void assign(orchestratorId, to, mission.name ?? "", task, Promise.resolve(), handoverText(from));
+  void assign(orchestratorId, to, withTicketNote(orchestratorId, mission, subTaskText(mission.name ?? "", task, to.branch, handoverText(from)), task));
   return { name: to.name };
 }

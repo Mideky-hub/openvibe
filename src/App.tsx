@@ -1,7 +1,11 @@
 import { useEffect } from "react";
 import { boot } from "@/app/boot";
 import { GoToLine } from "@/studio/GoToLine";
+import { QuitPrompt } from "@/studio/QuitPrompt";
 import { Palette } from "@/commands/Palette";
+import { LoopsDialog } from "@/loops/LoopsDialog";
+import { LoopsIndicator } from "@/loops/LoopsIndicator";
+import { SavePresetDialog } from "@/presets/SavePresetDialog";
 import { appMessages } from "@/app/messages";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { HomeScreen } from "@/home/HomeScreen";
@@ -10,6 +14,7 @@ import { ProjectView } from "@/shell/ProjectView";
 import { StatusScreen } from "@/shell/StatusScreen";
 import { TroubleshootingDialog } from "@/shell/TroubleshootingDialog";
 import { UpdateDialog } from "@/shell/UpdateDialog";
+import { AccountsDialog } from "@/accounts/AccountsDialog";
 import { messages, useMessages } from "@/i18n";
 import { projectsStore, useProjects } from "@/store/projects";
 
@@ -35,8 +40,21 @@ export default function App() {
       <ErrorBoundary scope="palette" fallback={() => null}>
         <Palette />
       </ErrorBoundary>
+      <ErrorBoundary scope="presets dialog" fallback={() => null}>
+        <SavePresetDialog />
+      </ErrorBoundary>
+      <ErrorBoundary scope="accounts dialog" fallback={() => null}>
+        <AccountsDialog />
+      </ErrorBoundary>
+      <ErrorBoundary scope="loops" fallback={() => null}>
+        <LoopsDialog />
+        <LoopsIndicator />
+      </ErrorBoundary>
       <ErrorBoundary scope="go to line" fallback={() => null}>
         <GoToLine />
+      </ErrorBoundary>
+      <ErrorBoundary scope="unsaved files" fallback={() => null}>
+        <QuitPrompt />
       </ErrorBoundary>
       <ErrorBoundary scope="update dialog" fallback={() => null}>
         <UpdateDialog />

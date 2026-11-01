@@ -6,7 +6,7 @@ import { focusGroup } from "@/canvas/canvasFocus";
 import { canvasStore } from "@/canvas/canvasStore";
 import { agentsPanelStore } from "@/fleet/agentsPanelState";
 import { pauseAgents, pauseAll, resumeAgent } from "@/fleet/broadcast";
-import { requestCloseGroup, ungroup } from "@/fleet/groups";
+import { requestCloseGroup, setGroupFolded, ungroup } from "@/fleet/groups";
 import { orchestrateGroup } from "@/fleet/orchestrators";
 import { duplicateTerminal, requestClose } from "@/fleet/terminals";
 import { pasteIntoTerminal, relaunchTerminal, stopTerminal, terminalSelection } from "@/nodes/terminal/registry";
@@ -19,7 +19,7 @@ import { reviewStore } from "@/review/reviewStore";
 import { CURRENT } from "./current";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
-vi.mock("@/canvas/arrive", () => ({ showNode: vi.fn(() => true), arrive: vi.fn() }));
+vi.mock("@/canvas/arrive", () => ({ showNode: vi.fn(() => true), arrive: vi.fn(), arrivingNode: vi.fn(() => null) }));
 vi.mock("@/canvas/canvasFocus", () => ({ focusGroup: vi.fn(() => true), releaseToCanvas: vi.fn() }));
 vi.mock("@/fleet/broadcast", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/fleet/broadcast")>()),
@@ -28,7 +28,7 @@ vi.mock("@/fleet/broadcast", async (importOriginal) => ({
   pauseAll: vi.fn(() => Promise.resolve()),
   resumeAll: vi.fn(() => Promise.resolve()),
 }));
-vi.mock("@/fleet/groups", () => ({ requestCloseGroup: vi.fn(), ungroup: vi.fn(), groupMembers: vi.fn(() => ["isis"]) }));
+vi.mock("@/fleet/groups", () => ({ requestCloseGroup: vi.fn(), ungroup: vi.fn(), setGroupFolded: vi.fn(), groupMembers: vi.fn(() => ["isis"]) }));
 vi.mock("@/fleet/orchestrators", () => ({ orchestrateGroup: vi.fn(() => Promise.resolve()) }));
 vi.mock("@/fleet/terminals", () => ({ duplicateTerminal: vi.fn(() => Promise.resolve()), requestClose: vi.fn() }));
 vi.mock("@/nodes/terminal/registry", () => ({ relaunchTerminal: vi.fn(), stopTerminal: vi.fn(), terminalSelection: vi.fn(() => ""), pasteIntoTerminal: vi.fn() }));
@@ -79,6 +79,7 @@ describe("Terminal · <prénom> and Groupe · <nom> (spec fenêtre §7.3)", () =
       "Renommer le groupe",
       "Ajouter un agent…",
       "Relier un orchestrateur",
+      "Replier ou déplier le groupe",
       "Dégrouper",
       "Fermer le groupe",
       "Mettre le groupe en pause",
@@ -103,6 +104,7 @@ describe("Terminal · <prénom> and Groupe · <nom> (spec fenêtre §7.3)", () =
       "group.rename",
       "group.addAgent",
       "group.orchestrate",
+      "group.fold",
       "group.ungroup",
       "group.close",
       "group.pause",
@@ -141,6 +143,12 @@ describe("Terminal · <prénom> and Groupe · <nom> (spec fenêtre §7.3)", () =
   it("acts on the group of the moment, as its menu does", async () => {
     await find("group.orchestrate").run(ctx("isis"));
     expect(orchestrateGroup).toHaveBeenCalledWith("g1");
+    await find("group.fold").run(ctx("isis"));
+    expect(setGroupFolded).toHaveBeenLastCalledWith("g1", true);
+    canvasStore.setState({ frames: [{ ...canvasStore.getState().frames[0], group: { role: "backend", pantheon: "egypt", folded: true } }] as never });
+    await find("group.fold").run(ctx("isis"));
+    expect(setGroupFolded).toHaveBeenLastCalledWith("g1", false);
+    canvasStore.setState({ frames: [{ ...canvasStore.getState().frames[0], group: { role: "backend", pantheon: "egypt" } }] as never });
     await find("group.ungroup").run(ctx("isis"));
     expect(ungroup).toHaveBeenCalledWith("g1");
     await find("group.close").run(ctx("isis"));
@@ -180,3 +188,20 @@ it("opens the review of the terminal of the moment (spec maj §5)", async () => 
   expect(reviewStore.getState().nodeId).toBe("thot");
 });
 
+
+describe("a target that went between the palette and Entrée (plan F2)", () => {
+  it("does nothing, without a TypeError: the group is gone", async () => {
+    canvasStore.setState({ frames: [] });
+    for (const id of ["group.rename", "group.addAgent", "group.orchestrate", "group.fold", "group.ungroup", "group.close", "group.pause", "group.resume", "group.frame"]) {
+      await expect(Promise.resolve(find(id).run(ctx("isis")))).resolves.toBeUndefined();
+    }
+    expect(ungroup).not.toHaveBeenCalled();
+    expect(requestCloseGroup).not.toHaveBeenCalled();
+  });
+
+  it("does nothing for Relancer when the terminal is gone", async () => {
+    vi.mocked(relaunchTerminal).mockClear();
+    await expect(Promise.resolve(find("terminal.relaunch").run(ctx("closed")))).resolves.toBeUndefined();
+    expect(relaunchTerminal).not.toHaveBeenCalled();
+  });
+});

@@ -16,10 +16,10 @@ import { requestClose } from "./terminals";
 
 /**
  * One agent of the fleet panel or of an orchestrator: logo, name, agent, pill;
- * on hover, Centrer (orchestrator), Pause, Reprendre and Fermer (spec habillage §5.5, §13).
+ * on hover, Centrer, Pause, Reprendre and Fermer (spec habillage §5.5, §13).
  */
 export function AgentRow(props: { id: string; onOpen?: () => void; trailing?: ReactNode; showCenter?: boolean }) {
-  const { id, onOpen, trailing, showCenter = false } = props;
+  const { id, onOpen, trailing, showCenter = true } = props;
   const t = useMessages(fleetMessages).agentRow;
   const payload = useNodes((s) => terminalOf(s.nodes[id]));
   const status = useTerminalStatus(id);
@@ -49,7 +49,7 @@ export function AgentRow(props: { id: string; onOpen?: () => void; trailing?: Re
       )}
       <StatusPill status={status} activity={activity} indigo={meta.tint === INDIGO} />
       {trailing}
-      <span className="hidden items-center gap-0.5 group-hover:flex">
+      <span className="hidden items-center gap-0.5 group-hover:flex group-focus-within:flex">
         {showCenter && (
           <HeaderButton label={t.center(name)} onClick={() => focusNode(id)}>
             <Crosshair />

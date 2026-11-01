@@ -9,7 +9,8 @@ import { completeArrival } from "@/commands/pendingArrival";
 import { assignMissingNames } from "@/fleet/naming";
 import { dismissResumeOffer, offerResumeAll } from "@/fleet/ResumeAllToast";
 import { adoptCopies } from "@/fleet/terminals";
-import { orchestratorLinks, unmarkedWires } from "@/fleet/wires";
+import { scheduleWireUpkeep } from "@/fleet/wireUpkeep";
+import { orchestratorLinks } from "@/fleet/wires";
 import { saveFiles, saveScene } from "@/ipc/db";
 import { onFlushAll } from "@/lib/flush";
 import { NodeHost } from "@/nodes/NodeHost";
@@ -30,6 +31,7 @@ import { GroupLabels } from "./overlay/GroupLabels";
 import { StepTimelines } from "./overlay/StepTimelines";
 import { loadScene, rememberScene, type LoadedScene } from "./sceneCache";
 import { EXCALIDRAW_UI_OPTIONS, withSceneDefaults } from "./sceneDefaults";
+import { sceneGone, sceneReady } from "./sceneReady";
 import { createSceneSync, liveNodeIds, liveNodeRects } from "./sceneSync";
 import { messages, useLang, useMessages } from "@/i18n";
 import { canvasMessages, EXCALIDRAW_LANG } from "./messages";
@@ -82,8 +84,14 @@ function LoadedCanvas({ workspaceId, scene }: { workspaceId: string; scene: Load
   // A Ctrl+P target of this workspace waits for its scene to be on screen (spec fenêtre §7.2).
   useEffect(() => {
     if (!api) return;
-    const frame = requestAnimationFrame(() => completeArrival(workspaceId));
-    return () => cancelAnimationFrame(frame);
+    const frame = requestAnimationFrame(() => {
+      completeArrival(workspaceId);
+      sceneReady(workspaceId);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      sceneGone(workspaceId);
+    };
   }, [api, workspaceId]);
 
   // The next workspace must not show this one's groups before its first change.
@@ -159,8 +167,7 @@ function LoadedCanvas({ workspaceId, scene }: { workspaceId: string; scene: Load
       canvasStore.getState().setNodeIds(liveNodeIds(elements));
       canvasStore.getState().setNodeRects(liveNodeRects(elements));
       canvasStore.getState().setLinks(orchestratorLinks(elements));
-      const unmarked = unmarkedWires(elements);
-      if (unmarked.length > 0 && api) requestAnimationFrame(() => markWires(api, unmarked));
+      if (api) scheduleWireUpkeep(api, elements);
       const activated = trackActivation(appState.activeEmbeddable);
       // Deferred: changing the view from inside onChange would re-enter it.
       if (activated && api) requestAnimationFrame(() => showAtFullSize(api, activated));
@@ -229,13 +236,3 @@ function settleRemovals({ dispose, restore, ask }: RemovalVerdict) {
   });
 }
 
-/** Hand-drawn wires get their mark, outside the undo history (spec habillage §13). */
-function markWires(api: ExcalidrawImperativeAPI, ids: readonly string[]) {
-  const marked = new Set(ids);
-  api.updateScene({
-    elements: api
-      .getSceneElementsIncludingDeleted()
-      .map((e) => (marked.has(e.id) ? newElementWith(e, { customData: { ...e.customData, openvibe: { kind: "wire" } } }) : e)),
-    captureUpdate: CaptureUpdateAction.NEVER,
-  });
-}

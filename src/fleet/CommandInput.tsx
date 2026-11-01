@@ -8,8 +8,9 @@ import { cn } from "@/lib/utils";
 import { sendCommand } from "./broadcast";
 import { fleetMessages } from "./messages";
 import { browseHistory, historyStore } from "./history";
-import { commandAt, isKnownCommand, isSlashCommand, matchCommands } from "./slashCommands";
+import { commandAt, isCommandAfterMentions, isKnownCommand, matchCommands } from "./slashCommands";
 import {
+  completedMention,
   extractMentions,
   keptDismissal,
   matchOptions,
@@ -37,9 +38,12 @@ interface Suggestion {
 }
 
 /** Escape keeps the list closed while the same `@` mention or `/command` is typed. */
-function keptClosed(dismissedAt: number | null, text: string, caret: number): number | null {
-  if (dismissedAt === null) return null;
-  return keptDismissal(dismissedAt, text, caret) ?? (commandAt(text, caret)?.start === dismissedAt ? dismissedAt : null);
+type Dismissal = { kind: "mention" | "command"; at: number };
+
+function keptClosed(dismissed: Dismissal | null, text: string, caret: number): Dismissal | null {
+  if (dismissed === null) return null;
+  if (dismissed.kind === "mention") return keptDismissal(dismissed.at, text, caret) === null ? null : dismissed;
+  return commandAt(text, caret)?.start === dismissed.at ? dismissed : null;
 }
 
 /**
@@ -64,7 +68,7 @@ export function CommandInput(props: {
   const [targets, setTargets] = useState<Target[]>([]);
   const [active, setActive] = useState(0);
   // Escape closes the list for the mention typed at that position.
-  const [dismissedAt, setDismissedAt] = useState<number | null>(null);
+  const [dismissed, setDismissed] = useState<Dismissal | null>(null);
   const [browsing, setBrowsing] = useState<{ index: number; draft: string } | null>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const history = useStore(historyStore, (s) => s.entries);
@@ -75,11 +79,12 @@ export function CommandInput(props: {
   const labels = new Map(options.map((o) => [targetKey(o.target), o.label]));
   const chips = targets.filter((t) => labels.has(targetKey(t)));
   const mention = mentionAt(text, caret);
-  const parts = mention ? mentionParts(mention.query) : null;
+  const parts = mention ? mentionParts(mention.query, options) : null;
   const command = mention ? null : commandAt(text, caret);
   const menuStart = mention?.start ?? command?.start ?? null;
+  const menuKind = mention ? "mention" : "command";
   // A recalled command keeps its list closed: ↑ goes on through the history.
-  const shown = menuStart !== null && menuStart !== dismissedAt && browsing === null;
+  const shown = menuStart !== null && !(dismissed?.kind === menuKind && dismissed.at === menuStart) && browsing === null;
   const fullCommand = command !== null && isKnownCommand(`/${command.query}`);
   const suggestions: Suggestion[] = !shown
     ? []
@@ -90,18 +95,27 @@ export function CommandInput(props: {
             key: `${targetKey(option.target)}-${i}`,
             label: option.label,
             detail: option.detail,
-            pick: () => insertTargets([...partTargets(parts.typed, options), option.target]),
+            pick: () => {
+              const known = partTargets(parts.typed, options);
+              // An unknown name stays as typed: the mention is completed, not reduced to the known ones.
+              if (known.length < parts.typed.length) completeText(completedMention(parts.typed, option));
+              else insertTargets([...known, option.target]);
+            },
           }))
       : matchCommands(command?.query ?? "")
           .slice(0, MENU_SIZE)
           .map((found) => ({ key: found.name, label: found.name, detail: found.hint, pick: () => insertCommand(found.name) }));
+  // A list that shrank under the highlight starts again at the top.
+  const row = active < suggestions.length ? active : 0;
   const typed = extractMentions(text, options);
   const allTargets = uniqueTargets([...chips, ...typed.targets]);
   const ids = resolveTargets(allTargets, { all: agents.map((a) => a.id), groups }, fallback);
   // A command for a mistyped target must not go to the selection instead.
-  const unknown = isSlashCommand(typed.text) ? /(?:^|\s)(@[^\s@,;:.!?…]+)/.exec(typed.text)?.[1] : undefined;
+  const unknown = isCommandAfterMentions(typed.text) ? /(?:^|\s)(@[^\s@,;:.!?…]+)/.exec(typed.text)?.[1] : undefined;
   const canSend = typed.text.length > 0 && ids.length > 0 && unknown === undefined;
   const nothingTargeted = allTargets.length === 0 && fallback.length === 0;
+  // Targets were chosen, but they hold no agent (an empty group).
+  const noAgents = allTargets.length > 0 && ids.length === 0;
 
   useLayoutEffect(() => {
     const element = field.current;
@@ -115,7 +129,7 @@ export function CommandInput(props: {
     setCaret(at);
     setActive(0);
     setBrowsing(null);
-    setDismissedAt((dismissed) => keptClosed(dismissed, value, at));
+    setDismissed((current) => keptClosed(current, value, at));
   };
 
   const moveCaret = (at: number) => requestAnimationFrame(() => field.current?.setSelectionRange(at, at));
@@ -128,9 +142,19 @@ export function CommandInput(props: {
     moveCaret(next.caret);
   };
 
+  const completeText = (mentionText: string) => {
+    if (!mention) return;
+    const value = `${text.slice(0, mention.start)}${mentionText}${text.slice(caret)}`;
+    const at = mention.start + mentionText.length;
+    edit(value, at);
+    moveCaret(at);
+  };
+
   const insertCommand = (name: string) => {
     if (!command) return;
-    const value = `${text.slice(0, command.start)}${name} ${text.slice(caret)}`;
+    // The space that follows the caret already separates the command from the rest.
+    const rest = text.slice(caret);
+    const value = `${text.slice(0, command.start)}${name}${rest.startsWith(" ") ? "" : " "}${rest}`;
     const at = command.start + name.length + 1;
     edit(value, at);
     moveCaret(at);
@@ -154,6 +178,8 @@ export function CommandInput(props: {
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
+    // The Enter (or arrow) of an IME composition picks a candidate: it is not ours.
+    if (e.isComposing || e.keyCode === 229) return;
     if (suggestions.length > 0 && menuStart !== null) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
@@ -163,12 +189,12 @@ export function CommandInput(props: {
       }
       if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && !fullCommand)) {
         e.preventDefault();
-        suggestions[Math.min(active, suggestions.length - 1)].pick();
+        suggestions[row].pick();
         return;
       }
       if (e.key === "Escape") {
         e.preventDefault();
-        setDismissedAt(menuStart);
+        setDismissed({ kind: menuKind, at: menuStart });
         return;
       }
     }
@@ -203,7 +229,7 @@ export function CommandInput(props: {
             <li
               key={suggestion.key}
               role="option"
-              aria-selected={i === active}
+              aria-selected={i === row}
               title={suggestion.detail}
               onMouseDown={(e) => {
                 e.preventDefault();
@@ -211,7 +237,7 @@ export function CommandInput(props: {
               }}
               className={cn(
                 "flex cursor-pointer items-center gap-2 px-3 py-1 text-xs",
-                i === active ? "bg-ov-hover text-ov-text" : "text-ov-text-2",
+                i === row ? "bg-ov-hover text-ov-text" : "text-ov-text-2",
               )}
             >
               <span className="shrink-0 font-mono text-ov-text">{suggestion.label}</span>
@@ -222,6 +248,7 @@ export function CommandInput(props: {
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {text.trim() && nothingTargeted && <p className="text-[11px] text-ov-text-2">{emptyHint}</p>}
+        {text.trim() && noAgents && !unknown && <p className="text-[11px] text-ov-text-2">{t.noAgents}</p>}
         {unknown && <p className="text-[11px] text-ov-text-2">{t.unknownTarget(unknown)}</p>}
         <div className="flex min-w-0 flex-wrap items-center gap-1">
           {chips.map((target) => (
@@ -246,7 +273,11 @@ export function CommandInput(props: {
             value={text}
             placeholder={chips.length > 0 ? "" : placeholder}
             onChange={(e) => edit(e.target.value, e.target.selectionStart)}
-            onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+            onSelect={(e) => {
+              const at = e.currentTarget.selectionStart;
+              if (at !== caret) setActive(0);
+              setCaret(at);
+            }}
             className={cn(
               "min-w-[8rem] flex-1 resize-none bg-transparent py-1 text-ov-text outline-none placeholder:text-ov-text-2",
               compact ? "text-xs" : "text-[13px]",
@@ -257,7 +288,7 @@ export function CommandInput(props: {
       <button
         type="button"
         aria-label={t.send}
-        title={canSend ? t.send : nothingTargeted ? emptyHint : t.writeInstruction}
+        title={canSend ? t.send : nothingTargeted ? emptyHint : noAgents ? t.noAgents : t.writeInstruction}
         disabled={!canSend}
         onClick={send}
         className={cn(

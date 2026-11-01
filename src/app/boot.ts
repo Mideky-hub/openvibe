@@ -8,8 +8,10 @@ import { onAgentSubagents } from "@/ipc/mcp";
 import { onPtyExit, ptyList } from "@/ipc/pty";
 import { installMcp } from "@/mcp/router";
 import { installMissionClock } from "@/mission/clock";
+import { installKeepAwake } from "@/mission/keepAwake";
 import { installMissionEvents } from "@/mission/events";
-import { setLivePtys } from "@/nodes/terminal/registry";
+import { forgetLivePty, setLivePtys } from "@/nodes/terminal/registry";
+import { installWaitingAlerts } from "@/shell/waitingAlert";
 import { agentActivityStore } from "@/store/agentActivity";
 import { subagentsStore } from "@/store/subagents";
 import { terminalStatusStore } from "@/store/terminalStatus";
@@ -19,6 +21,7 @@ import { saveBeforeClose } from "./close";
 import { forgetWorkspaces } from "./forget";
 import { loadLanguage } from "@/i18n/settings";
 import { loadThemeSettings } from "./theme";
+import { loadNativeNotifications } from "./nativeNotifications";
 import { loadUpdateSettings, startUpdateChecks } from "./updates";
 import { syncWindowTitle } from "./windowTitle";
 
@@ -34,21 +37,27 @@ export function boot(): Promise<void> {
     await loadLanguage();
     await loadThemeSettings();
     await loadUpdateSettings();
+    await loadNativeNotifications();
     await loadAgentsPanel();
     await onPtyExit(({ nodeId, exitCode }) => {
+      forgetLivePty(nodeId);
       terminalStatusStore.getState().set(nodeId, { state: "exited", code: exitCode });
       agentActivityStore.getState().remove(nodeId);
     });
     // Listened to before the snapshot: no change can fall between the two.
     await onAgentActivity((event) => agentActivityStore.getState().apply(event));
+    await onAgentSubagents(({ nodeId, running }) => subagentsStore.getState().set(nodeId, running));
     const activity = await agentActivitySnapshot();
     agentActivityStore.getState().load(activity.activities);
+    // What the sessions ran before this page loaded: the count is not lost on a reload.
+    for (const { nodeId, running } of activity.subagents ?? []) subagentsStore.getState().set(nodeId, running);
     if (!activity.hooksAvailable) toast.warning(messages(appMessages).hooksDown);
-    await onAgentSubagents(({ nodeId, running }) => subagentsStore.getState().set(nodeId, running));
     await installMcp();
     await installUsage();
     installMissionEvents();
     installMissionClock();
+    installKeepAwake();
+    installWaitingAlerts();
     setLivePtys(await ptyList());
     await getCurrentWindow().onCloseRequested(saveBeforeClose);
     setForgetWorkspaces(forgetWorkspaces);

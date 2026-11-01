@@ -4,6 +4,7 @@ import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { agentsPanelStore } from "@/fleet/agentsPanelState";
 import { agentsStore } from "@/fleet/agentsStore";
 import { pauseAll, resumeAll } from "@/fleet/broadcast";
+import { langStore } from "@/i18n";
 import { launchAt, launchFour, newConsole, placeOrchestrator } from "@/fleet/quickActions";
 import { labelOf, type Command, type CommandContext } from "../command";
 import { pendingUiRequest } from "../uiRequests";
@@ -20,6 +21,7 @@ const find = (id: string) => AGENT_COMMANDS.find((c) => c.id === id)!;
 beforeEach(() => {
   mockIPC(() => undefined);
   agentsStore.setState({
+    loaded: true,
     agents: [
       { id: "claude", available: true },
       { id: "codex", available: false },
@@ -33,16 +35,17 @@ describe("Agents (spec fenêtre §7.3)", () => {
   it("lists the spec's functions, in its order", () => {
     expect(AGENT_COMMANDS.map((c) => labelOf(c, busy))).toEqual([
       "Lancer Claude",
-      "Lancer Codex",
-      "Lancer Gemini",
-      "Lancer Qwen Code",
-      "Lancer Cursor",
-      "Lancer OpenCode",
-      "Lancer Aider",
-      "Lancer Ollama…",
+      "Installer Codex…",
+      "Installer Gemini…",
+      "Installer Qwen Code…",
+      "Installer Cursor…",
+      "Installer OpenCode…",
+      "Installer Aider…",
+      "Installer Ollama…",
       "Lancer Shell",
       "Lancer un agent personnalisé…",
       "Autre agent…",
+      "Comptes Claude…",
       "Nouvelle console",
       "Lancer 4 agents",
       "Orchestrateur",
@@ -53,14 +56,44 @@ describe("Agents (spec fenêtre §7.3)", () => {
     ]);
   });
 
-  it("launches an agent at the center of the view, greys one not found like the Agent menu", async () => {
+  it("offers to install a missing agent, through the menu's confirmation (spec installation §4.1)", async () => {
+    const codex = find("agent.launch.codex");
+    expect(labelOf(codex, busy)).toBe("Installer Codex…");
+    expect(codex.disabled!(busy)).toBeNull();
+    expect(codex.keywords).toContain("installer");
+    await codex.run(busy);
+    expect(launchAt).not.toHaveBeenCalled();
+    expect(pendingUiRequest()).toEqual({ kind: "agentMenu", view: { install: "codex" } });
+    await codex.run({ ...busy, at: { x: 1, y: 2 } });
+    expect(pendingUiRequest()).toEqual({ kind: "agentMenu", view: { install: "codex" }, at: { x: 1, y: 2 } });
+  });
+
+  it("speaks English when it offers an install", () => {
+    langStore.setState({ lang: "en" });
+    expect(labelOf(find("agent.launch.codex"), busy)).toBe("Install Codex…");
+    expect(find("agent.launch.codex").keywords).toContain("install");
+    langStore.setState({ lang: "fr" });
+  });
+
+  it("keeps launching before the first detection, when nothing is known to be missing", () => {
+    agentsStore.setState({ loaded: false, agents: [] } as never);
+    expect(labelOf(find("agent.launch.codex"), busy)).toBe("Lancer Codex");
+    expect(find("agent.launch.codex").disabled!(busy)).toBeNull();
+  });
+
+  it("offers Ollama's install rather than its models when it is missing", async () => {
+    await find("agent.launch.ollama").run(busy);
+    expect(pendingUiRequest()).toEqual({ kind: "agentMenu", view: { install: "ollama" } });
+  });
+
+  it("launches an agent at the center of the view", async () => {
     expect(find("agent.launch.claude").disabled!(busy)).toBeNull();
-    expect(find("agent.launch.codex").disabled!(busy)).toBe("codex introuvable dans le PATH");
     await find("agent.launch.claude").run(busy);
     expect(launchAt).toHaveBeenCalledWith("claude", undefined);
   });
 
   it("opens the Agent menu on Ollama's models and on the custom command", async () => {
+    agentsStore.setState({ agents: [{ id: "ollama", available: true }] } as never);
     await find("agent.launch.ollama").run(busy);
     expect(pendingUiRequest()).toEqual({ kind: "agentMenu", view: "ollama" });
     await find("agent.custom").run(busy);
@@ -86,6 +119,7 @@ describe("Agents (spec fenêtre §7.3)", () => {
     expect(launchFour).toHaveBeenLastCalledWith(at);
     await find("agent.orchestrator").run({ ...busy, at });
     expect(placeOrchestrator).toHaveBeenLastCalledWith(at);
+    agentsStore.setState({ agents: [{ id: "claude", available: true }, { id: "ollama", available: true }] } as never);
     await find("agent.launch.ollama").run({ ...busy, at });
     expect(pendingUiRequest()).toEqual({ kind: "agentMenu", view: "ollama", at });
   });

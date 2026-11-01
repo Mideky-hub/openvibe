@@ -18,9 +18,37 @@ OpenVibe launches the agent CLIs installed on your PC; it looks for them on Wind
 
 Claude Code is needed for the orchestrator, missions and the usage meter. Its official installer, in PowerShell: `irm https://claude.ai/install.ps1 | iex` (see [Claude Code's setup page](https://code.claude.com/docs/en/setup)).
 
+### Installing an agent from OpenVibe
+
+*Installer*, next to a missing agent, shows the official command and runs it in a visible terminal on the canvas of the open project (open a project first). Read the terminal if it fails: the installer's own message is there, and `Ctrl+C` stops it. Gemini CLI, OpenCode and Ollama's models need **npm**: if OpenVibe says it is missing, install [Node.js](https://nodejs.org/), which brings it, then click **Check again**. OpenVibe looks for the new agent for up to 30 minutes after the command starts, and says when it is installed.
+
+## No Windows notification when an agent has a question
+
+The notice at the bottom left of the window always shows while an agent waits. The Windows notification is only sent when OpenVibe's window is not in focus, only for the open project, and only if **Windows notifications** is on in the settings menu. If it is on and nothing appears, check Windows' notification settings for OpenVibe and that *Focus assist* (Do not disturb) is not hiding them.
+
 ## The usage meter stays empty
 
 The meter in the top bar reads Claude Code's usage through a small script run by `bash`. It needs **Git Bash**, which comes with [Git for Windows](https://git-scm.com/download/win). The Troubleshooting dialog says whether Git Bash is found. After installing Git, restart OpenVibe.
+
+## The Tokens view is empty, or says its reading was cut short
+
+The view reads the `.jsonl` logs that Claude Code keeps under `~/.claude/projects` (or under the folder named by `CLAUDE_CONFIG_DIR`), for the last 30 days, in UTC days. It stays empty if Claude Code has not run on this PC, if its folder is somewhere else, or if its history was cleared. For a very large history OpenVibe stops at fixed limits (number of files, bytes read, time) and says the figures are a minimum. Only Claude Code is read; Codex is not supported yet. The view never shows conversation text.
+
+## Code Studio refuses to save
+
+OpenVibe never overwrites what an agent wrote meanwhile. If the file changed on the disk since you opened it, the studio says so and offers to **reload** (your edits are lost) or to **overwrite** with your version. If the file was deleted, it offers to recreate it or to close it without keeping your edits. A project outside a git repository lists its files from the folder itself, up to a limit.
+
+## An agent has disappeared from a group
+
+The group is probably **folded**: only its label shows, with its counters, while its agents keep running. Click the chevron on the label, or *Déplier le groupe* in its menu. Going to one of its agents from the Agents panel or `Ctrl+P` unfolds it too. A group cannot be folded while its agents are still starting; wait a moment and try again.
+
+## A team preset deploys with a different agent
+
+A preset remembers the agent of each cell. If one is not installed on this PC, OpenVibe puts the default agent in its place and says so. Install the agent (see above) and save the preset again, or deploy it as it is.
+
+## Notes and git
+
+Notes are plain Markdown files in the project's `.openvibe/notes/`. OpenVibe does not touch the project's `.gitignore`: add `.openvibe/` to it to keep your notes out of git, or commit them to share them.
 
 ## "OpenVibe tools unavailable" on an orchestrator
 
@@ -29,6 +57,33 @@ An orchestrator only starts with OpenVibe's own tools, served by a local server 
 ## A mission says the repository has no commit
 
 A mission works on git branches, which need a first commit. In the project's folder: `git add -A`, then `git commit -m "First commit"`, and launch the mission again.
+
+## An overnight run did little, or did more than you wanted
+
+- **Agents stopped early.** Under *Fichiers*, the default, an agent stops at its first command until you are back: the morning report shows those tasks as not finished. *Fichiers et commandes* avoids that, but agents then run any command unasked, and the network and the accounts logged in on this PC are open to them. Choose it knowingly.
+- **Nothing started.** By default the plan waits for your go-ahead: click *Lancer la mission* before you leave, or tick *Lancer sans attendre mon feu vert*.
+- **No tickets.** GitHub issues are read with `gh`, which must be installed and logged in, and only issues with the label you gave are read. `BACKLOG.md` must be at the project's root. Kanban is not a source yet.
+- **The run stopped in the night.** The PC stays awake during the mission, but closing the lid or asking for sleep still puts it to sleep.
+- **An agent pushed, or acted on GitHub.** The push block is not a security boundary. `git push` and the `gh` commands that reach the remote are denied by rules on the command's text and by a git setting in the terminal: they stop accidents, and an agent running commands can get past them, as a review did with `-c remote.origin.pushurl` and `GIT_CONFIG_COUNT=0`. If that matters, stay with *Fichiers*, or use a repository and accounts you can afford to expose.
+
+## A loop does not send
+
+A loop never writes to an agent that waits for you (a permission dialog included), is stopped or is still starting; such a turn is skipped and does not count. An agent that was closed is ignored, and a loop with no live target switches itself off. Every loop is off again after OpenVibe restarts: switch it on from the loops window (*Gérer les boucles…* in the function palette). The pill at the bottom left, or *Boucles : tout arrêter*, stops them all.
+
+## A Claude agent uses the wrong account
+
+A terminal keeps the profile it started with; changing the active one in *Comptes Claude…* only affects the agents you launch afterwards. Close and relaunch the agent, or launch a new one. To sign in to a profile, use its *Se connecter* button: it opens a visible Claude terminal where you log in (or type `/login`). A profile whose folder is invalid makes the agent refuse to start, with a message, rather than fall back to another account. If you remove a profile, its folder stays on your disk and its old terminals restart with the default account.
+
+## The git window will not commit, discard or push
+
+- During a merge, a rebase, a cherry-pick or a revert, committing and discarding are refused: finish or abort the operation first.
+- Discarding refuses a file that changed since the list was read (an agent may have written it meanwhile): refresh and look again.
+- *Pousser* is greyed, with the reason, when HEAD is detached, there is no remote, or several remotes exist and none is called `origin`. It never forces. Git does not prompt in OpenVibe; Windows' credential manager may open its own window after your click. A refused push shows git's message in the window.
+- A commit that git refuses (no identity, a hook) shows git's own message, and your commit message stays.
+
+## OpenVibe will not open a second window
+
+OpenVibe runs once, on purpose: two copies would fight over the database and the log. Launching it again brings the open window to the front and restores it if it was minimized. If you cannot find it, check the taskbar and other virtual desktops.
 
 ## Where the logs and data are
 

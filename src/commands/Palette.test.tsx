@@ -16,6 +16,7 @@ import { goTo } from "./goToRun";
 import { openPalette, paletteStore, setPaletteQuery } from "./paletteState";
 import { Palette } from "./Palette";
 import { recentStore } from "./recent";
+import { presetsStore } from "@/presets/store";
 import { openInCodeStudio } from "@/studio/navigate";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
@@ -38,6 +39,7 @@ const projects = [
 beforeEach(async () => {
   mockIPC(() => undefined);
   vi.mocked(goTo).mockClear();
+  agentsStore.setState({ agents: [], loaded: true, load: () => Promise.resolve() });
   projectsStore.setState({ view: "home", projects, activeId: null } as never);
   paletteStore.setState({ open: false, query: "", context: null, returnFocus: null });
   host = document.createElement("div");
@@ -157,14 +159,22 @@ describe("the palette (spec fenêtre §7.1, §7.2)", () => {
     expect(document.body.textContent).not.toContain("Chargement…");
   });
 
-  it("greys an agent not found on this computer, with why, and never chooses it", async () => {
-    agentsStore.setState({ agents: [{ id: "claude", available: false }] } as never);
+  it("greys what cannot be installed, with why, and never chooses it", async () => {
+    agentsStore.setState({ agents: [{ id: "shell", available: false }], loaded: true } as never);
     await act(async () => openPalette("functions", busy));
-    await act(async () => setPaletteQuery("> lancer claude"));
-    const line = items().find((i) => i.textContent?.startsWith("Lancer Claude"))!;
+    await act(async () => setPaletteQuery("> lancer shell"));
+    const line = items().find((i) => i.textContent?.startsWith("Lancer Shell"))!;
     expect(line.getAttribute("data-disabled")).toBe("true");
-    expect(line.textContent).toContain("claude introuvable dans le PATH");
+    expect(line.textContent).toContain("introuvable dans le PATH");
     expect(selected()).not.toBe(line);
+  });
+
+  it("offers to install a missing agent (spec installation §4.1)", async () => {
+    agentsStore.setState({ agents: [{ id: "claude", available: false }], loaded: true } as never);
+    await act(async () => openPalette("functions", busy));
+    await act(async () => setPaletteQuery("> installer claude"));
+    const line = items().find((i) => i.textContent?.startsWith("Installer Claude…"))!;
+    expect(line.getAttribute("data-disabled")).not.toBe("true");
   });
 
   it("offers the last function again first: Ctrl+Maj+P then Entrée repeats it (retours J8b)", async () => {
@@ -196,5 +206,69 @@ describe("the palette (spec fenêtre §7.1, §7.2)", () => {
     await act(async () => press("Enter"));
     expect(paletteStore.getState().open).toBe(false);
     expect(openInCodeStudio).toHaveBeenCalledWith("src/App.tsx", 42, undefined);
+  });
+});
+
+describe("Escape and held keys (plan F1 findings)", () => {
+  it("Échap closes the palette without reaching the window listeners of placement and link modes", async () => {
+    const heard = vi.fn();
+    window.addEventListener("keydown", heard);
+    await act(async () => openPalette("goTo", home));
+    await act(async () => void press("Escape"));
+    window.removeEventListener("keydown", heard);
+    expect(paletteStore.getState().open).toBe(false);
+    expect(heard).not.toHaveBeenCalled();
+  });
+});
+
+describe("agents in the functions list (plan F2)", () => {
+  it("looks for the agents when the functions open, and lists the agents already found", async () => {
+    const load = vi.spyOn(agentsStore.getState(), "load").mockResolvedValue();
+    await act(async () => openPalette("functions", busy));
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not grey an agent before the first look has run", async () => {
+    agentsStore.setState({ agents: [], loaded: false });
+    await act(async () => openPalette("functions", busy));
+    await act(async () => setPaletteQuery("> lancer shell"));
+    const line = items().find((i) => i.textContent?.includes("Lancer Shell"));
+    expect(line?.getAttribute("data-disabled")).not.toBe("true");
+    expect(line?.textContent).not.toContain("introuvable");
+  });
+});
+
+describe("while scenes are read (plan F1 finding)", () => {
+  it("does not say « Aucun résultat » next to « Chargement… »", async () => {
+    mockIPC(() => new Promise(() => undefined));
+    workspacesStore.setState({ workspaces: [{ id: "w9", name: "Slow", projectId: "p1", position: 0 }], activeId: "w1" } as never);
+    projectsStore.setState({ view: "project", activeId: "p1" } as never);
+    await act(async () => openPalette("goTo", busy));
+    await act(async () => setPaletteQuery("zzzz"));
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("Chargement…");
+    expect(text).not.toContain("Aucun résultat");
+  });
+});
+
+describe("the team presets in the functions list (spec presets §3)", () => {
+  it("lists the saved presets under « Équipes », and reads them when the functions open", async () => {
+    presetsStore.setState({
+      presets: [{ id: "1", name: "Dev HQ", savedAt: 1, groups: [{ name: "G", role: "docs", agents: ["claude", "codex"], x: 0, y: 0 }], orchestrators: [] }],
+      loaded: true,
+    });
+    await act(async () => openPalette("functions", busy));
+    await act(async () => setPaletteQuery("> dev hq"));
+    expect(items().map((i) => i.textContent).sort()).toEqual(["Déployer l'équipe : Dev HQ (2 agents)", "Supprimer le preset : Dev HQ"]);
+    expect(document.body.textContent).toContain("Équipes");
+  });
+});
+
+describe("the loops in the functions list (spec boucles §4)", () => {
+  it("lists « Gérer les boucles… » in a project, under « Boucles »", async () => {
+    await act(async () => openPalette("functions", busy));
+    await act(async () => setPaletteQuery("> boucles"));
+    expect(items().map((i) => i.textContent)).toEqual(["Gérer les boucles…"]);
+    expect(document.body.textContent).toContain("Boucles");
   });
 });

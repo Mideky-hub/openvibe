@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { useMessages } from "@/i18n";
 import { removeNodes } from "@/fleet/terminals";
+import { useActivity } from "@/store/agentActivity";
 import { nodeNameOf, useNodes } from "@/store/nodes";
 import { uiStore, useUi } from "@/store/ui";
 import { shellMessages } from "./messages";
@@ -23,6 +24,7 @@ export function CloseAgentDialog() {
   const t = useMessages(shellMessages).closeAgent;
   const closing = useUi((s) => s.closing);
   const nodes = useNodes((s) => s.nodes);
+  const activity = useActivity(closing?.agents[0] ?? "")?.activity;
   const names = (closing?.agents ?? []).map((id) => nodeNameOf(nodes[id]) || "Agent");
   const close = () => uiStore.getState().setClosing(null);
   const one = names.length <= 1;
@@ -30,7 +32,15 @@ export function CloseAgentDialog() {
   const first = closing?.agents[0] ? nodes[closing.agents[0]] : undefined;
   const orchestrator = one && first?.kind === "orchestrator";
   const inMission = orchestrator && first.payload.mission?.state === "en_cours";
-  const description = !one ? t.several(names) : inMission ? t.inMission(name) : orchestrator ? t.orchestrator(name) : t.agent(name);
+  // Spec habillage §7.5: « est en cours » or « est prête », by what the agent is doing.
+  const state = activity === "working" ? "Working" : activity === "idle" ? "Ready" : null;
+  const description = !one
+    ? t.several(names)
+    : inMission
+      ? t.inMission(name)
+      : orchestrator
+        ? state ? t[`orchestrator${state}`](name) : t.orchestrator(name)
+        : state ? t[`agent${state}`](name) : t.agent(name);
 
   return (
     <Dialog open={closing !== null} onOpenChange={(open) => !open && close()}>

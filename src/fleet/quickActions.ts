@@ -1,10 +1,11 @@
 import { toast } from "sonner";
 import { canvasStore } from "@/canvas/canvasStore";
+import { returnKeyboardToCanvas } from "@/canvas/keyboardFocus";
 import { nextGroupName } from "@/canvas/groups";
 import { messages } from "@/i18n";
 import type { AgentId } from "@/ipc/pty";
 import { workspacesStore } from "@/store/workspaces";
-import { agentsStore } from "./agentsStore";
+import { loadedAgents } from "./agentsStore";
 import { defaultAgent } from "./catalog";
 import { launchGroup } from "./groups";
 import { defaultLaunchOptions, launchAgent } from "./launchAgent";
@@ -22,15 +23,16 @@ export function launchAt(agent: AgentId, at?: Point) {
 }
 
 /** "Nouvelle console": the default agent (spec habillage §5.6). */
-export function newConsole(at?: Point) {
-  launchAt(defaultAgent(agentsStore.getState().agents), at);
+export async function newConsole(at?: Point) {
+  launchAt(defaultAgent(await loadedAgents()), at);
 }
 
 /** "Lancer 4 agents": a Général group of four default agents (spec habillage §11.3). */
-export function launchFour(at?: Point) {
-  const agent = defaultAgent(agentsStore.getState().agents);
+export async function launchFour(at?: Point) {
+  const agent = defaultAgent(await loadedAgents());
   const name = nextGroupName(canvasStore.getState().frames);
   void launchGroup({ name, role: "general", agents: [agent, agent, agent, agent] }, defaultLaunchOptions(), at).catch(reportLaunchError);
+  returnKeyboardToCanvas();
 }
 
 /** « Orchestrateur »: at `at`, else at the center of the view, like a launch (plan F2, décision 3). */
@@ -38,4 +40,14 @@ export function placeOrchestrator(at?: Point) {
   const workspaceId = workspacesStore.getState().activeId;
   if (!workspaceId) return;
   void addOrchestrator(workspaceId, at ?? viewportCenter(canvasStore.getState().view)).catch(reportLaunchError);
+}
+
+/**
+ * « Se connecter » of a Claude profile (spec comptes §5): a visible Claude terminal started with that
+ * profile, where the user logs in. False when there is no canvas to place it on: no project, or the code workspace.
+ */
+export async function launchLogin(accountId: string): Promise<boolean> {
+  if (!workspacesStore.getState().activeId) return false;
+  const center = viewportCenter(canvasStore.getState().view);
+  return (await launchAgent("claude", { ...defaultLaunchOptions(), accountId }, center)) !== null;
 }

@@ -35,9 +35,15 @@ export function GettingStarted({ hasProject }: { hasProject: boolean }) {
                 "grid size-6 shrink-0 place-items-center rounded-full font-mono text-[11px] font-semibold",
                 step.done ? "bg-ov-ok/15 text-ov-ok" : "bg-ov-accent-soft text-ov-accent",
               )}
-              aria-label={step.done ? t.done : undefined}
             >
-              {step.done ? <Check className="size-3.5" /> : i + 1}
+              {step.done ? (
+                <>
+                  <Check className="size-3.5" aria-hidden />
+                  <span className="sr-only">{t.done}</span>
+                </>
+              ) : (
+                i + 1
+              )}
             </span>
             <div className="min-w-0">
               <p className={cn("text-[13px] font-semibold", step.done ? "text-ov-text-2 line-through" : "text-ov-text")}>{step.title}</p>

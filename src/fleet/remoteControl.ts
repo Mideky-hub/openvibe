@@ -22,6 +22,7 @@ const ANSWER_MS = 20_000;
 /** A session started with `--remote-control` shows its link within this time. */
 const LAUNCH_MS = 60_000;
 const consentError = () => messages(fleetMessages).remote.consent;
+const draftError = () => messages(fleetMessages).remote.draft;
 
 /** What the last `/remote-control` of a screen says. */
 export type RemoteScreen =
@@ -98,6 +99,17 @@ async function waitFor(io: RemoteIo, done: (screen: RemoteScreen) => boolean, ti
   return null;
 }
 
+/** What is typed in Claude's input box (the line before its closing rule), empty when nothing is. */
+export function draftOf(text: string): string {
+  const filled = text.split(String.fromCharCode(10)).map((line) => line.replace(/\s+$/, "")).filter((line) => line.trim() !== "");
+  const bottom = filled.slice(-5);
+  for (let i = 0; i < bottom.length - 1; i++) {
+    const draft = /^❯\s*(.*)$/.exec(bottom[i])?.[1];
+    if (draft !== undefined && /^─+$/.test(bottom[i + 1].trim())) return draft.trim();
+  }
+  return "";
+}
+
 /** Turns Remote Control on: `/remote-control`, unless the screen says it already is. */
 export async function enableRemote(io: RemoteIo, timeoutMs = ANSWER_MS): Promise<RemoteResult> {
   const before = remoteScreen(io.screen());
@@ -107,6 +119,8 @@ export async function enableRemote(io: RemoteIo, timeoutMs = ANSWER_MS): Promise
     await io.press(ESCAPE);
     return { on: true, url: before.url };
   }
+  // The command would be typed after the user's half-written text, and sent with it.
+  if (draftOf(io.screen())) return { error: draftError() };
   await io.send(COMMAND);
   const after = await waitFor(io, (s) => s.kind === "menu" || s.kind === "active" || s.kind === "error" || s.kind === "consent", timeoutMs);
   if (!after) return { error: messages(fleetMessages).remote.notConfirmed };
@@ -125,6 +139,7 @@ export async function disableRemote(io: RemoteIo, timeoutMs = ANSWER_MS): Promis
   if (screen.kind !== "menu") {
     const wasOn = screen.kind === "active";
     const opened = (s: RemoteScreen) => s.kind === "menu" || s.kind === "error" || s.kind === "consent";
+    if (draftOf(io.screen())) return { error: draftError() };
     await io.send(COMMAND);
     let after = await waitFor(io, (s) => opened(s) || (!wasOn && s.kind === "active"), timeoutMs);
     // It was off: that command turned it on, the next one opens its menu.
@@ -215,6 +230,11 @@ function locked<T>(nodeId: string, flow: () => Promise<T>): Promise<T> {
   return run;
 }
 
+/** Whether a Remote Control flow is typing in this session: nothing else may be written meanwhile. */
+export function remoteBusy(nodeId: string): boolean {
+  return flows.has(nodeId);
+}
+
 /** Sessions to bring to their wanted state at the end of their turn. */
 const pending = new Set<string>();
 
@@ -268,9 +288,12 @@ export async function setRemoteControlAll(nodeIds: readonly string[], on: boolea
   }
   const settled = await Promise.allSettled(ids.map((id) => setRemoteControl(id, on)));
   const results: (RemoteResult | null)[] = settled.map((s) => (s.status === "fulfilled" ? s.value : { error: String(s.reason) }));
-  const done = ids.filter((_, i) => { const r = results[i]; return r !== null && "on" in r; });
+  // A stopped session only remembers it for its next start: the tool says so.
+  const stopped = ids.filter((id, i) => { const r = results[i]; return r !== null && "on" in r && !isRunning(id); });
+  const done = ids.filter((id, i) => { const r = results[i]; return r !== null && "on" in r && isRunning(id); });
   const later = ids.filter((_, i) => { const r = results[i]; return r !== null && "later" in r; });
   if (done.length > 0) toast(messages(fleetMessages).remote.done(on, done.map(nameOf).join(", ")));
+  if (stopped.length > 0) toast(messages(fleetMessages).remote.nextStartFor(stopped.map(nameOf).join(", ")));
   if (later.length > 0) toast(messages(fleetMessages).remote.later(later.map(nameOf).join(", ")));
   ids.forEach((id, i) => {
     const result = results[i];
@@ -286,11 +309,18 @@ async function watchStart(nodeId: string) {
   if (seen?.kind === "active") remoteStore.getState().set(nodeId, { state: "on", url: seen.url });
   else if (seen?.kind === "error") remoteStore.getState().set(nodeId, { state: "error", error: seen.message });
   else if (seen?.kind === "consent") remoteStore.getState().set(nodeId, { state: "error", error: consentError() });
-  else remoteStore.getState().set(nodeId, { state: "on" });
+  // No link within the time: the phone cannot be followed, which is an error, not an active session.
+  else remoteStore.getState().set(nodeId, { state: "error", error: messages(fleetMessages).remote.notConfirmed });
 }
 
 // A session that stops loses its link; one that starts with Remote Control gets it.
 terminalStatusStore.subscribe((state, previous) => {
+  // A node removed from the canvas loses its status: its link would stay for good.
+  for (const nodeId of Object.keys(previous.statuses)) {
+    if (state.statuses[nodeId]) continue;
+    pending.delete(nodeId);
+    if (remoteStore.getState().links[nodeId]) remoteStore.getState().set(nodeId, null);
+  }
   for (const [nodeId, status] of Object.entries(state.statuses)) {
     const before = previous.statuses[nodeId]?.state;
     if (status.state === before) continue;
@@ -310,3 +340,15 @@ agentActivityStore.subscribe((state, previous) => {
     if (activity === "idle" && activity !== previous.activities[nodeId]?.activity) void locked(nodeId, () => apply(nodeId));
   }
 });
+
+
+const KNOWN_ERRORS = ["consent", "draft", "notConfirmed", "menuNotOpened", "menuUnreadable", "disconnectNotConfirmed"] as const;
+
+/** An error stored as text keeps the language of its moment: a known one is said again in the current language. */
+export function remoteErrorText(error: string): string {
+  const now = messages(fleetMessages).remote;
+  for (const key of KNOWN_ERRORS) {
+    if (fleetMessages.fr.remote[key] === error || fleetMessages.en.remote[key] === error) return now[key];
+  }
+  return error;
+}

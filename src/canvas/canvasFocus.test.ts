@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { uiStore } from "@/store/ui";
 import { canvasStore } from "./canvasStore";
 import { focusGroup, overview, overviewTargets, releaseToCanvas } from "./canvasFocus";
 
@@ -37,6 +38,14 @@ describe("releaseToCanvas (spec fenêtre §6.5)", () => {
     expect(updateScene).toHaveBeenCalledWith({ appState: { activeEmbeddable: null, selectedElementIds: {}, selectedGroupIds: {} } });
   });
 
+  it("ends placement and link modes", () => {
+    withScene([]);
+    uiStore.setState({ placing: { agent: "claude" } as never, linking: "chef" });
+    releaseToCanvas();
+    expect(uiStore.getState().placing).toBeNull();
+    expect(uiStore.getState().linking).toBeNull();
+  });
+
   it("creates no selection and leaves none behind: Suppr must not delete the terminal just left", () => {
     withScene([]);
     releaseToCanvas();
@@ -68,7 +77,7 @@ describe("overview (spec fenêtre §6.6)", () => {
     const scene = [node("isis", "terminal")];
     withScene(scene);
     overview();
-    expect(scrollToContent).toHaveBeenCalledWith(scene, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true });
+    expect(scrollToContent).toHaveBeenCalledWith(scene, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true, canvasOffsets: { top: 72, bottom: 60 } });
     expect(document.activeElement).toBe(container);
   });
 
@@ -84,7 +93,7 @@ describe("focusGroup (spec fenêtre §7.2)", () => {
     const frame = groupFrame("backend");
     withScene([frame]);
     expect(focusGroup("backend")).toBe(true);
-    expect(scrollToContent).toHaveBeenCalledWith(frame, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true, maxZoom: 1 });
+    expect(scrollToContent).toHaveBeenCalledWith(frame, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true, maxZoom: 1, canvasOffsets: { top: 96, bottom: 60 } });
     expect(document.activeElement).toBe(container);
   });
 
@@ -92,5 +101,32 @@ describe("focusGroup (spec fenêtre §7.2)", () => {
     withScene([]);
     expect(focusGroup("backend")).toBe(false);
     expect(scrollToContent).not.toHaveBeenCalled();
+  });
+});
+
+describe("releaseToCanvas in a rename field (plan E1)", () => {
+  it("cancels the edit instead of validating it through the loss of focus", () => {
+    withScene([]);
+    document.body.insertAdjacentHTML("beforeend", '<input id="rename" />');
+    const field = document.getElementById("rename") as HTMLInputElement;
+    const keys: string[] = [];
+    const events: string[] = [];
+    field.addEventListener("keydown", (e) => keys.push(e.key));
+    field.addEventListener("blur", () => events.push("blur"));
+    field.focus();
+    releaseToCanvas();
+    expect(keys).toEqual(["Escape"]);
+    // The Escape comes first: the field cancels, then loses the focus.
+    expect(events).toEqual(["blur"]);
+  });
+
+  it("never types Escape into a terminal's input", () => {
+    withScene([]);
+    const keys: string[] = [];
+    const xterm = document.querySelector("textarea")!;
+    xterm.addEventListener("keydown", (e) => keys.push(e.key));
+    xterm.focus();
+    releaseToCanvas();
+    expect(keys).toEqual([]);
   });
 });

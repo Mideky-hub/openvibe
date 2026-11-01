@@ -4,21 +4,26 @@ import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { showAbout } from "@/app/about";
 import { fitScene, zoomTo } from "@/canvas/viewActions";
 import { agentsPanelStore } from "@/fleet/agentsPanelState";
+import { currentWaitingAgents } from "@/fleet/waitingAgents";
 import { addProject } from "@/home/addProject";
 import { focusCommandBar } from "@/shell/commandBarFocus";
 import { closeWindow, minimizeWindow, toggleMaximizeWindow, windowStore } from "@/shell/windowState";
 import { removeWorkspace } from "@/shell/workspaceActions";
 import { projectsStore } from "@/store/projects";
+import { closeNotes, notesStore } from "@/notes/notesStore";
 import { workspacesStore } from "@/store/workspaces";
 import { labelOf, type Command, type CommandContext } from "../command";
+import { goToNextWaiting } from "../goToRun";
 import { pendingUiRequest } from "../uiRequests";
 import { APP } from "./app";
 import { NAVIGATION } from "./navigation";
 import { WORKSPACES } from "./workspaces";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
-vi.mock("@/canvas/arrive", () => ({ arrive: vi.fn(), showNode: vi.fn() }));
+vi.mock("@/canvas/arrive", () => ({ arrive: vi.fn(), showNode: vi.fn(), arrivingNode: vi.fn(() => null) }));
 vi.mock("@/canvas/viewActions", () => ({ fitScene: vi.fn(), zoomTo: vi.fn() }));
+vi.mock("@/fleet/waitingAgents", () => ({ currentWaitingAgents: vi.fn(() => []) }));
+vi.mock("../goToRun", () => ({ goToNextWaiting: vi.fn() }));
 vi.mock("@/shell/commandBarFocus", () => ({ focusCommandBar: vi.fn() }));
 vi.mock("@/shell/workspaceActions", () => ({ removeWorkspace: vi.fn(() => Promise.resolve()) }));
 vi.mock("@/app/about", () => ({ showAbout: vi.fn(() => Promise.resolve()) }));
@@ -55,6 +60,7 @@ describe("Navigation (spec fenêtre §7.3)", () => {
     expect(NAVIGATION.filter((c) => c.id !== "palette.functions").map((c) => labelOf(c, busy))).toEqual([
       "Terminal suivant",
       "Terminal précédent",
+      "Aller à l'agent en attente suivant",
       "Aller à…",
       "Vue d'ensemble",
       "Rendre la main au canvas",
@@ -62,6 +68,7 @@ describe("Navigation (spec fenêtre §7.3)", () => {
       "Zoom 100 %",
       "Écrire une consigne",
       "Masquer le panneau Agents",
+      "Notes",
       "Accueil",
       "Fermer le projet",
       "Aller à la ligne…",
@@ -90,8 +97,32 @@ describe("Navigation (spec fenêtre §7.3)", () => {
     expect(labelOf(toggle, busy)).toBe("Masquer le panneau Agents");
   });
 
+  it("offers the next waiting agent only while one waits, and starts from the current terminal", async () => {
+    const next = find(NAVIGATION, "agent.nextWaiting");
+    vi.mocked(currentWaitingAgents).mockReturnValue([]);
+    expect(next.available(busy)).toBe(false);
+    vi.mocked(currentWaitingAgents).mockReturnValue([{ id: "thot", kind: "terminal", name: "Thot", workspaceId: "w2", since: 0 }]);
+    expect(next.available(busy)).toBe(true);
+    await next.run(busy);
+    expect(goToNextWaiting).toHaveBeenCalledWith("isis");
+  });
+
   it("offers nothing but « Aller à… » outside a project", () => {
     expect(NAVIGATION.filter((c) => c.available(home)).map((c) => c.id)).toEqual(["palette.goTo", "palette.functions"]);
+  });
+});
+
+describe("Notes (spec notes §6)", () => {
+  it("opens from the palette, in a project only", () => {
+    const notes = find(NAVIGATION, "notes.open");
+    expect(labelOf(notes, busy)).toBe("Notes");
+    expect(notes.keywords).toContain("mémoire");
+    expect(notes.available(home)).toBe(false);
+    expect(notes.available(busy)).toBe(true);
+    closeNotes();
+    void notes.run(busy);
+    expect(notesStore.getState().open).toBe(true);
+    closeNotes();
   });
 });
 

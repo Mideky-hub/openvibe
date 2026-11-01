@@ -11,7 +11,7 @@ import { pendingUiRequest } from "../uiRequests";
 import { ORCHESTRATOR } from "./orchestrator";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
-vi.mock("@/canvas/arrive", () => ({ arrive: vi.fn(), showNode: vi.fn() }));
+vi.mock("@/canvas/arrive", () => ({ arrive: vi.fn(), showNode: vi.fn(), arrivingNode: vi.fn(() => null) }));
 vi.mock("@/fleet/orchestrators", () => ({ requestCloseOrchestrator: vi.fn() }));
 vi.mock("@/nodes/terminal/registry", () => ({ pasteIntoTerminal: vi.fn() }));
 vi.mock("@/radial/bridges", () => ({ readClipboardText: vi.fn(() => Promise.resolve("texte")) }));

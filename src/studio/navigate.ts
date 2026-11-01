@@ -2,14 +2,14 @@ import { projectsStore } from "@/store/projects";
 import { workspacesStore } from "@/store/workspaces";
 import { openFile, openStudio, studioStore } from "./studioStore";
 
-const activeProjectPath = () => {
+const activeProject = () => {
   const { projects, activeId } = projectsStore.getState();
-  return projects.find((p) => p.id === activeId)?.path ?? null;
+  return projects.find((p) => p.id === activeId)?.id ?? null;
 };
 
 /** Shows the active project's code workspace, creating its tab the first time. */
 export async function openCodeWorkspace(): Promise<void> {
-  const project = activeProjectPath();
+  const project = activeProject();
   if (!project) return;
   if (!(await workspacesStore.getState().openCode())) return;
   // Before the workspace is on screen, so that a file can open at once.

@@ -8,6 +8,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { accountsMessages } from "@/accounts/messages";
+import { useAccounts } from "@/accounts/store";
 import { useUiRequest } from "@/commands/uiRequests";
 import { useCanvas } from "@/canvas/canvasStore";
 import { groupOf } from "@/canvas/groups";
@@ -88,6 +90,26 @@ function RelaunchMenu(props: { nodeId: string; payload: TerminalPayload; running
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * The Claude profile a terminal started with (spec comptes §6), once there is a choice to show:
+ * at least one profile besides the default one.
+ */
+export function AccountChip({ accountId }: { accountId?: string }) {
+  const t = useMessages(accountsMessages);
+  const profiles = useAccounts((s) => s.profiles);
+  if (profiles.length === 0) return null;
+  const profile = profiles.find((p) => p.id === accountId);
+  return (
+    <span
+      data-account={profile?.id ?? "default"}
+      title={t.chipTitle(profile?.configDir ?? t.defaultHint)}
+      className="max-w-[90px] truncate rounded px-1 text-[10px] text-ov-text-2"
+    >
+      {profile?.name ?? t.defaultName}
+    </span>
   );
 }
 
@@ -194,6 +216,7 @@ export function TerminalHeader(props: {
       )}
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
         <StatusPill status={status} activity={activity} indigo={meta.tint === INDIGO} />
+        {payload.agent === "claude" && <AccountChip accountId={payload.accountId} />}
         {payload.model && <ModelChip nodeId={nodeId} model={payload.model} />}
         {payload.agent === "claude" && <RemoteButton nodeId={nodeId} wanted={payload.remoteControl === true} running={status.state === "running"} />}
         <HeaderButton label={t.review} onClick={() => openReview(nodeId)}>

@@ -33,6 +33,15 @@ export function needsMove(rect: Rect, view: Viewport): boolean {
   return left < 0 || top < TOP_ROW_HEIGHT || left + rect.width > view.width || top + rect.height > view.height - BOTTOM_BAR_HEIGHT;
 }
 
+/** The waiting notice would hide part of the node: an agent's question sits at the bottom of its terminal (spec notification §4). */
+function underWaitingNotice(rect: Rect, view: Viewport): boolean {
+  const notice = document.querySelector("[data-waiting-notice]")?.getBoundingClientRect();
+  if (!notice) return false;
+  const left = rect.x + view.scrollX;
+  const top = rect.y + view.scrollY;
+  return left < notice.right && left + rect.width > notice.left && top < notice.bottom && top + rect.height > notice.top;
+}
+
 /** The terminal at 100 %, centered in the zone utile (plan E1, décision 1). */
 export function arrivalView(rect: Rect, viewport: { width: number; height: number }) {
   const middle = (TOP_ROW_HEIGHT + viewport.height - BOTTOM_BAR_HEIGHT) / 2;
@@ -43,18 +52,29 @@ export function arrivalView(rect: Rect, viewport: { width: number; height: numbe
   };
 }
 
-/** How many frames the keyboard is offered to an arriving node (plan F1, décision 3). */
-const FOCUS_FRAMES = 10;
+/** How many frames (about two seconds) the keyboard is offered to an arriving node: after a workspace switch its terminal mounts late (plan E1, J8). */
+export const FOCUS_FRAMES = 120;
 
 /**
  * Offers the keyboard on each of the next frames until `focus` succeeds:
  * Excalidraw shows a node that was off screen once the view has moved, and
  * after a workspace switch its terminal may only be mounted a frame later.
  */
-function focusSoon(focus: () => boolean, frames = FOCUS_FRAMES) {
+function focusSoon(focus: () => boolean, token: number, frames = FOCUS_FRAMES) {
   requestAnimationFrame(() => {
-    if (!focus() && frames > 1) focusSoon(focus, frames - 1);
+    // A newer arrival owns the keyboard: its loop replaces this one.
+    if (token !== generation) return;
+    if (!focus() && frames > 1) focusSoon(focus, token, frames - 1);
+    else arriving = null;
   });
+}
+
+let generation = 0;
+let arriving: string | null = null;
+
+/** The node an arrival is still giving the keyboard to: a Ctrl+Tab repeat steps on from it, not from the terminal left (plan E1). */
+export function arrivingNode(): string | null {
+  return arriving;
 }
 
 /** Gives the keyboard to the xterm of a terminal or of an orchestrator's session. */
@@ -76,14 +96,25 @@ export function arrive(nodeId: string): boolean {
   const api = canvasStore.getState().api;
   const element = api?.getSceneElements().find((e) => e.id === nodeId);
   if (!api || !element) return false;
+  // A folded group keeps its terminals off the screen: unfold it, then arrive (spec replier un groupe §2).
+  const folded = canvasStore.getState().frames.find((f) => f.group?.folded && f.memberIds.includes(nodeId));
+  if (folded) {
+    void import("@/fleet/groups").then(({ setGroupFolded }) => {
+      setGroupFolded(folded.id, false);
+      setTimeout(() => arrive(nodeId), 0);
+    });
+    return true;
+  }
   const app = api.getAppState();
   const view = { scrollX: app.scrollX, scrollY: app.scrollY, zoom: app.zoom.value, width: app.width, height: app.height };
-  const move = needsMove(element, view) ? arrivalView(element, view) : {};
+  const move = needsMove(element, view) || underWaitingNotice(element, view) ? arrivalView(element, view) : {};
   api.updateScene({
     appState: { ...move, activeEmbeddable: { element, state: "active" }, selectedElementIds: {}, selectedGroupIds: {} },
   });
   const kind = nodeKindOf(element);
-  focusSoon(() => focusNodeInput(nodeId, kind));
+  generation += 1;
+  arriving = nodeId;
+  focusSoon(() => focusNodeInput(nodeId, kind), generation);
   if (kind === "terminal") signalArrival(nodeId);
   return true;
 }
@@ -96,5 +127,23 @@ export function showNode(nodeId: string): boolean {
   const app = api.getAppState();
   const view = { scrollX: app.scrollX, scrollY: app.scrollY, zoom: app.zoom.value, width: app.width, height: app.height };
   if (needsMove(element, view)) api.updateScene({ appState: arrivalView(element, view) });
+  return true;
+}
+
+/**
+ * Scrolls to a node added out of sight (Excalidraw mounts a node, and so
+ * starts its agent, only once it is shown), at the zoom the view has. A node
+ * in sight, even partly, leaves the view alone. False when it is gone.
+ */
+export function revealNode(nodeId: string): boolean {
+  const api = canvasStore.getState().api;
+  const element = api?.getSceneElements().find((e) => e.id === nodeId);
+  if (!api || !element) return false;
+  const app = api.getAppState();
+  const zoom = app.zoom.value;
+  const left = (element.x + app.scrollX) * zoom;
+  const top = (element.y + app.scrollY) * zoom;
+  const inSight = left + element.width * zoom > 0 && left < app.width && top + element.height * zoom > TOP_ROW_HEIGHT && top < app.height - BOTTOM_BAR_HEIGHT;
+  if (!inSight) api.scrollToContent(element, { animate: true, canvasOffsets: { top: TOP_ROW_HEIGHT, bottom: BOTTOM_BAR_HEIGHT } });
   return true;
 }

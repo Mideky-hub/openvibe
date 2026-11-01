@@ -13,11 +13,14 @@ vi.mock("./insert", () => ({ insertFileNode: vi.fn() }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let calls: { cmd: string; args: Record<string, unknown> }[];
+/** What the disk answers to a comparison. */
+let disk: string | null;
 let host: HTMLDivElement;
 let root: Root;
 
 beforeEach(async () => {
   calls = [];
+  disk = "v1";
   mockIPC((cmd, args) => {
     calls.push({ cmd, args: args as Record<string, unknown> });
     if (cmd === "studio_tree")
@@ -26,10 +29,12 @@ beforeEach(async () => {
         { path: "docs/guide.md", kind: "file" },
         { path: "main.ts", kind: "file" },
       ];
-    if (cmd === "studio_read") return "# Guide\n<script>alert(1)</script>\n";
+    if (cmd === "studio_read") return { text: "# Guide\n<script>alert(1)</script>\n", version: "v1" };
+    if (cmd === "studio_version") return disk;
+    if (cmd === "studio_write") return { status: "saved", version: "v2" };
     return undefined;
   });
-  studioStore.setState({ project: null, tabsFor: null, tabs: [], active: null, pendingLine: null });
+  studioStore.setState({ project: null, tabsFor: null, tabs: [], active: null, parked: {}, pendingLine: null, quitting: false });
   const project: Project = {
     id: "p1",
     name: "proj",
@@ -61,13 +66,13 @@ it("browses the tree, edits a file, saves it with Ctrl+S and previews Markdown s
   await click(modal().querySelector('[data-path="docs"]'));
   await click(modal().querySelector('[data-path="docs/guide.md"]'));
   await vi.waitFor(() => expect(modal().querySelector('[data-editor="docs/guide.md"]')).not.toBeNull());
-  expect(calls.find((c) => c.cmd === "studio_read")?.args).toMatchObject({ project: "C:/code/proj", path: "docs/guide.md" });
+  expect(calls.find((c) => c.cmd === "studio_read")?.args).toMatchObject({ projectId: "p1", path: "docs/guide.md" });
 
   await act(async () => editFile("docs/guide.md", "# Guide\nedited\n"));
   expect(modal().querySelector('[data-tab="docs/guide.md"] [data-dirty]')).not.toBeNull();
   await act(async () => modal().dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })));
   await vi.waitFor(() => expect(calls.some((c) => c.cmd === "studio_write")).toBe(true));
-  expect(calls.find((c) => c.cmd === "studio_write")?.args).toMatchObject({ path: "docs/guide.md", content: "# Guide\nedited\n" });
+  expect(calls.find((c) => c.cmd === "studio_write")?.args).toMatchObject({ projectId: "p1", path: "docs/guide.md", content: "# Guide\nedited\n", expected: "v1" });
   await vi.waitFor(() => expect(modal().querySelector("[data-dirty]")).toBeNull());
 
   await act(async () => editFile("docs/guide.md", "# Guide\n<script>alert(1)</script>\n"));
@@ -83,7 +88,7 @@ it("browses the tree, edits a file, saves it with Ctrl+S and previews Markdown s
 it("asks before closing a tab with unsaved changes", async () => {
   await vi.waitFor(() => expect(modal().querySelector('[data-path="main.ts"]')).not.toBeNull());
   await click(modal().querySelector('[data-path="main.ts"]'));
-  await vi.waitFor(() => expect(studioStore.getState().tabs[0]?.status).toBe("ready"));
+  await vi.waitFor(() => expect(studioStore.getState().tabs[0]?.session.getState().version).toBe("v1"));
   await act(async () => editFile("main.ts", "changed"));
   await click(modal().querySelector('[aria-label="Fermer main.ts"]'));
   expect(modal().querySelector('[role="alert"]')).not.toBeNull();
@@ -93,7 +98,7 @@ it("asks before closing a tab with unsaved changes", async () => {
 });
 
 it("shows the project's files in a panel the bar folds, and closes the studio when it goes", async () => {
-  expect(studioStore.getState().project).toBe("C:/code/proj");
+  expect(studioStore.getState().project).toBe("p1");
   await vi.waitFor(() => expect(modal().querySelector("[data-files]")).not.toBeNull());
   await click(modal().querySelector('nav [aria-label="Masquer les fichiers"]'));
   expect(modal().querySelector("[data-files]")).toBeNull();
@@ -101,4 +106,42 @@ it("shows the project's files in a panel the bar folds, and closes the studio wh
   expect(modal().querySelector("[data-files]")).not.toBeNull();
   await act(async () => root.render(<></>));
   expect(studioStore.getState().project).toBeNull();
+});
+
+const opened = async () => {
+  await vi.waitFor(() => expect(modal().querySelector('[data-path="main.ts"]')).not.toBeNull());
+  await click(modal().querySelector('[data-path="main.ts"]'));
+  await vi.waitFor(() => expect(studioStore.getState().tabs[0]?.session.getState().version).toBe("v1"));
+};
+
+it("warns when a file with unsaved changes moved on the disk, and overwrites only on request", async () => {
+  await opened();
+  await act(async () => editFile("main.ts", "mine"));
+  disk = "agent";
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  await vi.waitFor(() => expect(modal().querySelector('[role="alert"]')?.textContent).toContain("a changé sur le disque"));
+  expect(calls.some((c) => c.cmd === "studio_write")).toBe(false);
+  await click([...modal().querySelectorAll("button")].find((b) => b.textContent === "Écraser avec ma version")!);
+  await vi.waitFor(() => expect(calls.find((c) => c.cmd === "studio_write")?.args).toMatchObject({ content: "mine", expected: "agent" }));
+});
+
+it("closes the tab of a file deleted from the disk when asked", async () => {
+  await opened();
+  await act(async () => editFile("main.ts", "mine"));
+  disk = null;
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  await vi.waitFor(() => expect(modal().querySelector('[role="alert"]')?.textContent).toContain("supprimé du disque"));
+  await click([...modal().querySelectorAll("button")].find((b) => b.textContent === "Fermer sans garder")!);
+  expect(studioStore.getState().tabs).toHaveLength(0);
+});
+
+it("leaves Ctrl+S to a dialog over the workspace", async () => {
+  await opened();
+  await act(async () => editFile("main.ts", "mine"));
+  const dialog = document.createElement("div");
+  dialog.setAttribute("role", "dialog");
+  document.body.append(dialog);
+  await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true })));
+  dialog.remove();
+  expect(calls.some((c) => c.cmd === "studio_write")).toBe(false);
 });

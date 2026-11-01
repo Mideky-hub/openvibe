@@ -6,20 +6,28 @@ export const shellMessages = defineMessages(
     loading: "Chargement…",
     percent: (n: number) => `${n} %`,
     failed: (what: string, error: string) => `${what} : ${error}`,
-    activityRail: { agents: "Agents", settings: "Réglages" },
+    activityRail: { agents: "Agents", notes: "Notes", settings: "Réglages" },
     agentCounts: {
       working: "Agents en cours",
       waiting: "Agents qui attendent ta réponse",
       active: "Agents actifs du projet",
       activeCount: (count: number) => plural("fr", count, "actif", "actifs"),
     },
+    waitingNotice: {
+      question: (name: string) => `${name} a une question`,
+      others: (count: number) => `+ ${plural("fr", count, "autre", "autres")}`,
+    },
     closeAgent: {
       fallbackName: "cet agent",
       several: (names: string[]) => `Ces agents tournent encore ; les fermer met fin à leur session : ${names.join(", ")}.`,
       inMission: (name: string) =>
-        `${name} mène une mission en cours. Le fermer arrête sa session ; ses agents continuent, mais personne ne lira leurs comptes rendus.`,
+        `${name} mène une mission en cours. Le fermer arrête sa session ; ses agents continuent, mais personne ne lira leurs comptes rendus. Les worktrees et les branches de la mission restent sur le disque.`,
       orchestrator: (name: string) => `${name} tourne encore. Le fermer met fin à sa session.`,
       agent: (name: string) => `${name} tourne encore. La fermer met fin à sa session.`,
+      agentWorking: (name: string) => `${name} est en cours. La fermer met fin à sa session.`,
+      agentReady: (name: string) => `${name} est prête. La fermer met fin à sa session.`,
+      orchestratorWorking: (name: string) => `${name} est en cours. Le fermer met fin à sa session.`,
+      orchestratorReady: (name: string) => `${name} est prêt. Le fermer met fin à sa session.`,
       titleOne: (name: string) => `Fermer ${name} ?`,
       titleMany: (count: number) => `Fermer ${count} agents ?`,
       cancel: "Annuler",
@@ -47,7 +55,8 @@ export const shellMessages = defineMessages(
       agentsKeepRunning: "Tes agents continuent de tourner : recharger l'interface les retrouve.",
       reload: "Recharger l'interface",
     },
-    projectPicker: { project: "Projet", allProjects: "Tous les projets…", closeProject: "Fermer le projet" },
+    modeExit: { zen: "Quitter le mode zen", reading: "Quitter le mode lecture" },
+    projectPicker: { project: "Projet", allProjects: "Tous les projets…", closeProject: "Fermer le projet", openFailed: (error: string) => `Ouverture impossible : ${error}` },
     searchField: { project: "Rechercher un projet", inProject: (name: string) => `Rechercher dans ${name}` },
     settings: {
       theme: "Thème",
@@ -55,6 +64,7 @@ export const shellMessages = defineMessages(
       light: "Clair (Ivoire)",
       dark: "Sombre (Argile)",
       transparency: "Effets de transparence",
+      nativeNotifications: "Notifications Windows",
       exportScene: "Exporter la scène…",
       importScene: "Importer une scène…",
       exportPng: "Exporter en PNG…",
@@ -82,6 +92,7 @@ export const shellMessages = defineMessages(
       checkAgain: "Vérifier à nouveau",
       copy: "Copier le diagnostic",
       copied: "Diagnostic copié : colle-le dans ton signalement.",
+      copyFailed: "Copie impossible : le presse-papiers a refusé le diagnostic.",
       openLogs: "Ouvrir le dossier des journaux",
       openData: "Ouvrir le dossier des données",
       guide: "Guide de dépannage",
@@ -152,6 +163,8 @@ export const shellMessages = defineMessages(
     tabs: {
       deleteWorkspace: "Supprimer le workspace",
       rename: "Renommer",
+      moveLeft: "Déplacer à gauche",
+      moveRight: "Déplacer à droite",
       delete: "Supprimer",
       newWorkspace: "Nouveau workspace",
       activeAgents: (count: number) => plural("fr", count, "agent actif", "agents actifs"),
@@ -160,10 +173,11 @@ export const shellMessages = defineMessages(
       createFailed: "Création impossible",
     },
     removeWorkspace: {
-      confirm: (name: string, running: number) => {
+      confirm: (name: string, running: number, names: string[] = []) => {
+        const who = names.length > 0 ? ` (${names.join(", ")})` : "";
         const consequence =
           running > 0
-            ? `${plural("fr", running, "agent sera arrêté", "agents seront arrêtés")} et son contenu effacé.`
+            ? `${plural("fr", running, "agent sera arrêté", "agents seront arrêtés")}${who} et son contenu effacé.`
             : "Son contenu sera effacé.";
         return `Supprimer « ${name} » ? ${consequence}`;
       },
@@ -201,26 +215,51 @@ export const shellMessages = defineMessages(
       warm: (ratioPercent: number | null, until: string | null) =>
         `chaud${ratioPercent !== null ? ` · ${ratioPercent} %` : ""}${until ? ` · jusqu'à ${until}` : ""}`,
       footnote: "Lu dans la ligne d'état de chaque session Claude lancée par OpenVibe ; ta propre ligne d'état s'affiche toujours.",
+      tokensLink: "Tokens sur 30 jours",
+      tokensBack: "Usage",
+      tokensTitle: "Tokens · 30 jours",
+      tokensLoading: "Lecture des journaux de Claude…",
+      tokensFailed: (error: string) => `Lecture impossible : ${error}`,
+      tokensEmpty: "Aucun token trouvé dans les journaux de Claude sur 30 jours.",
+      tokensDefaultOnly: "Compte par défaut seulement : les profils Claude ne sont pas comptés ici.",
+      tokensChart: (peak: string) => `Tokens par jour (pic : ${peak})`,
+      tokensDay: (date: string, total: string, output: string) => `${date} · ${total} au total · ${output} en sortie`,
+      tokensByAgent: "Par agent",
+      tokensOtherSessions: "Autres sessions Claude",
+      tokensByModel: "Par modèle",
+      tokensLegend: "dont sortie (accent)",
+      tokensFiles: (count: number) => `${count} fichier${count > 1 ? "s" : ""} lu${count > 1 ? "s" : ""}`,
+      tokensTruncated: "lecture tronquée : ces chiffres sont un minimum",
+      tokensLocal: "Lu sur ce PC, rien n'est envoyé. Codex n'est pas pris en charge.",
+      tokensDetail: (input: string, output: string, cache: string) => `${input} entrée · ${output} sortie · ${cache} cache`,
     },
   },
   {
     loading: "Loading…",
     percent: (n: number) => `${n}%`,
     failed: (what: string, error: string) => `${what}: ${error}`,
-    activityRail: { agents: "Agents", settings: "Settings" },
+    activityRail: { agents: "Agents", notes: "Notes", settings: "Settings" },
     agentCounts: {
       working: "Agents working",
       waiting: "Agents waiting for your answer",
       active: "Active agents in the project",
       activeCount: (count: number) => plural("en", count, "active", "active"),
     },
+    waitingNotice: {
+      question: (name: string) => `${name} has a question`,
+      others: (count: number) => `+ ${plural("en", count, "more", "more")}`,
+    },
     closeAgent: {
       fallbackName: "this agent",
       several: (names: string[]) => `These agents are still running; closing them ends their session: ${names.join(", ")}.`,
       inMission: (name: string) =>
-        `${name} is leading a mission in progress. Closing it stops its session; its agents keep going, but nobody will read their reports.`,
+        `${name} is leading a mission in progress. Closing it stops its session; its agents keep going, but nobody will read their reports. The mission's worktrees and branches stay on disk.`,
       orchestrator: (name: string) => `${name} is still running. Closing it ends its session.`,
       agent: (name: string) => `${name} is still running. Closing it ends its session.`,
+      agentWorking: (name: string) => `${name} is working. Closing it ends its session.`,
+      agentReady: (name: string) => `${name} is ready. Closing it ends its session.`,
+      orchestratorWorking: (name: string) => `${name} is working. Closing it ends its session.`,
+      orchestratorReady: (name: string) => `${name} is ready. Closing it ends its session.`,
       titleOne: (name: string) => `Close ${name}?`,
       titleMany: (count: number) => `Close ${count} agents?`,
       cancel: "Cancel",
@@ -248,7 +287,8 @@ export const shellMessages = defineMessages(
       agentsKeepRunning: "Your agents keep running: reloading the interface finds them again.",
       reload: "Reload the interface",
     },
-    projectPicker: { project: "Project", allProjects: "All projects…", closeProject: "Close the project" },
+    modeExit: { zen: "Leave zen mode", reading: "Leave reading mode" },
+    projectPicker: { project: "Project", allProjects: "All projects…", closeProject: "Close the project", openFailed: (error: string) => `Could not open: ${error}` },
     searchField: { project: "Search for a project", inProject: (name: string) => `Search in ${name}` },
     settings: {
       theme: "Theme",
@@ -256,6 +296,7 @@ export const shellMessages = defineMessages(
       light: "Light (Ivory)",
       dark: "Dark (Clay)",
       transparency: "Transparency effects",
+      nativeNotifications: "Windows notifications",
       exportScene: "Export the scene…",
       importScene: "Import a scene…",
       exportPng: "Export as PNG…",
@@ -283,6 +324,7 @@ export const shellMessages = defineMessages(
       checkAgain: "Check again",
       copy: "Copy the diagnostics",
       copied: "Diagnostics copied: paste them into your report.",
+      copyFailed: "Could not copy: the clipboard refused the diagnostics.",
       openLogs: "Open the logs folder",
       openData: "Open the data folder",
       guide: "Troubleshooting guide",
@@ -353,6 +395,8 @@ export const shellMessages = defineMessages(
     tabs: {
       deleteWorkspace: "Delete the workspace",
       rename: "Rename",
+      moveLeft: "Move left",
+      moveRight: "Move right",
       delete: "Delete",
       newWorkspace: "New workspace",
       activeAgents: (count: number) => plural("en", count, "active agent", "active agents"),
@@ -361,10 +405,11 @@ export const shellMessages = defineMessages(
       createFailed: "Could not create",
     },
     removeWorkspace: {
-      confirm: (name: string, running: number) => {
+      confirm: (name: string, running: number, names: string[] = []) => {
+        const who = names.length > 0 ? ` (${names.join(", ")})` : "";
         const consequence =
           running > 0
-            ? `${plural("en", running, "agent will be stopped", "agents will be stopped")} and its contents erased.`
+            ? `${plural("en", running, "agent will be stopped", "agents will be stopped")}${who} and its contents erased.`
             : "Its contents will be erased.";
         return `Delete "${name}"? ${consequence}`;
       },
@@ -402,6 +447,23 @@ export const shellMessages = defineMessages(
       warm: (ratioPercent: number | null, until: string | null) =>
         `warm${ratioPercent !== null ? ` · ${ratioPercent}%` : ""}${until ? ` · until ${until}` : ""}`,
       footnote: "Read from the status line of each Claude session started by OpenVibe; your own status line still shows.",
+      tokensLink: "Tokens over 30 days",
+      tokensBack: "Usage",
+      tokensTitle: "Tokens · 30 days",
+      tokensLoading: "Reading Claude's logs…",
+      tokensFailed: (error: string) => `Could not read: ${error}`,
+      tokensEmpty: "No tokens found in Claude's logs over 30 days.",
+      tokensDefaultOnly: "Default account only: Claude profiles are not counted here.",
+      tokensChart: (peak: string) => `Tokens per day (peak: ${peak})`,
+      tokensDay: (date: string, total: string, output: string) => `${date} · ${total} in all · ${output} output`,
+      tokensByAgent: "By agent",
+      tokensOtherSessions: "Other Claude sessions",
+      tokensByModel: "By model",
+      tokensLegend: "of which output (accent)",
+      tokensFiles: (count: number) => `${count} file${count > 1 ? "s" : ""} read`,
+      tokensTruncated: "reading cut short: these figures are a minimum",
+      tokensLocal: "Read on this PC, nothing is sent. Codex is not supported.",
+      tokensDetail: (input: string, output: string, cache: string) => `${input} in · ${output} out · ${cache} cache`,
     },
   },
 );

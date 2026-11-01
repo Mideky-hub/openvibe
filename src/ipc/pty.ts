@@ -5,6 +5,9 @@ import { call } from "./invoke";
 export type ShellKind = "default" | "powershell" | "pwsh" | "cmd" | "gitbash";
 export type ClaudeMode = "new" | "resume" | "continue";
 
+/** What a mission lets its agents do unasked (spec mission de nuit §5.3). */
+export type Permission = "ask" | "edits" | "work";
+
 export interface ClaudeLaunch {
   mode: ClaudeMode;
   sessionId: string;
@@ -14,6 +17,9 @@ export interface ClaudeLaunch {
   remoteControl?: string;
   /** `--model`, chosen by a mission's router (spec maj §3). */
   model?: string;
+  permission?: Permission;
+  /** The profile's folder: this terminal's `CLAUDE_CONFIG_DIR` (spec comptes §4). */
+  configDir?: string;
 }
 
 /** Agents of the launch menu (spec habillage §8), in menu order. */
@@ -45,6 +51,12 @@ export interface AgentInfo {
 export interface PtyExitEvent {
   nodeId: string;
   exitCode: number | null;
+  /**
+   * The process that exited, the number `ptySpawn` resolved with. A terminal relaunched
+   * since runs under another pid: an exit with a different pid is the old process's
+   * and must be ignored.
+   */
+  pid: number | null;
 }
 
 /** Raw channel payloads arrive as ArrayBuffer; Tauri < 2.5.1 sent small ones as number[]. */
@@ -67,7 +79,19 @@ export function ptySpawn(
   rows: number,
   onData: (bytes: Uint8Array) => void,
 ): Promise<number | null> {
-  return call("pty_spawn", { nodeId, spec, cols, rows, onData: byteChannel(onData) });
+  return call<number | null>("pty_spawn", { nodeId, spec, cols, rows, onData: byteChannel(onData) }).then((pid) => {
+    if (pid !== null) spawnedPids.set(nodeId, pid);
+    return pid;
+  });
+}
+
+/** The process each terminal was last started with; a terminal re-attached after a reload has none. */
+const spawnedPids = new Map<string, number>();
+
+/** An exit of another process than the terminal's current one: a late event of an older run. */
+export function isStaleExit(event: PtyExitEvent): boolean {
+  const current = spawnedPids.get(event.nodeId);
+  return event.pid !== null && event.pid !== undefined && current !== undefined && event.pid !== current;
 }
 
 /** Reconnects to a live session; the current scrollback is sent first. */
@@ -110,6 +134,7 @@ export const ptyList = () => call<string[]>("pty_list");
 export const listAgents = () => call<AgentInfo[]>("list_agents");
 export const listOllamaModels = () => call<string[]>("list_ollama_models");
 export const listShells = () => call<ShellKind[]>("list_shells");
+export const npmAvailable = () => call<boolean>("npm_available");
 /** Reads Windows' PATH again from the registry: an agent installed since the start is found (spec première version §7.2). */
 export const refreshPath = () => call<void>("refresh_path");
 
@@ -118,5 +143,10 @@ export async function getScrollback(nodeId: string): Promise<Uint8Array> {
 }
 
 export function onPtyExit(handler: (event: PtyExitEvent) => void): Promise<UnlistenFn> {
-  return listen<PtyExitEvent>("pty-exit", (event) => handler(event.payload));
+  return listen<PtyExitEvent>("pty-exit", (event) => {
+    // A late exit of an older process must not mark the relaunched terminal as ended.
+    if (isStaleExit(event.payload)) return;
+    spawnedPids.delete(event.payload.nodeId);
+    handler(event.payload);
+  });
 }

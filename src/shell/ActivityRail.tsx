@@ -1,7 +1,8 @@
-import { Code2, Settings, Users } from "lucide-react";
+import { BookOpen, Code2, Settings, Users } from "lucide-react";
 import { useWorkspaceAgentCounts } from "@/fleet/agentCounts";
 import { setAgentsPanel, useAgentsPanel } from "@/fleet/agentsPanelState";
 import { useMessages } from "@/i18n";
+import { openNotes } from "@/notes/notesStore";
 import { useProjects } from "@/store/projects";
 import { isCode, useWorkspaces } from "@/store/workspaces";
 import { studioMessages } from "@/studio/messages";
@@ -38,6 +39,9 @@ export function ActivityRail() {
         onClick={() => void openCodeWorkspace()}
       >
         <Code2 />
+      </ToolButton>
+      <ToolButton label={t.notes} onClick={openNotes}>
+        <BookOpen />
       </ToolButton>
       <span aria-hidden className="my-1 h-px w-6 bg-ov-line" />
       <SettingsMenu

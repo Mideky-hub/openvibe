@@ -125,13 +125,14 @@ async function run(path: string, link: KanbanBoardLink | undefined, action: Remo
 /**
  * Moves a card; a linked card's issue (and Project item) follows on GitHub.
  * The remote actions are decided on the board before the move; a failure is
- * told, and the card stays where it was dropped.
+ * told, and the card stays where it was dropped. `folder` is where `gh` runs
+ * for a mission, which goes on while the user is in another project.
  */
-export async function moveCardWithGithub(nodeId: string, cardId: string, toColumnId: string, index?: number) {
+export async function moveCardWithGithub(nodeId: string, cardId: string, toColumnId: string, index?: number, folder?: string) {
   const before = boardOf(nodeId);
   if (!before) return;
   const linked = before.cards[cardId]?.github !== undefined;
-  const path = linked ? projectPath() : null;
+  const path = linked ? (folder ?? projectPath()) : null;
   let actions: RemoteAction[] = [];
   let failure: unknown = null;
   if (path) {

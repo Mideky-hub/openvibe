@@ -25,6 +25,7 @@ export const nodesMessages = defineMessages(
       relaunchTitle: "Relancer ?",
       resumeHint: "Cliquer pour reprendre · taper démarre à neuf",
       relaunchHint: "Cliquer pour relancer · taper démarre à neuf",
+      oneShotHint: "Cliquer pour relancer la commande",
       hide: "Masquer",
     },
     options: {
@@ -112,6 +113,7 @@ export const nodesMessages = defineMessages(
       relaunchTitle: "Restart?",
       resumeHint: "Click to resume · typing starts fresh",
       relaunchHint: "Click to restart · typing starts fresh",
+      oneShotHint: "Click to run the command again",
       hide: "Hide",
     },
     options: {

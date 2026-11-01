@@ -134,7 +134,43 @@ pub fn rebase_path(path: &str, from: &str, to: &str) -> Option<String> {
     Some(format!("{}\\{rest}", to.trim_end_matches(['\\', '/'])))
 }
 
-/// Points the project at another folder, and its terminals with it: a terminal
+/// Moves the path at `pointer`, when it has one under the old folder.
+fn rebase_at(payload: &mut serde_json::Value, pointer: &str, from: &str, to: &str) -> bool {
+    let Some(slot) = payload.pointer_mut(pointer) else {
+        return false;
+    };
+    let Some(moved) = slot.as_str().and_then(|path| rebase_path(path, from, to)) else {
+        return false;
+    };
+    *slot = serde_json::Value::String(moved);
+    true
+}
+
+/// A node's paths that follow its project. The folder is changed from the home
+/// screen, nodes not in memory: `rebaseTerminalFolders` cannot do this alone.
+fn rebase_payload(payload: &mut serde_json::Value, from: &str, to: &str) -> bool {
+    let members = payload
+        .pointer("/mission/members")
+        .and_then(|members| members.as_array())
+        .map_or(0, Vec::len);
+    let mut pointers: Vec<String> = [
+        "/cwd",
+        "/session/cwd",
+        "/mission/project",
+        "/mission/worktree",
+    ]
+    .map(str::to_string)
+    .into();
+    pointers.extend((0..members).map(|i| format!("/mission/members/{i}/worktree")));
+    // Not `any`: every path moves, not only the first.
+    pointers
+        .iter()
+        .filter(|pointer| rebase_at(payload, pointer, from, to))
+        .count()
+        > 0
+}
+
+/// Points the project at another folder, and its nodes with it: a terminal
 /// started in the old folder (or below) would otherwise fail with "dossier introuvable".
 pub fn relocate(conn: &Connection, id: &str, path: &str) -> AppResult<()> {
     let path = valid_path(conn, path, Some(id))?;
@@ -144,24 +180,19 @@ pub fn relocate(conn: &Connection, id: &str, path: &str) -> AppResult<()> {
         "UPDATE projects SET path = ?2 WHERE id = ?1",
         params![id, path],
     )?;
-    let terminals: Vec<(String, String)> = {
+    let saved: Vec<(String, String)> = {
         let mut stmt = tx.prepare(
             "SELECT n.id, n.payload_json FROM nodes n JOIN workspaces w ON w.id = n.workspace_id
-             WHERE w.project_id = ?1 AND n.kind = 'terminal'",
+             WHERE w.project_id = ?1",
         )?;
         let rows = stmt.query_map([id], |row| Ok((row.get(0)?, row.get(1)?)))?;
         rows.collect::<rusqlite::Result<_>>()?
     };
-    for (node_id, payload) in terminals {
+    for (node_id, payload) in saved {
         let Ok(mut value) = serde_json::from_str::<serde_json::Value>(&payload) else {
             continue;
         };
-        let moved = value
-            .get("cwd")
-            .and_then(|cwd| cwd.as_str())
-            .and_then(|cwd| rebase_path(cwd, &old, &path));
-        if let Some(cwd) = moved {
-            value["cwd"] = serde_json::Value::String(cwd);
+        if rebase_payload(&mut value, &old, &path) {
             tx.execute(
                 "UPDATE nodes SET payload_json = ?2, updated_at = ?3 WHERE id = ?1",
                 params![node_id, value.to_string(), now_ms()],
@@ -431,5 +462,40 @@ mod tests {
                 Ok(())
             })
             .unwrap();
+    }
+
+    /// The folder is changed from the home screen, with no node in memory: only
+    /// the base can move an orchestrator's session and mission (review).
+    #[test]
+    fn relocating_moves_an_orchestrator_s_session_and_mission() {
+        let db = Db::open_in_memory().unwrap();
+        db.with(|conn| {
+            let project = create(conn, "C:\\code\\api")?;
+            let w = workspaces::list(conn, &project.id)?.remove(0);
+            nodes::save(
+                conn,
+                "chef",
+                &w.id,
+                nodes::NodeKind::Orchestrator,
+                r#"{"name":"Chef","session":{"cwd":"C:/code/api","agent":"claude"},
+                    "mission":{"project":"C:/code/api","worktree":"C:/code/api/w","state":"en_cours",
+                    "members":[{"name":"Isis","worktree":"C:/code/api/w/isis"},{"name":"Thot","worktree":"D:/x"}]}}"#,
+            )?;
+            relocate(conn, &project.id, "D:\\api")?;
+            let json: String = conn.query_row(
+                "SELECT payload_json FROM nodes WHERE id = 'chef'",
+                [],
+                |row| row.get(0),
+            )?;
+            let payload: serde_json::Value = serde_json::from_str(&json).unwrap();
+            assert_eq!(payload["session"]["cwd"], "D:\\api");
+            assert_eq!(payload["mission"]["project"], "D:\\api");
+            assert_eq!(payload["mission"]["worktree"], "D:\\api\\w");
+            assert_eq!(payload["mission"]["members"][0]["worktree"], "D:\\api\\w\\isis");
+            assert_eq!(payload["mission"]["members"][1]["worktree"], "D:/x");
+            assert_eq!(payload["mission"]["state"], "en_cours");
+            Ok(())
+        })
+        .unwrap();
     }
 }

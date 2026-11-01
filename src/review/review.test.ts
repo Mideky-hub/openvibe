@@ -58,7 +58,7 @@ describe("reviewMessage", () => {
         { file: "README.md", text: "Documente l'option." },
       ]),
     ).toBe(
-      "Revue de code de tes changements :\n- src/a.ts:12 — Renomme z.\n- src/a.ts (ligne 11 supprimée) — Pourquoi retirer y ?\n- README.md — Documente l'option.\nCorrige ce qui doit l'être, puis dis-moi ce que tu as changé.",
+      "Revue de code de tes changements :\n- src/a.ts:12 — Renomme z.\n- src/a.ts (ligne 11 supprimée, numérotée dans la version avant tes changements) — Pourquoi retirer y ?\n- README.md — Documente l'option.\nCorrige ce qui doit l'être, puis dis-moi ce que tu as changé.",
     );
   });
 });
@@ -68,7 +68,7 @@ describe("reviewMessage in English (spec première version §7.1)", () => {
     langStore.setState({ lang: "en" });
     try {
       expect(reviewMessage([{ file: "src/a.ts", line: 11, side: "old", text: "Why?" }, { file: "README.md", text: "Document it." }])).toBe(
-        "Code review of your changes:\n- src/a.ts (line 11 removed) — Why?\n- README.md — Document it.\nFix what needs fixing, then tell me what you changed.",
+        "Code review of your changes:\n- src/a.ts (line 11 removed, numbered in the version before your changes) — Why?\n- README.md — Document it.\nFix what needs fixing, then tell me what you changed.",
       );
     } finally {
       langStore.setState({ lang: "fr" });
@@ -91,4 +91,17 @@ describe("missionBranchFor", () => {
     expect(missionBranchFor("isis")).toBe("openvibe/auth");
     expect(missionBranchFor("thot")).toBeNull();
   });
+});
+
+import { remarkRow } from "./review";
+
+it("finds the row of a remark by its line text when the numbers have drifted (backlog 27 oct)", () => {
+  const { lines } = parseDiff("@@ -1,2 +1,3 @@\n+new first\n const x = 1;\n+const y = 3;\n");
+  expect(remarkRow(lines, { file: "a", line: 2, lineText: "const y = 3;", text: "?" })).toBe(3);
+  expect(remarkRow(lines, { file: "a", line: 2, lineText: "gone", text: "?" })).toBe(-1);
+  expect(remarkRow(lines, { file: "a", line: 1, text: "no text" })).toBe(1);
+});
+
+it("quotes the line in the message the agent reads (backlog 27 oct)", () => {
+  expect(reviewMessage([{ file: "a.ts", line: 3, lineText: "const y = 3;", text: "why?" }])).toContain("a.ts:3 `const y = 3;` — why?");
 });

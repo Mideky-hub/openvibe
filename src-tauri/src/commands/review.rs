@@ -30,7 +30,7 @@ pub async fn review_file_diff(
 
 /// The repository's files, from its root.
 #[tauri::command]
-pub async fn review_files(path: String) -> AppResult<Vec<String>> {
+pub async fn review_files(path: String) -> AppResult<review::FileList> {
     blocking(move || review::files(Path::new(&path))).await
 }
 

@@ -2,6 +2,8 @@ use std::path::Path;
 
 use crate::error::{AppError, AppResult};
 use crate::mission::{self, Cleanup, MergeReport, Worktree};
+use crate::power::KeepAwake;
+use crate::tickets::{self, ProjectChecks};
 
 /// Git can take seconds on a large repository: off the async runtime.
 async fn blocking<T: Send + 'static>(
@@ -40,6 +42,30 @@ pub async fn mission_merge(
     branch: String,
 ) -> AppResult<MergeReport> {
     blocking(move || mission::merge_agent(Path::new(&mission), Path::new(&agent), &branch)).await
+}
+
+/// The project's `BACKLOG.md` (spec mission de nuit §5.1).
+#[tauri::command]
+pub async fn mission_backlog(project: String) -> AppResult<String> {
+    blocking(move || tickets::backlog(Path::new(&project))).await
+}
+
+/// The open issues with a label, as `gh` gives them.
+#[tauri::command]
+pub async fn mission_issues(project: String, label: String) -> AppResult<String> {
+    blocking(move || tickets::github_issues(Path::new(&project), &label)).await
+}
+
+/// What the Overnight run dialog shows before the user leaves.
+#[tauri::command]
+pub async fn mission_checks(project: String) -> AppResult<ProjectChecks> {
+    blocking(move || Ok(tickets::checks(Path::new(&project)))).await
+}
+
+/// Held while an overnight mission runs (spec mission de nuit §5.4).
+#[tauri::command]
+pub fn set_keep_awake(awake: tauri::State<'_, KeepAwake>, on: bool) {
+    awake.set(on);
 }
 
 /// A launch that failed: what it created goes (final review H2).
