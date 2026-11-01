@@ -20,6 +20,7 @@ export const gitMessages = defineMessages(
       messageLabel: "Message du commit",
       messagePlaceholder: "Décris ce que ce commit change",
       commit: (count: number) => `Valider (${count})`,
+      committing: "Validation…",
       committed: (hash: string) => `Commit ${hash} créé`,
     },
     discard: {
@@ -42,6 +43,7 @@ export const gitMessages = defineMessages(
       manyRemotes: "Plusieurs dépôts distants, aucun origin : pousse depuis un terminal",
       detached: "HEAD détachée : aucune branche à pousser",
       noCommit: "Aucun commit à pousser",
+      mirror: "Ce dépôt distant est un miroir : pousse depuis un terminal",
     },
   },
   {
@@ -62,6 +64,7 @@ export const gitMessages = defineMessages(
       messageLabel: "Commit message",
       messagePlaceholder: "Describe what this commit changes",
       commit: (count: number) => `Commit (${count})`,
+      committing: "Committing…",
       committed: (hash: string) => `Commit ${hash} created`,
     },
     discard: {
@@ -84,6 +87,7 @@ export const gitMessages = defineMessages(
       manyRemotes: "Several remotes and no origin: push from a terminal",
       detached: "Detached HEAD: no branch to push",
       noCommit: "No commit to push",
+      mirror: "This remote is a mirror: push from a terminal",
     },
   },
 );

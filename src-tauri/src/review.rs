@@ -246,13 +246,30 @@ pub fn changes(dir: &Path, base: Option<&str>) -> Result<Changes, String> {
 
 fn changes_limited(dir: &Path, base: Option<&str>, max: usize) -> Result<Changes, String> {
     let from = compared(dir, base)?;
+    // From the root whatever `diff.relative` says: the paths go back to git from there.
     let names = git(
         dir,
-        &["diff", "--no-ext-diff", "--name-status", "-z", "-M", &from],
+        &[
+            "diff",
+            "--no-ext-diff",
+            "--no-relative",
+            "--name-status",
+            "-z",
+            "-M",
+            &from,
+        ],
     )?;
     let counts = parse_numstat(&git(
         dir,
-        &["diff", "--no-ext-diff", "--numstat", "-z", "-M", &from],
+        &[
+            "diff",
+            "--no-ext-diff",
+            "--no-relative",
+            "--numstat",
+            "-z",
+            "-M",
+            &from,
+        ],
     )?);
     let mut files: Vec<ChangedFile> = parse_name_status(&names)
         .into_iter()
@@ -335,6 +352,7 @@ pub fn file_diff(dir: &Path, file: &ChangedFile, base: Option<&str>) -> Result<S
         "diff",
         "--no-color",
         "--no-ext-diff",
+        "--no-relative",
         "-M",
         from.as_str(),
         "--",

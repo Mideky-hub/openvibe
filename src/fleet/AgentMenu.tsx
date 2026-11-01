@@ -210,7 +210,7 @@ export function AgentMenu({
           />
         )}
         {typeof view === "object" && (
-          <InstallPrompt agent={view.install} onBack={() => setView("agents")} onRun={() => inTerminal((at) => void installAgent(view.install, at))} />
+          <InstallPrompt key={view.install} agent={view.install} onBack={() => setView("agents")} onRun={() => inTerminal((at) => void installAgent(view.install, at))} />
         )}
       </PopoverContent>
     </Popover>
