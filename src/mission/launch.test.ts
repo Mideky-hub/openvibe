@@ -364,7 +364,7 @@ describe("a new agent in a chosen group (spec groupes spécialisés §4)", () =>
     const gone = nextName("norse", []);
     const running = { state: "en_cours" as const, project: "C:/code/proj", slug: "auth", plan: [{ ...inFront, title: "t" }], members: [member("n7", gone, false, { group: "g1" })] };
     await setup(running);
-    canvasStore.setState({ api: { getSceneElements: () => [] } as never, frames: [front] });
+    canvasStore.setState({ api: { getSceneElementsIncludingDeleted: () => [] } as never, frames: [front] });
     const first = await reassignTask("chef", "n7", "nouveau");
     const asked = vi.mocked(missionAddAgent).mock.calls.map(([, , name]) => name);
     expect(asked).toHaveLength(1);

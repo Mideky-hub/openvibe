@@ -98,9 +98,19 @@ it("gives a copied group a pantheon of its own, the original keeping its own (pl
 });
 
 it("reuses the name of a closed terminal, whose node stays in memory only for Ctrl+Z", async () => {
-  const live = [{ id: "a" }, { id: "c" }];
-  canvasStore.setState({ api: { getSceneElements: () => live } as never });
+  const scene = [{ id: "a" }, { id: "b", isDeleted: true }, { id: "c" }];
+  canvasStore.setState({ api: { getSceneElementsIncludingDeleted: () => scene } as never });
   expect(namesInWorkspace("w1")).toEqual([]);
   canvasStore.setState({ api: null });
   expect(namesInWorkspace("w1")).toEqual(["Isis"]);
+});
+
+it("keeps the name of an agent being created, and frees that of a closed one (review)", () => {
+  const scene = [{ id: "a", isDeleted: true }];
+  canvasStore.setState({ api: { getSceneElements: () => [], getSceneElementsIncludingDeleted: () => scene } as never });
+  // `b`, not on the scene yet: its record is written first, and a second launch must not take its name.
+  expect(namesInWorkspace("w1")).toContain("Isis");
+  nodesStore.getState().update("a", { name: "Osiris" });
+  expect(namesInWorkspace("w1")).not.toContain("Osiris");
+  canvasStore.setState({ api: null });
 });
