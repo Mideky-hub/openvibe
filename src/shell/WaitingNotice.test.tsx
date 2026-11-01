@@ -33,8 +33,8 @@ beforeEach(async () => {
   workspacesStore.setState({
     activeId: "w1",
     workspaces: [
-      { id: "w1", projectId: "p1", name: "Workspace 1", position: 0, pantheon: null },
-      { id: "w2", projectId: "p1", name: "Backend", position: 1, pantheon: null },
+      { id: "w1", projectId: "p1", name: "Workspace 1", position: 0, pantheon: null, kind: "canvas" },
+      { id: "w2", projectId: "p1", name: "Backend", position: 1, pantheon: null, kind: "canvas" },
     ],
   });
   nodesStore.setState({

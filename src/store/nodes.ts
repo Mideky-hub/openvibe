@@ -167,6 +167,8 @@ export function rebaseTerminalFolders(from: string, to: string) {
       if (Object.keys(patch).length > 0) nodesStore.getState().update(id, patch);
       continue;
     }
+    // A Kanban or a file node has no folder of its own.
+    if (node.kind !== "terminal") continue;
     const cwd = rebasePath(node.payload.cwd, from, to);
     if (cwd) nodesStore.getState().update(id, { cwd });
   }

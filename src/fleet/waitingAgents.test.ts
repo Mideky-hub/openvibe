@@ -64,7 +64,7 @@ describe("currentWaitingAgents", () => {
   });
 
   it("reads the open project's workspaces from the stores", () => {
-    workspacesStore.setState({ workspaces: [{ id: "w1", projectId: "p1", name: "Workspace 1", position: 0, pantheon: null }] });
+    workspacesStore.setState({ workspaces: [{ id: "w1", projectId: "p1", name: "Workspace 1", position: 0, pantheon: null, kind: "canvas" }] });
     nodesStore.setState({ nodes: { isis: terminal("w1", "Isis"), thot: terminal("w9", "Thot") } });
     terminalStatusStore.setState({ statuses: { isis: { state: "running" }, thot: { state: "running" } } });
     agentActivityStore.getState().apply({ nodeId: "isis", activity: "waiting", since: 1 });

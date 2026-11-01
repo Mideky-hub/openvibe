@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { useUiRequest } from "@/commands/uiRequests";
 import { messages, useMessages } from "@/i18n";
-import { useNodes } from "@/store/nodes";
+import { nodeNameOf, useNodes } from "@/store/nodes";
 import { useLoops, loopsStore } from "./live";
 import { loopsMessages } from "./messages";
 import { LOOP_TEMPLATES, validateLoop, type LoopDef, type LoopError, type LoopTrigger } from "./model";
@@ -184,7 +184,7 @@ export function LoopsDialog() {
                     checked={form.targets.includes(id)}
                     onChange={(e) => change({ targets: e.currentTarget.checked ? [...form.targets, id] : form.targets.filter((x) => x !== id) })}
                   />
-                  {node.payload.name || id}
+                  {nodeNameOf(node) || id}
                 </label>
               ))}
             </fieldset>

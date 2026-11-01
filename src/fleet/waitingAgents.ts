@@ -8,7 +8,7 @@ import { AGENTS } from "./catalog";
 /** An agent stopped until the user answers it (spec notification §3). */
 export interface WaitingAgent {
   id: string;
-  kind: NodeRecord["kind"];
+  kind: "terminal" | "orchestrator";
   name: string;
   workspaceId: string;
   /** Since when it waits, in ms. */
@@ -18,7 +18,7 @@ export interface WaitingAgent {
 }
 
 /** A terminal without a first name goes by its agent's name; an orchestrator always has one. */
-function nameOf(record: NodeRecord): string {
+function nameOf(record: Extract<NodeRecord, { kind: WaitingAgent["kind"] }>): string {
   return record.kind === "terminal" ? record.payload.name || AGENTS[record.payload.agent].label : record.payload.name;
 }
 
@@ -33,6 +33,8 @@ export function waitingAgents(
   const agents: WaitingAgent[] = [];
   for (const [id, record] of Object.entries(nodes)) {
     const activity = activities[id];
+    // A Kanban or a file on the canvas never waits.
+    if (record.kind !== "terminal" && record.kind !== "orchestrator") continue;
     if (!wanted.has(record.workspaceId) || statuses[id]?.state !== "running" || activity?.activity !== "waiting") continue;
     agents.push({ id, kind: record.kind, name: nameOf(record), workspaceId: record.workspaceId, since: activity.since, message: activity.message });
   }
