@@ -274,7 +274,8 @@ export async function cleanMission(orchestratorId: string): Promise<Cleanup | st
   const mission = missionOf(nodesStore.getState().nodes[orchestratorId]);
   if (mission?.state !== "terminee") return t().launch.notFinished;
   const next: Mission = { ...NEW_MISSION, maxAgents: mission.maxAgents };
-  if (mission.budgetMin !== undefined) next.budgetMin = mission.budgetMin;
+  // A night's budget is that night's absence, no setting for the next mission.
+  if (mission.budgetMin !== undefined && !mission.overnight) next.budgetMin = mission.budgetMin;
   // The router is a setting like the budget: the next mission keeps it checked.
   if (mission.router) next.router = true;
   try {

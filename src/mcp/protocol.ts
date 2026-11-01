@@ -29,6 +29,7 @@ const TOOLS: Record<string, string> = {
   add_tasks: "add_tasks",
   queue: "queue",
   next_task: "next_task",
+  tickets: "tickets",
   notes: "notes",
 };
 

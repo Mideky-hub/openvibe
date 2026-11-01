@@ -1,6 +1,7 @@
 import { messages } from "@/i18n";
 import { agentMessages } from "@/mcp/messages";
 import { readLevel, type Level } from "./router";
+import type { TicketSource } from "./tickets";
 
 /** The mission of an orchestrator (spec orchestrateur §7), saved in its payload. */
 export type MissionState = "redaction" | "plan" | "lancement" | "en_cours" | "terminee";
@@ -107,6 +108,10 @@ export interface Mission {
   overnight?: boolean;
   /** The end of the night was told. */
   windDownTold?: boolean;
+  /** Where an overnight mission takes its tasks. */
+  tickets?: TicketSource;
+  /** The dialog was the go-ahead: the plan starts as soon as it is proposed (spec mission de nuit §5.1). */
+  autoLaunch?: boolean;
 }
 
 export const NEW_AGENT = "nouveau";
@@ -127,6 +132,12 @@ export const sameName = (a: string, b: string) => fold(a) === fold(b);
 
 /** Text typed in a terminal ends at its first line break: briefs and messages go on one line. */
 export const oneLine = (value: string) => value.replace(/\s*[\r\n]+\s*/g, " ").trim();
+
+function readTicketSource(raw: unknown): TicketSource | undefined {
+  const r = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
+  if (r.kind === "backlog") return { kind: "backlog" };
+  return r.kind === "github" && typeof r.label === "string" ? { kind: "github", label: r.label } : undefined;
+}
 
 function readPast(raw: unknown): PastTask | null {
   const r = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
@@ -217,6 +228,9 @@ export function readMission(raw: unknown): Mission | undefined {
   if (r.router === true) mission.router = true;
   if (r.overnight === true) mission.overnight = true;
   if (r.windDownTold === true) mission.windDownTold = true;
+  const tickets = readTicketSource(r.tickets);
+  if (tickets) mission.tickets = tickets;
+  if (r.autoLaunch === true) mission.autoLaunch = true;
   return mission;
 }
 

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { toast } from "sonner";
 import { useStore } from "zustand";
 import { useCanvas } from "@/canvas/canvasStore";
@@ -13,6 +14,7 @@ import { uiStore, useUi } from "@/store/ui";
 import { cleanMission, launchMission } from "./launch";
 import { budgetBar, budgetOf, MAX_AGENTS, memberTime, type Mission } from "./mission";
 import { missionMessages } from "./messages";
+import { OvernightDialog } from "./OvernightDialog";
 import { LEVELS, modelLabel } from "./router";
 import { agentState, missionOf, setMission } from "./store";
 
@@ -26,6 +28,7 @@ export function MissionPanel({ nodeId }: { nodeId: string }) {
       <header className="flex items-center gap-2">
         <span className="font-semibold uppercase tracking-[0.08em] text-ov-text">{t.title(mission.name ?? "")}</span>
         <span>{t.state[mission.state]}</span>
+        {mission.overnight && <span className="rounded bg-ov-field px-1.5 text-[11px] text-ov-text">{t.nightBadge}</span>}
         {mission.branch && <span className="ml-auto truncate font-mono text-[11px]">{mission.branch}</span>}
       </header>
       {(mission.state === "redaction" || mission.state === "plan") && <Settings nodeId={nodeId} mission={mission} />}
@@ -50,6 +53,7 @@ function Settings({ nodeId, mission }: { nodeId: string; mission: Mission }) {
   const frames = useCanvas((s) => s.frames);
   const nodes = useNodes((s) => s.nodes);
   const claude = linkedAgents(links, frames).agentIds.filter((id) => terminalOf(nodes[id])?.agent === "claude").length;
+  const [night, setNight] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-3">
       <label className="flex items-center gap-1" title={t.globalBudgetTitle}>
@@ -93,6 +97,10 @@ function Settings({ nodeId, mission }: { nodeId: string; mission: Mission }) {
         />
         {t.routerLabel}
       </label>
+      <button type="button" onClick={() => setNight(true)} className="rounded-full border border-ov-line px-2.5 py-0.5 text-[11px] text-ov-text hover:bg-ov-card">
+        {t.nightButton}
+      </button>
+      {night && <OvernightDialog nodeId={nodeId} open onOpenChange={setNight} />}
       <span className="ml-auto">
         {t.linked(claude)}
       </span>

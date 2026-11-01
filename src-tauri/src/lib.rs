@@ -14,6 +14,7 @@ mod repo;
 mod review;
 mod studio;
 mod sync;
+mod tickets;
 mod tokens;
 
 use std::time::Duration;
@@ -162,6 +163,8 @@ pub fn run() {
             commands::mission::mission_merge,
             commands::mission::mission_cleanup,
             commands::mission::mission_discard,
+            commands::mission::mission_backlog,
+            commands::mission::mission_issues,
             commands::notes::notes_all,
             commands::notes::notes_read,
             commands::notes::notes_version,
