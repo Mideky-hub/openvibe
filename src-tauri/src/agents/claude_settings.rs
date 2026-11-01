@@ -455,6 +455,15 @@ mod tests {
         assert!(!script.contains('\r'), "bash needs LF line ends");
     }
 
+    /// A bash that can run a script at a Windows path: `Command` alone finds
+    /// System32's WSL launcher first, which cannot, and the test then proved nothing.
+    fn real_bash() -> Option<std::path::PathBuf> {
+        which::which_all("bash").ok()?.find(|path| {
+            let path = path.to_string_lossy().to_lowercase();
+            !path.contains("system32") && !path.contains("windowsapps")
+        })
+    }
+
     /// Runs the real script under bash; None when there is no bash to run it.
     fn run_status_script(url: &str, input: &[u8]) -> Option<(Vec<u8>, std::time::Duration)> {
         use std::io::Write;
@@ -465,7 +474,7 @@ mod tests {
         let out = dir.path().join("out.txt");
         let user = format!("cat > '{}'", out.to_string_lossy().replace('\\', "/"));
         let started = std::time::Instant::now();
-        let mut child = Command::new("bash")
+        let mut child = Command::new(real_bash()?)
             .arg(script.to_string_lossy().replace('\\', "/"))
             .arg(url)
             .arg(
@@ -483,7 +492,11 @@ mod tests {
         child.stdin.take().unwrap().write_all(input).unwrap();
         child.wait().ok()?;
         let elapsed = started.elapsed();
-        Some((std::fs::read(out).ok()?, elapsed))
+        // A script that ran must have written: only a missing bash skips the test.
+        Some((
+            std::fs::read(out).expect("the status script wrote nothing"),
+            elapsed,
+        ))
     }
 
     #[test]
