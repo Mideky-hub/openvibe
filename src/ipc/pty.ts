@@ -14,6 +14,8 @@ export interface ClaudeLaunch {
   remoteControl?: string;
   /** `--model`, chosen by a mission's router (spec maj §3). */
   model?: string;
+  /** The profile's folder: this terminal's `CLAUDE_CONFIG_DIR` (spec comptes §4). */
+  configDir?: string;
 }
 
 /** Agents of the launch menu (spec habillage §8), in menu order. */

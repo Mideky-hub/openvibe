@@ -41,3 +41,14 @@ export function placeOrchestrator(at?: Point) {
   if (!workspaceId) return;
   void addOrchestrator(workspaceId, at ?? viewportCenter(canvasStore.getState().view)).catch(reportLaunchError);
 }
+
+/**
+ * « Se connecter » of a Claude profile (spec comptes §5): a visible Claude terminal started with that
+ * profile, where the user logs in. False when there is no project to place it in.
+ */
+export async function launchLogin(accountId: string): Promise<boolean> {
+  if (!workspacesStore.getState().activeId) return false;
+  const center = viewportCenter(canvasStore.getState().view);
+  await launchAgent("claude", { ...defaultLaunchOptions(), accountId }, center);
+  return true;
+}
