@@ -5,7 +5,7 @@ import { showNode } from "@/canvas/arrive";
 import { canvasStore } from "@/canvas/canvasStore";
 import { pauseAgents } from "@/fleet/broadcast";
 import { forgetScene, rememberScene } from "@/canvas/sceneCache";
-import { closeGroup, closeStoredGroup, launchGroup, setGroupFolded, showGroups } from "@/fleet/groups";
+import { closeGroup, closeStoredGroup, launchGroup, showGroups } from "@/fleet/groups";
 import { nextName } from "@/fleet/names";
 import { linkOrchestrator } from "@/fleet/orchestrators";
 import { addTerminal, removeFromStoredScene, removeNodes } from "@/fleet/terminals";
@@ -31,7 +31,7 @@ vi.mock("@/ipc/pty", async (importOriginal) => ({
   ptyWrite: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("@/nodes/terminal/registry", () => ({ relaunchTerminal: vi.fn(), stopTerminal: vi.fn(), quietFor: vi.fn(() => 0), typedAgo: vi.fn(() => Infinity), freshText: vi.fn(() => ""), markForAutostart: vi.fn() }));
-vi.mock("@/fleet/groups", () => ({ launchGroup: vi.fn(), closeGroup: vi.fn(), closeStoredGroup: vi.fn(), showGroups: vi.fn(), setGroupFolded: vi.fn() }));
+vi.mock("@/fleet/groups", () => ({ launchGroup: vi.fn(), closeGroup: vi.fn(), closeStoredGroup: vi.fn(), showGroups: vi.fn() }));
 vi.mock("@/fleet/orchestrators", () => ({ linkOrchestrator: vi.fn() }));
 vi.mock("@/fleet/terminals", () => ({ addTerminal: vi.fn(() => Promise.resolve("n9")), removeNodes: vi.fn(), removeFromStoredScene: vi.fn() }));
 vi.mock("@/fleet/broadcast", () => ({ pauseAgents: vi.fn(() => Promise.resolve(1)) }));
@@ -287,13 +287,6 @@ describe("a new agent in a chosen group (spec groupes spécialisés §4)", () =>
     expect(new Set(missionNow().members.map((m) => m.name)).size).toBe(4);
     expect(showGroups).toHaveBeenCalledWith(["g1", "f1"]);
     expect(missionNow().frameId).toBe("f1");
-  });
-
-  it("unfolds a folded group it joins: an agent stays out of sight there, and would not start", async () => {
-    canvasStore.setState({ frames: [{ ...front, group: { ...front.group, folded: true } }] });
-    await setup({ plan: [inFront] });
-    await launchMission("chef");
-    expect(setGroupFolded).toHaveBeenCalledWith("g1", false);
   });
 
   it("frames nothing more when nobody joins a group, as before", async () => {

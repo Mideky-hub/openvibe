@@ -1,7 +1,7 @@
 import { showNode } from "@/canvas/arrive";
 import { pauseAgents } from "@/fleet/broadcast";
 import { GROUP_GAP, groupGrid } from "@/fleet/groupLayout";
-import { closeGroup, closeStoredGroup, launchGroup, setGroupFolded, showGroups } from "@/fleet/groups";
+import { closeGroup, closeStoredGroup, launchGroup, showGroups } from "@/fleet/groups";
 import { defaultLaunchOptions } from "@/fleet/launchAgent";
 import { nextName } from "@/fleet/names";
 import { namesInWorkspace, pantheonForNewGroup } from "@/fleet/naming";
@@ -141,8 +141,6 @@ async function formTeam(orchestratorId: string, workspaceId: string, project: st
       if (!group) continue;
       const frame = workspaceCanvas(workspaceId).frames.find((f) => f.id === group.id);
       if (!frame) throw new Error(t().launch.groupLost(group.name));
-      // In a folded group an agent stays out of sight, and would not start.
-      if (frame.group?.folded && orchestratorShown(orchestratorId)) setGroupFolded(frame.id, false);
       const nodeId = await addTerminal(workspaceId, agentPayload(member.name, member.worktree, member.model, mission.permission), frameCenter(frame), frame.id);
       if (!nodeId) throw new Error(t().launch.groupFailed);
       member.nodeId = nodeId;

@@ -4,6 +4,7 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { revealNode } from "@/canvas/arrive";
 import { canvasStore } from "@/canvas/canvasStore";
+import { workspacesStore } from "@/store/workspaces";
 import { addTerminal } from "./terminals";
 
 vi.mock("@excalidraw/excalidraw", () => ({
@@ -19,6 +20,7 @@ beforeEach(() => {
   mockIPC(() => undefined);
   vi.mocked(revealNode).mockClear();
   scene = [];
+  workspacesStore.setState({ activeId: "w1" });
   canvasStore.setState({
     api: {
       getSceneElementsIncludingDeleted: () => scene,
