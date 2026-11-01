@@ -154,3 +154,34 @@ it("says nothing for a stopped agent, and records an overrun as told only once i
   checkBudgets(60 * min);
   expect(notify).toHaveBeenCalledTimes(1);
 });
+
+it("tells a budget once even while the orchestrator cannot hear, and records the worst (review)", async () => {
+  vi.mocked(notify).mockReset();
+  vi.mocked(toast.warning).mockClear();
+  const pending: (() => void)[] = [];
+  vi.mocked(notify).mockImplementation((_orchestrator: string, _line: string, typed?: () => void) => void (typed && pending.push(typed)));
+  await nodesStore.getState().create("chef2", {
+    workspaceId: "w1",
+    kind: "orchestrator",
+    payload: {
+      name: "Chef",
+      mission: {
+        state: "en_cours",
+        name: "Auth",
+        maxAgents: 4,
+        members: [{ nodeId: "isis", name: "Isis", task: "Login", budgetMin: 10, linked: false, branch: "b", worktree: "w", sentAt: 0 }],
+      },
+    },
+  });
+  const lines = () => vi.mocked(notify).mock.calls.filter(([to]) => to === "chef2").length;
+  checkBudgets(11 * min);
+  expect(lines()).toBe(1);
+  checkBudgets(21 * min);
+  expect(lines()).toBe(1);
+  expect(toast.warning).toHaveBeenCalledTimes(1);
+  for (const typed of pending) typed();
+  checkBudgets(22 * min);
+  expect(lines()).toBe(1);
+  expect(toast.warning).toHaveBeenCalledTimes(1);
+  expect(missionOf(nodesStore.getState().nodes.chef2)?.members[0].overdue).toBe(2);
+});
