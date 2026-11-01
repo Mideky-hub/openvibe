@@ -13,6 +13,7 @@ import { ToolRail } from "./ToolRail";
 
 // Excalidraw does not load under Vitest (roughjs); the rail drives it through the store's api only.
 vi.mock("@excalidraw/excalidraw", () => ({}));
+vi.mock("@/kanban/place", () => ({ placeKanban: vi.fn() }));
 vi.mock("@/fleet/quickActions", () => ({ newConsole: vi.fn(), launchFour: vi.fn(), placeOrchestrator: vi.fn() }));
 vi.mock("@/fleet/launchAgent", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/fleet/launchAgent")>()),
@@ -58,13 +59,13 @@ it("offers the canvas tools in the spec's order, each setting its Excalidraw too
   }
 });
 
-it("holds the catalog, Nouvelle console, Lancer 4 agents and Orchestrateur in its ＋ (spec identité §5.4, §11)", async () => {
+it("holds the catalog, Nouvelle console, Lancer 4 agents, Orchestrateur and Kanban in its ＋ (spec identité §5.4, §11)", async () => {
   const menuEntries = () =>
     [...document.querySelectorAll<HTMLButtonElement>('[data-slot="popover-content"] button')].map((b) => b.textContent ?? "");
   await act(async () => byLabel("Lancer un agent").click());
   const entries = menuEntries();
   expect(entries[0]).toContain("Claude");
-  expect(entries.slice(-4, -1)).toEqual(["Nouvelle console", "Lancer 4 agents", expect.stringContaining("Orchestrateur")]);
+  expect(entries.slice(-5, -1)).toEqual(["Nouvelle console", "Lancer 4 agents", expect.stringContaining("Orchestrateur"), expect.stringContaining("Kanban")]);
   const click = (text: string) =>
     [...document.querySelectorAll<HTMLButtonElement>('[data-slot="popover-content"] button')].find((b) => b.textContent === text)!.click();
   await act(async () => click("Nouvelle console"));

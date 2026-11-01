@@ -2,8 +2,9 @@ import { langStore, messages } from "@/i18n";
 import { declaredSteps, markedSteps, MAX_STEPS } from "@/nodes/steps";
 import { notify } from "@/mission/events";
 import { oneLine } from "@/mission/mission";
+import { finishMissionCard, flagMissionCard } from "@/kanban/orchestrate";
 import { afterReport } from "@/mission/queue";
-import { isOrchestratorClosed, memberOf, updateMember } from "@/mission/store";
+import { isOrchestratorClosed, memberOf, missionOf, updateMember } from "@/mission/store";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { agentMessages } from "./messages";
@@ -89,6 +90,10 @@ export function report(nodeId: string, args: Record<string, unknown>): ToolResul
   // `merge` merges every « done » branch again: a merged one stays so until then (final review H2).
   const check = typeof args.check === "string" ? oneLine(args.check) : "";
   updateMember(found.orchestratorId, nodeId, { report: { summary, status, at: Date.now(), ...(check ? { check } : {}) } });
+  // Its Kanban card follows: done, or on alert in « En cours ».
+  const plan = missionOf(nodesStore.getState().nodes[found.orchestratorId])?.plan;
+  if (status === "termine") void finishMissionCard(found.orchestratorId, plan, found.member.task).catch(() => undefined);
+  else flagMissionCard(found.orchestratorId, plan, found.member.task, status === "bloque" ? "blocked" : "failed");
   // Queued even when nobody listens: a relaunched or restored orchestrator hears it then (final review R3).
   notify(found.orchestratorId, t().agent.reported(found.member.name, outReport(status), oneLine(summary)));
   // The queue moves on without it: a stopped orchestrator must not stall the night.

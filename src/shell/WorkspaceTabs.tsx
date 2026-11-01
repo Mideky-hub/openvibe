@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Code2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -12,7 +12,7 @@ import { useUiRequest } from "@/commands/uiRequests";
 import { messages, useMessages } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { useRunningCount } from "@/store/running";
-import { useWorkspaces, workspacesStore, type Workspace } from "@/store/workspaces";
+import { canRemove as removable, isCode, useWorkspaces, workspacesStore, type Workspace } from "@/store/workspaces";
 import { IconButton } from "./buttons";
 import { TABS_HEIGHT } from "./layout";
 import { shellMessages } from "./messages";
@@ -101,6 +101,7 @@ function WorkspaceTab(props: { workspace: Workspace; active: boolean; canRemove:
           void workspacesStore.getState().move(workspace.id, index + (e.key === "ArrowLeft" ? -1 : 1));
         }}
       >
+        {isCode(workspace) && <Code2 data-code-icon aria-hidden className="mr-1.5 size-3.5 shrink-0 text-ov-accent" />}
         <span className="max-w-40 truncate">{workspace.name}</span>
         {(active || running > 0) && (
           <span
@@ -177,7 +178,7 @@ export function WorkspaceTabs() {
           count={workspaces.length}
           workspace={workspace}
           active={workspace.id === activeId}
-          canRemove={workspaces.length > 1}
+          canRemove={removable(workspaces, workspace)}
         />
       ))}
       <IconButton

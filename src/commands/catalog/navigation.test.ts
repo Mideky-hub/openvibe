@@ -73,6 +73,7 @@ describe("Navigation (spec fenêtre §7.3)", () => {
       "Notes",
       "Accueil",
       "Fermer le projet",
+      "Aller à la ligne…",
     ]);
   });
 

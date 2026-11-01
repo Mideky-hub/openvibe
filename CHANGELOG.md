@@ -5,7 +5,6 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 ## [Unreleased]
 
 ### Added
-- **Code studio:** open and edit a project's files in OpenVibe (CodeMirror), from the command palette. It never overwrites a file an agent changed in the meantime without telling you, and keeps secrets out of its list.
 - **Notes:** per-project Markdown notes (plain files in the project's `.openvibe/notes/`), a graph of the links between them, notes per group, and a note list agents are told about. Open them from the rail, the palette or a group's menu.
 - **Install agents from the interface:** from the home screen or the palette, in a visible terminal, with a prerequisites check first, and Ollama models pulled the same way. Nothing is ever installed without being asked.
 - **Question notice:** when an agent waits on a question, OpenVibe previews the question, and raises a Windows notification if you are not looking. A setting turns the notification off. Gemini CLI's hooks are heard too.
@@ -23,6 +22,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 - **A discreet exit button** in the zen and reading modes.
 
 ### Changed
+- **Code Studio:** saving never goes over a file that changed on disk: an agent's change is reloaded by itself when you have none, and otherwise a banner lets you reload or overwrite, and a file deleted meanwhile can be dropped or recreated. Files are written atomically and keep their line endings, the tree leaves out secrets and `.git`, and quitting or updating asks first about unsaved tabs.
 - The global time budget is now counted in real time for every mission, and the queue gives no new task once it is spent.
 - Missions keep working when their project is not the one on screen.
 - Only one OpenVibe runs at a time: a second launch brings the first window back.
@@ -41,6 +41,23 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 - Groups: a group copied whole gets a pantheon of its own, a folded group never hides a selectable agent, and a new group is fitted at a readable zoom instead of 40 %.
 - Review: the toasts no longer cover *Send*, a nested repository is skipped, and a git warning on an empty diff is no error.
 - Many small interface fixes: the command palette and `@` commands (names, Escape, double spaces), the saved theme painted before the first render, translated messages, and the keyboard going back to the canvas after menus.
+
+## [1.1.0-beta.1] - 2026-10-28
+
+### Added
+- **Code Studio**: each project gets one code workspace, an IDE tab beside its canvases (activity rail or command palette, **Code Studio**). The repository's tree sits in a floating bar you can show, hide, filter and refresh; files open in tabs in an editor with syntax highlighting, **Save (Ctrl+S)**, a warning before closing unsaved changes, and a **Preview** of Markdown files. **Insert** puts the open file on the last canvas shown. Reading and writing are limited to the project's folder (#49).
+- In the code workspace, **Ctrl+P** finds files by name, and `file:line` or `file:line:column` (e.g. `App.tsx:42`) opens the file at that line; **Ctrl+G** (**Go to line…**) jumps to `42` or `42:7` in the open file.
+- A **file node** on the canvas: a file of the project, shown read-only with a **Refresh** button.
+- A **Kanban** widget (tool rail or command palette): columns you add, rename and delete, cards with a title, notes, a priority and a due date (today, tomorrow, next week or a date), overdue cards marked. Cards are dragged between columns, and a card dropped on a terminal is sent to that agent as an instruction. The node widens with its number of columns (#29).
+- **Link to GitHub…** in the board's menu syncs a Kanban with a repository's issues, and optionally a Project v2, through the GitHub CLI (`gh`): issues become cards, moving a card closes, reopens or changes the issue's Status, and **Create the issue on GitHub** turns a card into an issue. It needs `gh auth login`, plus `gh auth refresh -s project` for Projects; OpenVibe stores no token (#29).
+- **Plan with the orchestrator** in a column's menu sends the column's cards to a new or existing orchestrator. Linked orchestrators read the board with a new MCP tool, `board`, and `propose_plan` takes a `card` field per sub-task: the card moves to **In progress** when the mission starts and to the **Done** column (or the last one) when its agent reports done. The card shows the agent working on it, follows a reassignment, and warns when the agent is blocked or failed.
+
+### Changed
+- The database is upgraded twice on first start: migration 3 lets nodes be files, migration 4 gives workspaces a kind (canvas or code). OpenVibe keeps a copy of the database first (`openvibe.v<N>-backup.db`).
+- Closing the code workspace is always allowed; the last canvas still cannot be closed.
+
+### Fixed
+- **Launch the mission** and the mission's total budget stay visible at the bottom of the mission panel, however long the plan.
 
 ## [1.0.0-beta.1] - 2026-10-27
 

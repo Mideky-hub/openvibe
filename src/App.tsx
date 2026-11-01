@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { boot } from "@/app/boot";
+import { GoToLine } from "@/studio/GoToLine";
 import { Palette } from "@/commands/Palette";
 import { LoopsDialog } from "@/loops/LoopsDialog";
 import { LoopsIndicator } from "@/loops/LoopsIndicator";
@@ -47,6 +48,9 @@ export default function App() {
       <ErrorBoundary scope="loops" fallback={() => null}>
         <LoopsDialog />
         <LoopsIndicator />
+      </ErrorBoundary>
+      <ErrorBoundary scope="go to line" fallback={() => null}>
+        <GoToLine />
       </ErrorBoundary>
       <ErrorBoundary scope="update dialog" fallback={() => null}>
         <UpdateDialog />

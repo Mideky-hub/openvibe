@@ -31,6 +31,7 @@ const TOOLS: Record<string, string> = {
   next_task: "next_task",
   tickets: "tickets",
   notes: "notes",
+  board: "board",
 };
 
 /** The former names, for the agent that still calls one: what it is called now. */

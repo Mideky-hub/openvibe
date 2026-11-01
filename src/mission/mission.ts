@@ -18,6 +18,8 @@ export interface SubTask {
   level?: Level;
   /** The linked group a new agent joins, else it goes in the mission's (spec groupes spécialisés §4). */
   group?: PlanGroup;
+  /** The Kanban card it handles (`board`): it follows the sub-task on its board. */
+  card?: string;
 }
 
 /** A task waiting for a free agent (spec mission de nuit §4.1). */
@@ -212,6 +214,7 @@ function readQueued(task: QueuedTask): QueuedTask {
     budgetMin,
     ...(level ? { level } : {}),
     ...(typeof group?.id === "string" && typeof group.name === "string" ? { group: { id: group.id, name: group.name } } : {}),
+    ...(typeof task.card === "string" && task.card ? { card: task.card } : {}),
   };
 }
 
@@ -292,12 +295,16 @@ export function proposedTasks(args: Record<string, unknown>, mission: Mission, g
   return tasks;
 }
 
-/** `propose_plan`'s arguments (internal names, `@/mcp/protocol`) as a plan, or what is wrong (spec §7.2). `linked`: names of the linked Claude agents; `groups`: the linked groups. */
+/**
+ * `propose_plan`'s arguments (internal names, `@/mcp/protocol`) as a plan, or what is wrong (spec §7.2).
+ * `linked`: names of the linked Claude agents; `groups`: the linked groups; `cards`: ids of the cards of its linked boards.
+ */
 export function proposedPlan(
   args: Record<string, unknown>,
   mission: Mission,
   linked: readonly string[],
   groups: readonly PlanGroup[] = [],
+  cards: readonly string[] = [],
 ): { name: string; task: string; plan: SubTask[] } | string {
   const e = messages(agentMessages).plan;
   const name = text(args.nom);
@@ -324,7 +331,9 @@ export function proposedPlan(
     if (wanted && known !== NEW_AGENT) return e.groupForNew(n);
     const group = wanted ? groups.find((g) => sameName(g.name, wanted)) : undefined;
     if (wanted && !group) return e.notLinkedGroup(n, wanted);
-    plan.push({ ...fields, agent: known, ...(group ? { group: { id: group.id, name: group.name } } : {}) });
+    const card = r.card === undefined || r.card === null ? "" : text(r.card);
+    if (r.card !== undefined && r.card !== null && !cards.includes(card)) return e.card(n, String(r.card));
+    plan.push({ ...fields, agent: known, ...(group ? { group: { id: group.id, name: group.name } } : {}), ...(card ? { card } : {}) });
   }
   return { name, task, plan };
 }

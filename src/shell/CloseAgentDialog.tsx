@@ -10,7 +10,7 @@ import {
 import { useMessages } from "@/i18n";
 import { removeNodes } from "@/fleet/terminals";
 import { useActivity } from "@/store/agentActivity";
-import { useNodes } from "@/store/nodes";
+import { nodeNameOf, useNodes } from "@/store/nodes";
 import { uiStore, useUi } from "@/store/ui";
 import { shellMessages } from "./messages";
 
@@ -25,7 +25,7 @@ export function CloseAgentDialog() {
   const closing = useUi((s) => s.closing);
   const nodes = useNodes((s) => s.nodes);
   const activity = useActivity(closing?.agents[0] ?? "")?.activity;
-  const names = (closing?.agents ?? []).map((id) => nodes[id]?.payload.name || "Agent");
+  const names = (closing?.agents ?? []).map((id) => nodeNameOf(nodes[id]) || "Agent");
   const close = () => uiStore.getState().setClosing(null);
   const one = names.length <= 1;
   const name = names[0] ?? t.fallbackName;

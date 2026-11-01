@@ -8,7 +8,7 @@ import { currentWaitingAgents } from "@/fleet/waitingAgents";
 import { focusCommandBar } from "@/shell/commandBarFocus";
 import { projectsStore } from "@/store/projects";
 import { openNotes } from "@/notes/notesStore";
-import { openStudio } from "@/studio/studioStore";
+import { inCodeWorkspace, openGoToLine } from "@/studio/GoToLine";
 import type { Command, CommandContext } from "../command";
 import { goToNextWaiting } from "../goToRun";
 import { command, sectionNamed } from "./define";
@@ -50,5 +50,6 @@ export const NAVIGATION: readonly Command[] = [
   command("notes.open", { section: nav, available: inProject, run: () => openNotes() }),
   command("project.home", { section: nav, available: inProject, run: () => projectsStore.getState().goHome() }),
   command("project.close", { section: nav, available: inProject, run: () => projectsStore.getState().close() }),
+  command("editor.goToLine", { section: nav, shortcut: "Ctrl+G", available: () => inCodeWorkspace(), run: () => openGoToLine() }),
   command("palette.functions", { section: nav, shortcut: "Ctrl+Maj+P", available: always, run: (ctx) => openPalette("functions", ctx) }),
 ];

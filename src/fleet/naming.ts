@@ -14,9 +14,9 @@ import { nextName, nextPantheon } from "./names";
 export function namesInWorkspace(workspaceId: string): string[] {
   const scene = canvasStore.getState().api?.getSceneElementsIncludingDeleted() ?? [];
   const closed = new Set(scene.filter((e) => e.isDeleted).map((e) => e.id));
-  return Object.entries(nodesStore.getState().nodes)
-    .filter(([id, node]) => node.workspaceId === workspaceId && node.kind === "terminal" && node.payload.name && !closed.has(id))
-    .map(([, node]) => node.payload.name);
+  return Object.entries(nodesStore.getState().nodes).flatMap(([id, node]) =>
+    node.workspaceId === workspaceId && node.kind === "terminal" && node.payload.name && !closed.has(id) ? [node.payload.name] : [],
+  );
 }
 
 /** The pantheon of the agents outside groups; it avoids those of the groups on screen. */

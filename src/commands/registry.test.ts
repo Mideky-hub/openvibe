@@ -56,7 +56,7 @@ describe("the registry (spec fenêtre §6.1, §8)", () => {
     expect(new Set(ids).size).toBe(ids.length);
     const shortcuts = COMMANDS.flatMap((c) => (c.shortcut ? [c.shortcut] : []));
     expect(new Set(shortcuts).size).toBe(shortcuts.length);
-    expect(new Set(shortcuts)).toEqual(new Set(["Ctrl+Tab", "Ctrl+Maj+Tab", "Ctrl+P", "Ctrl+Maj+P", "Maj+Échap", "Ctrl+Maj+A"]));
+    expect(new Set(shortcuts)).toEqual(new Set(["Ctrl+Tab", "Ctrl+Maj+Tab", "Ctrl+P", "Ctrl+Maj+P", "Maj+Échap", "Ctrl+Maj+A", "Ctrl+G"]));
   });
 
   it("offers the terminal steps only with terminals, the palette everywhere", () => {
