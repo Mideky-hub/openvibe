@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
+import { accountsStore, openAccounts } from "@/accounts/store";
 import type { TerminalPayload } from "@/nodes/types";
 import { nodesStore } from "@/store/nodes";
 import { statusOf, terminalStatusStore } from "@/store/terminalStatus";
@@ -153,4 +154,19 @@ it("shows the saved screen when a re-attach finds nothing, and holds input until
   expect(state.replaying).toBe(true);
   term.drain();
   expect(state.replaying).toBe(false);
+});
+
+it("starts no terminal of a profile it could not read: never on another account (review)", async () => {
+  mockIPC((cmd, args) => {
+    calls.push({ cmd, args: args as Record<string, unknown> });
+    if (cmd === "accounts_list") throw { kind: "db", message: "database is locked" };
+    return 1234;
+  });
+  accountsStore.setState({ profiles: [], active: null, loaded: false });
+  openAccounts();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const bound: TerminalPayload = { ...payload, agent: "claude", claudeSessionId: "s1", accountId: "work" };
+  await startSession("bound", fakeTerm(), bound, "resume");
+  expect(calls.filter((c) => c.cmd === "pty_spawn")).toEqual([]);
+  expect(statusOf("bound").state).toBe("error");
 });
