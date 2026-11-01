@@ -82,6 +82,10 @@ describe("the lines of the palette (spec presets §3)", () => {
     const [, , remove] = presetCommands([preset("Dev HQ", "1")]);
     runCommand(remove, project);
     await vi.waitFor(() => expect(presetsStore.getState().presets).toEqual([]));
-    expect(toast).toHaveBeenCalledWith("Preset « Dev HQ » supprimé");
+    // A search that ranks the delete line first must not cost a preset: the toast takes it back.
+    const [, options] = vi.mocked(toast).mock.calls.find(([text]) => text === "Preset « Dev HQ » supprimé")! as [string, { action: { label: string; onClick: () => void } }];
+    expect(options.action.label).toBe("Annuler");
+    options.action.onClick();
+    await vi.waitFor(() => expect(presetsStore.getState().presets.map((p) => p.name)).toEqual(["Dev HQ"]));
   });
 });

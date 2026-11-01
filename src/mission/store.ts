@@ -85,6 +85,11 @@ export function agentGroup(nodeId: string): { group: string | null; speciality: 
   return { group: group?.name ?? null, speciality: group?.group.speciality ?? null };
 }
 
+/** The group a member belongs to: the one it joined, else the one it stands in. */
+export function memberGroupId(member: Member): string | null {
+  return member.group ?? groupOf(canvasStore.getState().frames, member.nodeId)?.id ?? null;
+}
+
 export type AgentState = "travaille" | "attend" | "inactif" | "arrêté";
 
 /** An agent's state as the orchestrator reads it (spec §7.2 `equipe`). */

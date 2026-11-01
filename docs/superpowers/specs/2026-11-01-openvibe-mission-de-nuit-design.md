@@ -31,7 +31,7 @@ Constat H3 : le budget global est vérifié au plan comme une somme de minutes-a
 - `left_min` et ce que `extend` peut prendre deviennent le temps réel restant : `extend` est refusé si la nouvelle cible de l'agent finit après la fin du budget global.
 - Le panneau cesse de présenter le total comme une fraction du budget : « 120 min d'agents · 60 min de temps réel ».
 - Une mission de nuit (`overnight`) a pour budget global le temps d'absence, et les budgets par agent y sont des **cibles** : le dépassement prévient l'orchestrateur avec une ligne qui le dit, jamais de toast à 200 % (personne ne le lirait), et le rapport du matin le montre.
-- **Fin de nuit** : à `max(10 min, 10 %)` de la fin d'une mission de nuit, OpenVibe prévient une fois l'orchestrateur (« il reste N min : fusionne, fais vérifier, termine ») et la file cesse de donner des tâches. Sans cela, le travail commencé à la dernière minute reste sans fusion ni bilan au retour.
+- **Fin de nuit** : à `max(10 min, 10 %)` de la fin d'une mission de nuit (la moitié du budget au plus, pour une très courte), OpenVibe prévient une fois l'orchestrateur (« il reste N min : fusionne, fais vérifier, termine ») et la file cesse de donner des tâches. Sans cela, le travail commencé à la dernière minute reste sans fusion ni bilan au retour.
 - OpenVibe n'arrête toujours aucun agent de lui-même (spec orchestrateur §8.2) : à la fin du temps, l'orchestrateur est prévenu, c'est tout.
 
 ## 4. La file de tâches (tranche 3)
@@ -53,11 +53,11 @@ Constat H3 : le budget global est vérifié au plan comme une somme de minutes-a
 Quand un agent rend compte **« done »** :
 
 1. OpenVibe attend la fin de son tour (60 s au plus) : `report` arrive en plein tour, et le dernier commit peut le suivre.
-2. Il fusionne sa branche dans celle de la mission. Une sous-tâche finie doit y être avant que l'agent en prenne une autre (règle déjà appliquée par `reassign`, relecture H3). En cas de conflit, l'agent garde sa tâche et l'orchestrateur est prévenu : il fait résoudre, rappelle `merge`, et la file repart de là.
+2. Il fusionne sa branche dans celle de la mission, une fusion à la fois (deux `git merge` dans un même worktree se cassent l'un l'autre). Après chaque attente, tout est relu : mission finie, compte rendu changé, terminal arrêté ou fin de nuit arrêtent la suite. Une sous-tâche finie doit y être avant que l'agent en prenne une autre (règle déjà appliquée par `reassign`, relecture H3). En cas de conflit, l'agent garde sa tâche et l'orchestrateur est prévenu : il fait résoudre, rappelle `merge`, et la file repart de là.
 3. Il prend la première tâche qui lui convient : sans `group`, ou du groupe de l'agent ; la tâche passe de la file au plan, ce qui garde `reassign` et `mission()` intacts.
 4. L'agent repart en **nouvelle conversation** dans son worktree, sur sa branche, avec le modèle de la tâche si le routeur est actif : le contexte d'une tâche ne pollue pas la suivante, et ses étapes repartent de zéro. La consigne lui dit de fusionner d'abord la branche de la mission dans la sienne.
 
-Quand il rend compte **« blocked »** ou **« failed »**, il garde sa tâche et rien ne part : l'orchestrateur décide. `reassign` reste possible ; `next_task` lui donne la suivante, en sachant que le travail inachevé reste sur sa branche et partira avec sa prochaine fusion.
+Quand il rend compte **« blocked »** ou **« failed »**, il garde sa tâche et rien ne part : l'orchestrateur décide. `reassign` reste possible ; `next_task` lui donne la suivante, en sachant que le travail inachevé reste sur sa branche et partira avec sa prochaine fusion. La tâche quittée est alors abandonnée : plus personne ne la tient pour `reassign`, et le rapport du matin la montre.
 
 ### 4.4 Ce qui ne change pas
 

@@ -1183,6 +1183,54 @@ mod tests {
     }
 
     #[test]
+    fn quotes_the_model_for_cmd_and_git_bash_too() {
+        let with = |syntax, model: &str| {
+            let mut launch = claude(ClaudeMode::Continue, "");
+            launch.as_mut().unwrap().model = Some(model.into());
+            agent_command(&spec(Agent::Claude, launch), syntax, &AgentHooks::default())
+                .unwrap()
+                .unwrap()
+        };
+        assert_eq!(
+            with(ShellSyntax::Cmd, "claude-haiku-5-5"),
+            "claude --model \"claude-haiku-5-5\" --continue"
+        );
+        assert_eq!(
+            with(ShellSyntax::Posix, "sonnet[1m]"),
+            "claude --model 'sonnet[1m]' --continue"
+        );
+    }
+
+    #[test]
+    fn quotes_paths_with_spaces_and_apostrophes_for_cmd_and_git_bash() {
+        let hooks = AgentHooks {
+            claude_settings: Some(PathBuf::from("C:/Users/Jean d'Arc/My Data/n1.json")),
+            ..AgentHooks::default()
+        };
+        let with = |syntax| {
+            agent_command(
+                &spec(Agent::Claude, claude(ClaudeMode::Continue, "")),
+                syntax,
+                &hooks,
+            )
+            .unwrap()
+            .unwrap()
+        };
+        assert_eq!(
+            with(ShellSyntax::Cmd),
+            "claude --settings \"C:/Users/Jean d'Arc/My Data/n1.json\" --continue"
+        );
+        assert_eq!(
+            with(ShellSyntax::Posix),
+            "claude --settings 'C:/Users/Jean d'\\''Arc/My Data/n1.json' --continue"
+        );
+        assert_eq!(
+            with(ShellSyntax::PowerShell),
+            "claude --settings 'C:/Users/Jean d''Arc/My Data/n1.json' --continue"
+        );
+    }
+
+    #[test]
     fn reads_remote_control_of_a_claude_session_off_by_default() {
         let launch =
             |claude: serde_json::Value| -> ClaudeLaunch { serde_json::from_value(claude).unwrap() };

@@ -11,6 +11,7 @@ export type UiRequest =
   | { kind: "agentMenu"; view: "agents" | "options" | "ollama" | { install: AgentId }; at?: Point }
   | { kind: "composeGroup" }
   | { kind: "savePreset" }
+  | { kind: "loops" }
   | { kind: "groupMenu"; id: string };
 
 type RequestOf<K extends UiRequest["kind"]> = Extract<UiRequest, { kind: K }>;

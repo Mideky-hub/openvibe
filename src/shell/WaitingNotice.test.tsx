@@ -8,6 +8,7 @@ import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore, type NodeRecord } from "@/store/nodes";
 import { terminalStatusStore } from "@/store/terminalStatus";
 import { workspacesStore } from "@/store/workspaces";
+import { readSource } from "@/theme/cssBlocks";
 import { WaitingNotice } from "./WaitingNotice";
 
 vi.mock("@/commands/goToRun", () => ({ goToAgent: vi.fn() }));
@@ -81,6 +82,42 @@ describe("WaitingNotice (spec notification §4)", () => {
   it("names the workspace of an agent that is not on screen", async () => {
     await wait("thot");
     expect(rows()).toEqual(["Thot a une questionBackend"]);
+  });
+
+  describe("the preview of the question (spec notification §7)", () => {
+    const ask = (message?: string) => act(async () => agentActivityStore.getState().apply({ nodeId: "isis", activity: "waiting", since: 0, message }));
+
+    it("shows what the agent says it waits for, with the whole text in a tooltip", async () => {
+      await ask("Claude needs your permission to use Bash");
+      expect(rows()).toEqual(["Isis a une questionClaude needs your permission to use Bash"]);
+      expect(host.querySelector("[title]")?.getAttribute("title")).toBe("Claude needs your permission to use Bash");
+    });
+
+    it("falls back to no preview", async () => {
+      await ask(undefined);
+      expect(rows()).toEqual(["Isis a une question"]);
+      expect(host.querySelector("[title]")).toBeNull();
+    });
+
+    it("follows the agent: a new question replaces it, the end of the wait removes it", async () => {
+      await ask("First?");
+      await ask("Second?");
+      expect(rows()).toEqual(["Isis a une questionSecond?"]);
+      await ask(undefined);
+      expect(rows()).toEqual(["Isis a une question"]);
+    });
+
+    it("shows a message as plain text, never as markup", async () => {
+      const hostile = '<img src=x onerror="alert(1)"><a href="http://x">**click**</a>';
+      await ask(hostile);
+      expect(host.querySelector("img")).toBeNull();
+      expect(host.querySelector("a")).toBeNull();
+      expect(host.querySelector("[title]")?.textContent).toBe(hostile);
+    });
+
+    it("never turns a message into markup in the source either", () => {
+      expect(readSource("shell/WaitingNotice.tsx")).not.toContain("dangerouslySetInnerHTML");
+    });
   });
 
   it("takes the keyboard to the agent on a click", async () => {

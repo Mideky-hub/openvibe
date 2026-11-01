@@ -1,4 +1,5 @@
 import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
+import { ZONE_OFFSETS } from "@/canvas/canvasFocus";
 import { canvasStore } from "@/canvas/canvasStore";
 import { withGroupSpeciality } from "@/canvas/groups";
 import { nodeKindOf } from "@/canvas/nodeElement";
@@ -13,11 +14,12 @@ import { nodesStore, terminalOf } from "@/store/nodes";
 import type { DeployDeps } from "./deploy";
 import { capturePreset, type TeamPreset } from "./model";
 
-/** The team of the workspace on screen as a preset; null without a group of agents. */
-export function captureCurrentTeam(name: string): TeamPreset | null {
+/** The team of the workspace on screen as a preset; `noCanvas` when none is mounted, null without a group of agents. */
+export function captureCurrentTeam(name: string): TeamPreset | "noCanvas" | null {
   const { api, frames, links } = canvasStore.getState();
+  if (!api) return "noCanvas";
   const nodes = nodesStore.getState().nodes;
-  const orchestrators = (api?.getSceneElements() ?? [])
+  const orchestrators = api.getSceneElements()
     .filter((e) => nodeKindOf(e) === "orchestrator")
     .map((e) => ({ id: e.id, name: readOrchestratorPayload(nodes[e.id]?.payload).name }));
   return capturePreset({ frames, agentOf: (id) => terminalOf(nodes[id])?.agent, orchestrators, links }, name, crypto.randomUUID(), Date.now());
@@ -46,5 +48,12 @@ export async function liveDeployDeps(): Promise<DeployDeps> {
     orchestrate: orchestrateGroup,
     link: linkOrchestrator,
     rename: renameOrchestrator,
+    fit: (ids) => {
+      const scene = canvasStore.getState().api;
+      const targets = scene?.getSceneElements().filter((e) => ids.includes(e.id) || (e.frameId !== null && ids.includes(e.frameId)));
+      if (scene && targets && targets.length > 0) {
+        scene.scrollToContent(targets, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true, canvasOffsets: ZONE_OFFSETS });
+      }
+    },
   };
 }

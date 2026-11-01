@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { BUDGET_COLOR } from "@/canvas/overlay/timeline";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AGENTS } from "@/fleet/catalog";
@@ -10,6 +10,7 @@ import { sessionOf, useNodes } from "@/store/nodes";
 import { currentLimit, formatUsd, limitTone, liveCacheSessions, totals, type Limit, type Limits } from "@/usage/usage";
 import { useUsage } from "@/usage/usageStore";
 import { shellMessages } from "./messages";
+import { TokensView } from "./TokensView";
 
 /** « 67,8 k », « 1,2 M » tokens. */
 function formatTokens(count: number): string {
@@ -81,7 +82,7 @@ export function UsageMeter() {
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[380px]">
-        <UsageDetail />
+        <UsageContent />
       </PopoverContent>
     </Popover>
   );
@@ -118,7 +119,13 @@ function LimitRow({ label, limit, now }: { label: string; limit: Limit; now: num
   );
 }
 
-function UsageDetail() {
+/** The usage detail, or the 30-day tokens it links to (spec Tokens §4). */
+function UsageContent() {
+  const [tokens, setTokens] = useState(false);
+  return tokens ? <TokensView onBack={() => setTokens(false)} /> : <UsageDetail onTokens={() => setTokens(true)} />;
+}
+
+function UsageDetail({ onTokens }: { onTokens: () => void }) {
   const t = useMessages(shellMessages);
   const u = t.usage;
   const limits = useCurrentLimits();
@@ -185,6 +192,13 @@ function UsageDetail() {
             ))}
         </Section>
       )}
+      <button
+        type="button"
+        onClick={onTokens}
+        className="self-start rounded-[6px] px-2 py-1 text-[12px] text-ov-accent hover:bg-ov-hover"
+      >
+        {u.tokensLink} →
+      </button>
       <p className="text-[10.5px] text-ov-text-3">{u.footnote}</p>
     </div>
   );

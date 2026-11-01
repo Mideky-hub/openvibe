@@ -3,6 +3,7 @@ import { getScrollback, ptyAttach, ptyKill, ptySpawn } from "@/ipc/pty";
 import type { TerminalPayload } from "@/nodes/types";
 import { nodesStore } from "@/store/nodes";
 import { isRunning, terminalStatusStore, waitForExit } from "@/store/terminalStatus";
+import { markResumedLaunch } from "@/usage/usageStore";
 import { buildSpawnSpec, type LaunchMode } from "./launch";
 import { messages } from "@/i18n";
 import { nodesMessages } from "@/nodes/messages";
@@ -45,6 +46,8 @@ export async function startSession(nodeId: string, term: TermSink, payload: Term
   setStatus(nodeId, { state: "running" });
   try {
     const spec = buildSpawnSpec(withConversationId(nodeId, payload), mode);
+    // A resumed conversation brings its earlier spending: the usage counts this launch's only.
+    if (payload.agent === "claude" && mode !== "new") markResumedLaunch(nodeId);
     await ptySpawn(nodeId, spec, term.cols, term.rows, (bytes) => term.write(bytes));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

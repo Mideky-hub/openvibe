@@ -9,7 +9,8 @@ import { nodeKindOf } from "./nodeElement";
 export function findTerminalAt(elements: readonly ExcalidrawElement[], x: number, y: number): ExcalidrawElement | null {
   for (let i = elements.length - 1; i >= 0; i--) {
     const element = elements[i];
-    if (element.isDeleted || nodeKindOf(element) !== "terminal") continue;
+    // A locked terminal is one a folded group keeps hidden.
+    if (element.isDeleted || element.locked || nodeKindOf(element) !== "terminal") continue;
     const inside = x >= element.x && x <= element.x + element.width && y >= element.y && y <= element.y + element.height;
     if (inside) return element;
   }

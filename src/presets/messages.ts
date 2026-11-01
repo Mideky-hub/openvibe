@@ -23,8 +23,10 @@ export const presetsMessages = defineMessages(
     toast: {
       saved: (name: string) => `Preset « ${name} » enregistré`,
       nothing: "Aucun groupe avec des agents à enregistrer",
+      noCanvas: "Aucun workspace affiché : ouvre un projet pour enregistrer son équipe",
       full: "Trop de presets (50 au plus) : supprime-en un d'abord",
       removed: (name: string) => `Preset « ${name} » supprimé`,
+      undo: "Annuler",
       deployed: (name: string, r: DeployResult) =>
         `Équipe « ${name} » déployée : ${plural("fr", r.groups, "groupe", "groupes")}, ${plural("fr", r.agents, "agent", "agents")}, ${plural("fr", r.orchestrators, "orchestrateur", "orchestrateurs")}`,
       substituted: (count: number) =>
@@ -53,8 +55,10 @@ export const presetsMessages = defineMessages(
     toast: {
       saved: (name: string) => `Preset “${name}” saved`,
       nothing: "No group with agents to save",
+      noCanvas: "No workspace on screen: open a project to save its team",
       full: "Too many presets (50 at most): delete one first",
       removed: (name: string) => `Preset “${name}” deleted`,
+      undo: "Undo",
       deployed: (name: string, r: DeployResult) =>
         `Team “${name}” deployed: ${plural("en", r.groups, "group", "groups")}, ${plural("en", r.agents, "agent", "agents")}, ${plural("en", r.orchestrators, "orchestrator", "orchestrators")}`,
       substituted: (count: number) => `${plural("en", count, "agent", "agents")} not found on this computer replaced by the default agent`,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Command } from "cmdk";
 import { useMessages } from "@/i18n";
 import { TITLE_BAR_HEIGHT } from "@/shell/layout";
@@ -10,6 +10,9 @@ import { goTo } from "./goToRun";
 import { commandsMessages } from "./messages";
 import { closePalette, modeOf, setPaletteQuery, stripPrefix, usePalette } from "./paletteState";
 import { agentsStore, useAgents } from "@/fleet/agentsStore";
+import { loopCommands } from "@/loops/commands";
+import { presetCommands } from "@/presets/commands";
+import { presetsStore, usePresets } from "@/presets/store";
 import { rememberFunction, useRecentFunctions } from "./recent";
 import { COMMANDS } from "./registry";
 import { useGoToData } from "./useGoToData";
@@ -37,11 +40,17 @@ function PaletteBody() {
   // « Lancer … » greys the agents not found: look again when the functions open, and follow the answer.
   useAgents((s) => s.agents);
   useEffect(() => {
-    if (mode === "functions") void agentsStore.getState().load().catch(() => undefined);
+    if (mode !== "functions") return;
+    void agentsStore.getState().load().catch(() => undefined);
+    void presetsStore.getState().load().catch(() => undefined);
   }, [mode]);
   const recent = useRecentFunctions();
   const goToList = mode === "goTo" ? goToSections(goToData.items, search) : [];
-  const functionList = mode === "functions" && context ? functionSections(COMMANDS, context, search, recent) : [];
+  // The saved team presets add their lines to the registry's (spec presets §3).
+  const presets = usePresets((s) => s.presets);
+  const loops = useMemo(() => loopCommands(), []);
+  const commands = useMemo(() => [...COMMANDS, ...presetCommands(presets), ...loops], [presets, loops]);
+  const functionList = mode === "functions" && context ? functionSections(commands, context, search, recent) : [];
   const keys =
     mode === "goTo"
       ? goToList.flatMap((s) => s.items.map((i) => i.key))

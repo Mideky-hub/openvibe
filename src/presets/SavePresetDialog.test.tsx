@@ -102,3 +102,13 @@ it("says there is nothing to save when no group holds an agent any more", async 
   expect(toast.error).toHaveBeenCalledWith("Aucun groupe avec des agents à enregistrer");
   expect(saved).toHaveLength(0);
 });
+
+it("refuses clearly when no canvas is on screen, instead of saving an empty team (plan presets)", async () => {
+  canvasStore.setState({ api: null });
+  await act(async () => requestUi({ kind: "savePreset" }));
+  await type("X");
+  await act(async () => button("Enregistrer").click());
+  expect(toast.error).toHaveBeenCalledWith("Aucun workspace affiché : ouvre un projet pour enregistrer son équipe");
+  expect(saved).toHaveLength(0);
+  expect(presetsStore.getState().presets).toEqual([]);
+});

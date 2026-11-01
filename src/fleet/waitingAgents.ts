@@ -13,6 +13,8 @@ export interface WaitingAgent {
   workspaceId: string;
   /** Since when it waits, in ms. */
   since: number;
+  /** What it says it waits for, if it says so: untrusted plain text (spec notification §7). */
+  message?: string;
 }
 
 /** A terminal without a first name goes by its agent's name; an orchestrator always has one. */
@@ -25,14 +27,14 @@ export function waitingAgents(
   workspaceIds: readonly string[],
   nodes: Readonly<Record<string, NodeRecord>>,
   statuses: Readonly<Record<string, { state: string } | undefined>>,
-  activities: Readonly<Record<string, { activity: string; since: number } | undefined>>,
+  activities: Readonly<Record<string, { activity: string; since: number; message?: string } | undefined>>,
 ): WaitingAgent[] {
   const wanted = new Set(workspaceIds);
   const agents: WaitingAgent[] = [];
   for (const [id, record] of Object.entries(nodes)) {
     const activity = activities[id];
     if (!wanted.has(record.workspaceId) || statuses[id]?.state !== "running" || activity?.activity !== "waiting") continue;
-    agents.push({ id, kind: record.kind, name: nameOf(record), workspaceId: record.workspaceId, since: activity.since });
+    agents.push({ id, kind: record.kind, name: nameOf(record), workspaceId: record.workspaceId, since: activity.since, message: activity.message });
   }
   return agents.sort((a, b) => a.since - b.since || a.id.localeCompare(b.id));
 }

@@ -2,6 +2,7 @@ import { langStore, messages } from "@/i18n";
 import { declaredSteps, markedSteps, MAX_STEPS } from "@/nodes/steps";
 import { notify } from "@/mission/events";
 import { oneLine } from "@/mission/mission";
+import { afterReport } from "@/mission/queue";
 import { isOrchestratorClosed, memberOf, updateMember } from "@/mission/store";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
@@ -89,6 +90,8 @@ export function report(nodeId: string, args: Record<string, unknown>): ToolResul
   updateMember(found.orchestratorId, nodeId, { report: { summary, status, at: Date.now() } });
   // Queued even when nobody listens: a relaunched or restored orchestrator hears it then (final review R3).
   notify(found.orchestratorId, t().agent.reported(found.member.name, outReport(status), oneLine(summary)));
+  // The queue moves on without it: a stopped orchestrator must not stall the night.
+  void afterReport(found.orchestratorId, nodeId);
   if (isOrchestratorClosed(found.orchestratorId) || !isRunning(found.orchestratorId)) return said(t().agent.unheard);
   return said(t().agent.sent);
 }
