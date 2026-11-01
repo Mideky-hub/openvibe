@@ -19,8 +19,8 @@ import { terminalStatusStore } from "@/store/terminalStatus";
 import { workspacesStore } from "@/store/workspaces";
 import { notify } from "./events";
 import { whenReady } from "./ready";
-import { cleanMission, endMission, handoverText, launchMission, mergeMission, reassignTask, subTaskText } from "./launch";
-import type { Member, Mission } from "./mission";
+import { cleanMission, endMission, handoverText, launchMission, mergeMission, reassignTask, subTaskText, withTicketNote } from "./launch";
+import { NEW_MISSION, type Member, type Mission } from "./mission";
 import { missionOf, updateMember } from "./store";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
@@ -460,6 +460,11 @@ describe("a mission fed by tickets (review)", () => {
     await launchMission("chef");
     await vi.waitFor(() => expect(ptySendText).toHaveBeenCalled());
     expect(vi.mocked(ptySendText).mock.calls.every(([, text]) => text.includes(data))).toBe(true);
+  });
+
+  it("tells an agent working on a Kanban card too: GitHub may have written it", () => {
+    expect(withTicketNote(NEW_MISSION, "x", { card: "c1" })).toContain(data);
+    expect(withTicketNote(NEW_MISSION, "x", {})).toBe("x");
   });
 
   it("says nothing of it in a mission without tickets", async () => {

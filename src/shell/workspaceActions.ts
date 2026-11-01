@@ -2,7 +2,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { forgetWorkspaces } from "@/app/forget";
 import { flushAll } from "@/lib/flush";
 import { messages } from "@/i18n";
-import { nodesStore } from "@/store/nodes";
+import { nodeNameOf, nodesStore } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { workspacesStore, type Workspace } from "@/store/workspaces";
 import { shellMessages } from "./messages";
@@ -13,7 +13,7 @@ export async function removeWorkspace(workspace: Workspace, running: number) {
   // The agents it would stop, by name: a count alone does not say which work is lost.
   const names = Object.entries(nodesStore.getState().nodes)
     .filter(([id, node]) => node.workspaceId === workspace.id && isRunning(id))
-    .map(([, node]) => node.payload.name || "Agent");
+    .map(([, node]) => nodeNameOf(node) || "Agent");
   const confirmed = await ask(t.confirm(workspace.name, running, names), {
     title: t.title,
     kind: "warning",

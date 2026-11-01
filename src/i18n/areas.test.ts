@@ -20,10 +20,7 @@ const both = <T>(read: () => T): { fr: T; en: T } => {
 
 it("Code studio", () => {
   const save = both(() => messages(studioMessages).save);
-  expect(save).toEqual({ fr: "Enregistrer", en: "Save" });
-  const filter = both(() => [1, 3].map((n) => messages(studioMessages).filterPlaceholder(n)));
-  expect(filter.en).toEqual(["Filter 1 file…", "Filter 3 files…"]);
-  expect(filter.fr).toEqual(["Filtrer 1 fichier…", "Filtrer 3 fichiers…"]);
+  expect(save).toEqual({ fr: "Enregistrer (Ctrl+S)", en: "Save (Ctrl+S)" });
   expect(both(() => messages(studioMessages).unsaved.title("a.ts")).en).toBe("Save a.ts?");
 });
 

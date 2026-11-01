@@ -5,8 +5,10 @@ import { ptySendText } from "@/ipc/pty";
 import { endMission, launchMission, mergeMission, reassignTask } from "@/mission/launch";
 import { budgetOf, memberTime, NEW_AGENT, oneLine, proposedPlan, proposedTasks, remainingGlobal, sameName, spentMin, type Member, type Mission } from "@/mission/mission";
 import { freeMembers, giveNext, pumpQueue } from "@/mission/queue";
+import { boardView } from "@/kanban/missionLink";
 import { LEVELS, modelLabel } from "@/mission/router";
 import { readTickets } from "@/mission/tickets";
+import { linkedBoards } from "@/kanban/orchestrate";
 import { agentGroup, agentState, linkedClaudeAgents, linkedGroups, missionOf, canvasKnown, setMission, updateMember } from "@/mission/store";
 import { terminalText } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
@@ -44,6 +46,7 @@ export function orchestratorTools() {
                 group: { type: "string", description: d.planGroup },
                 budget_min: { type: "integer", minimum: 1 },
                 level: { type: "string", enum: ["low", "medium", "high", "extreme"], description: d.planLevel },
+                card: { type: "string", description: d.planCard },
               },
               required: ["title", "brief", "agent", "budget_min"],
             },
@@ -80,6 +83,7 @@ export function orchestratorTools() {
     { name: "queue", description: d.queue, inputSchema: NO_ARGS },
     { name: "next_task", description: d.nextTask, inputSchema: { type: "object", properties: { agent: { type: "string" } }, required: ["agent"] } },
     { name: "tickets", description: d.tickets, inputSchema: NO_ARGS },
+    { name: "board", description: d.board, inputSchema: NO_ARGS },
     { name: "team", description: d.team, inputSchema: NO_ARGS },
     {
       name: "read_output",
@@ -121,7 +125,7 @@ export function orchestratorTools() {
 }
 
 /** Internal names of the orchestrator's tools (`./protocol.ts`). */
-export const ORCHESTRATOR_ONLY = new Set(["mission", "proposer_plan", "add_tasks", "queue", "next_task", "tickets", "equipe", "lire_sortie", "ecrire", "prolonger", "interrompre", "reattribuer", "fusionner", "terminer", "remote_control"]);
+export const ORCHESTRATOR_ONLY = new Set(["mission", "proposer_plan", "add_tasks", "queue", "next_task", "tickets", "board", "equipe", "lire_sortie", "ecrire", "prolonger", "interrompre", "reattribuer", "fusionner", "terminer", "remote_control"]);
 
 const json = (value: unknown) => said(JSON.stringify(value, null, 2));
 const formed = (mission: Mission) => mission.state === "en_cours" || mission.state === "terminee";
@@ -158,6 +162,7 @@ function describeMission(orchestratorId: string, mission: Mission): ToolResult {
         level: s.level ? outLevel(s.level) : null,
         // Once an agent holds the sub-task, its own model counts: reassign may have given it to one that keeps its own.
         model: modelOfSubTask(mission, s),
+        card: s.card ?? null,
       })) ?? null,
     linked_agents: canvasKnown(orchestratorId)
       ? linkedClaudeAgents(orchestratorId)
@@ -181,7 +186,8 @@ function proposePlan(orchestratorId: string, mission: Mission, args: Record<stri
   const onCanvas = (s: Record<string, unknown> | null) => !sameName(String(s?.agent ?? ""), NEW_AGENT) || Boolean(s?.groupe);
   const named = Array.isArray(args.sous_taches) && args.sous_taches.some((s) => onCanvas(s as Record<string, unknown> | null));
   if (named && !canvasKnown(orchestratorId)) return refused(t().orchestrator.hiddenWorkspace);
-  const result = proposedPlan(args, mission, linkedClaudeAgents(orchestratorId).map((a) => a.name), linkedGroups(orchestratorId));
+  const cards = linkedBoards(orchestratorId).flatMap(({ board }) => Object.keys(board.cards));
+  const result = proposedPlan(args, mission, linkedClaudeAgents(orchestratorId).map((a) => a.name), linkedGroups(orchestratorId), cards);
   if (typeof result === "string") return refused(result);
   setMission(orchestratorId, { state: "plan", ...result, error: undefined });
   // The dialog was the go-ahead: the user has left (spec mission de nuit §5.1).
@@ -232,6 +238,13 @@ async function nextTask(orchestratorId: string, mission: Mission, args: Record<s
 }
 
 const timeText = (spent: number | undefined, budget: number) => (spent === undefined ? `? / ${budget} min` : `${Math.floor(spent)} / ${budget} min`);
+
+/** `board`: the Kanban boards handed to this orchestrator. */
+function describeBoards(orchestratorId: string): ToolResult {
+  const boards = linkedBoards(orchestratorId);
+  if (boards.length === 0) return said(t().orchestrator.noBoard);
+  return json(boards.map(({ nodeId, board }) => boardView(nodeId, board)));
+}
 
 function describeTeam(orchestratorId: string, mission: Mission): ToolResult {
   if (!formed(mission)) return refused(t().orchestrator.notFormed);
@@ -414,6 +427,8 @@ export async function orchestratorTool(orchestratorId: string, name: string, arg
       return finish(orchestratorId, mission, args);
     case "remote_control":
       return remote(orchestratorId, mission, args);
+    case "board":
+      return describeBoards(orchestratorId);
     default:
       return refused(t().router.unknown(name));
   }

@@ -1,24 +1,22 @@
-//! The Code studio's files (spec studio code §4): read and written by hand,
-//! never outside the project, never over what an agent wrote meanwhile.
+//! Code Studio (issue #49): the files of a project folder, read and written
+//! from the interface. Nothing outside the project is ever read or written,
+//! and never over what an agent wrote meanwhile (spec studio code §4).
 
+use crate::review::{self, MAX_FILES};
 use crate::tr;
 use std::collections::BTreeSet;
 use std::hash::{DefaultHasher, Hasher};
 use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::process::hide_window;
-
 /// A file over this is neither opened nor saved.
 pub const MAX_BYTES: u64 = 2 * 1024 * 1024;
-/// A folder of thousands of generated files must not freeze the tree.
-pub const MAX_FILES: usize = 50_000;
 /// Outside a repository nothing says what is generated or private: these are not walked.
-const SKIPPED_FOLDERS: [&str; 6] = [".git", "node_modules", "target", ".ssh", ".aws", ".gnupg"];
+const SKIPPED: [&str; 6] = [".git", "node_modules", "target", ".ssh", ".aws", ".gnupg"];
+const MAX_DEPTH: usize = 32;
 /// Private keys and stores, by extension.
 const SECRET_EXTENSIONS: [&str; 7] = ["pem", "key", "p12", "pfx", "keystore", "jks", "ppk"];
 /// Private keys and credentials, by name.
@@ -33,6 +31,21 @@ const SECRET_NAMES: [&str; 9] = [
     ".git-credentials",
     "credentials.json",
 ];
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TreeEntry {
+    /// From the project folder, with `/`.
+    pub path: String,
+    /// `file` or `dir`.
+    pub kind: &'static str,
+}
+
+fn entry(path: &str, kind: &'static str) -> TreeEntry {
+    TreeEntry {
+        path: path.to_string(),
+        kind,
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -183,23 +196,6 @@ fn replace(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     written
 }
 
-fn listed_by_git(root: &Path) -> Option<String> {
-    let output = hide_window(
-        Command::new("git")
-            .arg("--no-optional-locks")
-            .args(["-c", "core.quotePath=false"])
-            .arg("-C")
-            .arg(root)
-            .args(["ls-files", "-co", "--exclude-standard", "-z"]),
-    )
-    .output()
-    .ok()?;
-    output
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
-}
-
 /// Without a `.gitignore` to hide them, these would sit in the tree in plain sight.
 fn is_secret(name: &str) -> bool {
     let name = name.to_ascii_lowercase();
@@ -209,55 +205,88 @@ fn is_secret(name: &str) -> bool {
         || extension.is_some_and(|e| SECRET_EXTENSIONS.contains(&e))
 }
 
-/// The files of a folder that is no repository; links are not followed.
-fn walk(root: &Path) -> Result<Vec<String>, String> {
-    let mut found = BTreeSet::new();
-    let mut folders = vec![String::new()];
-    while let Some(folder) = folders.pop() {
-        let entries = match std::fs::read_dir(root.join(&folder)) {
-            Ok(entries) => entries,
-            Err(err) if folder.is_empty() => return Err(err.to_string()),
-            Err(_) => continue,
-        };
-        for entry in entries.flatten() {
-            if found.len() == MAX_FILES {
-                return Ok(found.into_iter().collect());
-            }
-            let Ok(kind) = entry.file_type() else {
-                continue;
-            };
-            let name = entry.file_name().to_string_lossy().into_owned();
-            let path = if folder.is_empty() {
-                name.clone()
-            } else {
-                format!("{folder}/{name}")
-            };
-            if kind.is_file() {
-                if !is_secret(&name) {
-                    found.insert(path);
-                }
-            } else if kind.is_dir() && !SKIPPED_FOLDERS.contains(&name.as_str()) {
-                folders.push(path);
-            }
+/// The files of a git repository (ignored ones left out) as entries, folders included.
+/// Run in `project`, not at the repository's top: the project may be a subfolder.
+fn git_tree(project: &Path) -> Option<Vec<TreeEntry>> {
+    let listed = review::git(
+        project,
+        &[
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "-z",
+        ],
+    )
+    .ok()?;
+    let files: BTreeSet<&str> = listed
+        .split('\0')
+        // `--cached` still names a tracked file that was deleted.
+        .filter(|p| !p.is_empty() && project.join(p).is_file())
+        .collect();
+    let mut dirs = BTreeSet::new();
+    for file in &files {
+        for (at, _) in file.match_indices('/') {
+            dirs.insert(&file[..at]);
         }
     }
-    Ok(found.into_iter().collect())
+    let mut entries: Vec<TreeEntry> = dirs
+        .into_iter()
+        .map(|d| entry(d, "dir"))
+        .chain(files.into_iter().map(|f| entry(f, "file")))
+        .collect();
+    entries.sort_by(|a, b| a.path.cmp(&b.path));
+    entries.truncate(MAX_FILES);
+    Some(entries)
 }
 
-/// The project's files, tracked or not, without ignored ones; paths from `root`.
-/// Run in `root`, not at the repository's top: the project may be a subfolder.
-pub fn files(root: &Path) -> Result<Vec<String>, String> {
-    let Some(listed) = listed_by_git(root) else {
-        return walk(root);
+/// A bounded walk of a folder that is no repository, links not followed.
+fn walk(dir: &Path, prefix: &str, depth: usize, out: &mut Vec<TreeEntry>) {
+    if depth > MAX_DEPTH {
+        return;
+    }
+    let Ok(read) = std::fs::read_dir(dir) else {
+        return;
     };
-    let unique: BTreeSet<&str> = listed.split('\0').filter(|p| !p.is_empty()).collect();
-    Ok(unique
-        .into_iter()
-        // `ls-files -c` still names a tracked file that was deleted.
-        .filter(|file| root.join(file).is_file())
-        .take(MAX_FILES)
-        .map(str::to_string)
-        .collect())
+    for item in read.flatten() {
+        if out.len() >= MAX_FILES {
+            return;
+        }
+        let name = item.file_name().to_string_lossy().into_owned();
+        let Ok(kind) = item.file_type() else { continue };
+        let path = if prefix.is_empty() {
+            name.clone()
+        } else {
+            format!("{prefix}/{name}")
+        };
+        if kind.is_dir() {
+            if SKIPPED.contains(&name.as_str()) {
+                continue;
+            }
+            out.push(entry(&path, "dir"));
+            walk(&item.path(), &path, depth + 1, out);
+        } else if kind.is_file() && !is_secret(&name) {
+            out.push(entry(&path, "file"));
+        }
+    }
+}
+
+/// The project's tree: git's view of it (`.gitignore` respected), else a bounded walk.
+pub fn tree(project: &Path) -> Result<Vec<TreeEntry>, String> {
+    if !project.is_dir() {
+        let shown = project.display();
+        return Err(tr!(
+            "dossier introuvable : {shown}",
+            "folder not found: {shown}"
+        ));
+    }
+    if let Some(entries) = git_tree(project) {
+        return Ok(entries);
+    }
+    let mut entries = Vec::new();
+    walk(project, "", 0, &mut entries);
+    entries.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(entries)
 }
 
 /// A text file of `root`. What is not valid UTF-8 is refused rather than read
@@ -291,7 +320,8 @@ pub fn version(root: &Path, file: &str) -> Result<Option<String>, String> {
 
 /// Writes `text` if the disk still holds `expected` (None: no file). There is
 /// no way to force it: overwriting is writing against the version seen, so one
-/// more change is one more conflict (spec studio code §3).
+/// more change is one more conflict (spec studio code §3). Its missing folders
+/// are created, inside the project.
 pub fn write(
     root: &Path,
     file: &str,
@@ -315,6 +345,15 @@ pub fn write(
             "fichier en lecture seule : {file}",
             "read-only file: {file}"
         ));
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+        // Checked again once it exists: nothing moved it out meanwhile.
+        let base = std::fs::canonicalize(root).map_err(|err| err.to_string())?;
+        let parent = std::fs::canonicalize(parent).map_err(|err| err.to_string())?;
+        if !parent.starts_with(&base) {
+            return Err(refused(file));
+        }
     }
     replace(&path, text.as_bytes()).map_err(|err| err.to_string())?;
     Ok(WriteOutcome::Saved {
@@ -443,6 +482,49 @@ mod tests {
             );
         }
         assert_eq!(std::fs::read(dir.path().join(".git/config")).unwrap(), b"x");
+    }
+
+    /// Links need rights on Windows: the test is skipped where they cannot be made.
+    fn link_dir(from: &Path, to: &Path) -> bool {
+        #[cfg(unix)]
+        return std::os::unix::fs::symlink(from, to).is_ok();
+        #[cfg(windows)]
+        return std::os::windows::fs::symlink_dir(from, to).is_ok();
+    }
+
+    fn link_file(from: &Path, to: &Path) -> bool {
+        #[cfg(unix)]
+        return std::os::unix::fs::symlink(from, to).is_ok();
+        #[cfg(windows)]
+        return std::os::windows::fs::symlink_file(from, to).is_ok();
+    }
+
+    #[test]
+    fn never_follows_a_link_out_of_the_project() {
+        let outer = project(&[("secret.txt", b"secret"), ("proj/a.txt", b"x")]);
+        let dir = outer.path().join("proj");
+        let secret = outer.path().join("secret.txt");
+        if !link_file(&secret, &dir.join("leak.txt")) {
+            return;
+        }
+        assert!(read(&dir, "leak.txt").is_err());
+        assert!(write(&dir, "leak.txt", "pwn", None).is_err());
+        assert_eq!(std::fs::read(&secret).unwrap(), b"secret");
+
+        // A folder link: a file that does not exist yet beneath it.
+        if link_dir(outer.path(), &dir.join("up")) {
+            assert!(read(&dir, "up/secret.txt").is_err());
+            assert!(write(&dir, "up/created.txt", "pwn", None).is_err());
+            assert!(write(&dir, "up/sub/created.txt", "pwn", None).is_err());
+            assert!(!outer.path().join("created.txt").exists());
+            assert!(!outer.path().join("sub").exists());
+        }
+        // A dangling link to a file outside.
+        let missing = outer.path().join("later.txt");
+        if link_file(&missing, &dir.join("dangling.txt")) {
+            assert!(write(&dir, "dangling.txt", "pwn", None).is_err());
+            assert!(!missing.exists());
+        }
     }
 
     #[cfg(windows)]
@@ -660,11 +742,48 @@ mod tests {
     }
 
     #[test]
-    fn a_file_gone_with_its_folder_has_no_version_and_cannot_be_recreated() {
+    fn a_file_gone_with_its_folder_has_no_version_and_comes_back_with_it() {
         let dir = project(&[("sub/deep/a.txt", b"x")]);
         std::fs::remove_dir_all(dir.path().join("sub")).unwrap();
         assert_eq!(version(dir.path(), "sub/deep/a.txt").unwrap(), None);
-        assert!(write(dir.path(), "sub/deep/a.txt", "y", None).is_err());
+        write(dir.path(), "sub/deep/a.txt", "y", None).unwrap();
+        assert_eq!(
+            std::fs::read(dir.path().join("sub/deep/a.txt")).unwrap(),
+            b"y"
+        );
+    }
+
+    #[test]
+    fn writes_inside_the_project_creating_folders() {
+        let dir = project(&[]);
+        write(dir.path(), "new/deep/f.txt", "ok", None).unwrap();
+        assert_eq!(read(dir.path(), "new/deep/f.txt").unwrap().text, "ok");
+        assert!(
+            write(dir.path(), "new", "x", None).is_err(),
+            "a folder is not a file"
+        );
+    }
+
+    #[test]
+    fn never_reads_or_writes_outside_the_project() {
+        let outer = project(&[("secret.txt", b"secret"), ("proj/a.txt", b"x")]);
+        let dir = outer.path().join("proj");
+        let secret = outer.path().join("secret.txt");
+        let absolute = secret.to_string_lossy().into_owned();
+        for bad in [
+            "../secret.txt",
+            "a/../../secret.txt",
+            absolute.as_str(),
+            "/etc/passwd",
+            "",
+        ] {
+            assert!(read(&dir, bad).is_err(), "read {bad}");
+            assert!(write(&dir, bad, "pwn", None).is_err(), "write {bad}");
+        }
+        assert!(write(&dir, "../new.txt", "pwn", None).is_err());
+        assert!(write(&dir, "x/../../new.txt", "pwn", None).is_err());
+        assert!(!outer.path().join("new.txt").exists());
+        assert_eq!(std::fs::read(&secret).unwrap(), b"secret");
     }
 
     #[test]
@@ -742,13 +861,30 @@ mod tests {
         );
     }
 
+    fn files(root: &Path) -> Vec<String> {
+        tree(root)
+            .unwrap()
+            .into_iter()
+            .filter(|e| e.kind == "file")
+            .map(|e| e.path)
+            .collect()
+    }
+
+    fn entries(root: &Path) -> Vec<(String, &'static str)> {
+        tree(root)
+            .unwrap()
+            .into_iter()
+            .map(|e| (e.path, e.kind))
+            .collect()
+    }
+
     #[test]
     fn lists_tracked_and_untracked_files_without_ignored_or_deleted_ones() {
         let dir = project(&[
             (".gitignore", b"ignored.txt\nbuild/\n"),
             ("tracked.txt", b"x"),
             ("gone.txt", b"x"),
-            ("src/é.ts", b"x"),
+            ("src/\u{e9}.ts", b"x"),
             ("untracked.txt", b"x"),
             ("ignored.txt", b"x"),
             ("build/out.js", b"x"),
@@ -764,8 +900,29 @@ mod tests {
         assert!(git(dir.path(), &["commit", "-q", "-m", "init"]));
         std::fs::remove_file(dir.path().join("gone.txt")).unwrap();
         assert_eq!(
-            files(dir.path()).unwrap(),
-            [".gitignore", "src/é.ts", "tracked.txt", "untracked.txt"]
+            files(dir.path()),
+            [
+                ".gitignore",
+                "src/\u{e9}.ts",
+                "tracked.txt",
+                "untracked.txt"
+            ]
+        );
+    }
+
+    #[test]
+    fn lists_folders_implied_by_the_files_of_a_repository() {
+        let dir = project(&[("src/deep/a.ts", b"a")]);
+        if !git(dir.path(), &["init"]) {
+            return; // git is not installed on this machine
+        }
+        assert_eq!(
+            entries(dir.path()),
+            [
+                ("src".to_string(), "dir"),
+                ("src/deep".to_string(), "dir"),
+                ("src/deep/a.ts".to_string(), "file")
+            ]
         );
     }
 
@@ -775,7 +932,7 @@ mod tests {
         if !git(dir.path(), &["init"]) {
             return; // git is not installed on this machine
         }
-        assert_eq!(files(&dir.path().join("app")).unwrap(), ["src/b.txt"]);
+        assert_eq!(files(&dir.path().join("app")), ["src/b.txt"]);
     }
 
     #[test]
@@ -787,7 +944,14 @@ mod tests {
             ("target/debug/app.exe", b"x"),
             (".git/config", b"x"),
         ]);
-        assert_eq!(files(dir.path()).unwrap(), ["a.txt", "sub/b.txt"]);
+        assert_eq!(
+            entries(dir.path()),
+            [
+                ("a.txt".to_string(), "file"),
+                ("sub".to_string(), "dir"),
+                ("sub/b.txt".to_string(), "file")
+            ]
+        );
     }
 
     #[cfg(windows)]
@@ -826,17 +990,24 @@ mod tests {
             std::fs::write(root.join(name), "x").unwrap();
         }
         assert_eq!(
-            files(root).unwrap(),
+            files(root),
             ["environment.md", "id_rsa.pub", "keys.md", "main.rs"]
         );
     }
 
+    #[cfg(windows)]
     #[test]
     fn the_walk_does_not_follow_a_junction() {
         let outside = project(&[("secret.txt", b"x")]);
         let dir = project(&[("a.txt", b"x")]);
         junction(&dir.path().join("link"), outside.path());
-        assert_eq!(files(dir.path()).unwrap(), ["a.txt"]);
+        assert_eq!(files(dir.path()), ["a.txt"]);
+    }
+
+    #[test]
+    fn a_missing_folder_has_no_tree() {
+        let dir = project(&[]);
+        assert!(tree(&dir.path().join("gone")).is_err());
     }
 
     #[test]

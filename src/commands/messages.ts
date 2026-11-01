@@ -5,7 +5,7 @@ export const commandsMessages = defineMessages(
   {
     palette: {
       label: "Palette",
-      placeholderGoTo: "Aller à un terminal, un groupe, un workspace… (> pour les fonctions)",
+      placeholderGoTo: "Aller à un terminal, un workspace, un fichier (fichier:ligne)… (> pour les fonctions)",
       placeholderFunctions: "Rechercher une fonction…",
       loading: "Chargement…",
       empty: "Aucun résultat",
@@ -21,7 +21,7 @@ export const commandsMessages = defineMessages(
       "group.orchestrate": (error: string) => `Orchestrateur impossible : ${error}`,
     } as Record<string, ((error: string) => string) | undefined>,
     goTo: {
-      sections: { terminal: "Terminaux", group: "Groupes", orchestrator: "Orchestrateurs", workspace: "Workspaces", project: "Projets" },
+      sections: { terminal: "Terminaux", group: "Groupes", orchestrator: "Orchestrateurs", workspace: "Workspaces", project: "Projets", file: "Fichiers" },
       keywords: { group: "groupe", orchestrator: "orchestrateur", workspace: "workspace", tab: "onglet" },
       members: (count: number) => plural("fr", count, "agent", "agents"),
       linked: (count: number) => `relié à ${count}`,
@@ -30,12 +30,13 @@ export const commandsMessages = defineMessages(
       openFailed: (error: string) => `Ouverture impossible : ${error}`,
       gone: (label: string) => `${label} n'existe plus`,
       unreadable: (name: string) => `Workspace ${name} illisible`,
+      atLine: (line: number) => `ligne ${line}`,
     },
   },
   {
     palette: {
       label: "Palette",
-      placeholderGoTo: "Go to a terminal, a group, a workspace… (> for functions)",
+      placeholderGoTo: "Go to a terminal, a workspace, a file (file:line)… (> for functions)",
       placeholderFunctions: "Search for a function…",
       loading: "Loading…",
       empty: "No results",
@@ -50,7 +51,7 @@ export const commandsMessages = defineMessages(
       "group.orchestrate": (error: string) => `Could not create the orchestrator: ${error}`,
     } as Record<string, ((error: string) => string) | undefined>,
     goTo: {
-      sections: { terminal: "Terminals", group: "Groups", orchestrator: "Orchestrators", workspace: "Workspaces", project: "Projects" },
+      sections: { terminal: "Terminals", group: "Groups", orchestrator: "Orchestrators", workspace: "Workspaces", project: "Projects", file: "Files" },
       keywords: { group: "group", orchestrator: "orchestrator", workspace: "workspace", tab: "tab" },
       members: (count: number) => plural("en", count, "agent", "agents"),
       linked: (count: number) => `linked to ${count}`,
@@ -59,6 +60,7 @@ export const commandsMessages = defineMessages(
       openFailed: (error: string) => `Could not open: ${error}`,
       gone: (label: string) => `${label} no longer exists`,
       unreadable: (name: string) => `Workspace ${name} is unreadable`,
+      atLine: (line: number) => `line ${line}`,
     },
   },
 );

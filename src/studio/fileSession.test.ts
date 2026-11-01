@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createFileSession, isDirty, type StudioIo } from "./fileSession";
-import type { WriteOutcome } from "./ipc";
+import type { WriteOutcome } from "@/ipc/studio";
 
 /** A disk in memory, whose version is its text: enough to see every comparison. */
 function fakeDisk(files: Record<string, string>) {

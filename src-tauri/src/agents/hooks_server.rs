@@ -113,8 +113,9 @@ pub fn start(sink: impl HookSink) -> std::io::Result<HookServer> {
                 .body_length()
                 .is_some_and(|length| length > MAX_ANNOUNCED_BODY)
             {
-                log::warn!("request abandoned: its announced body is absurd");
+                // Before anything that could panic: unwinding would drop it, and abort.
                 std::mem::forget(request);
+                log::warn!("request abandoned: its announced body is absurd");
                 continue;
             }
             let sink = Arc::clone(&sink);

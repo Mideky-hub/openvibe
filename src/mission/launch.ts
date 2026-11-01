@@ -13,6 +13,7 @@ import { missionAddAgent, missionCleanup, missionDiscard, missionMerge, missionP
 import { ptySendText, ptyWrite, type Permission } from "@/ipc/pty";
 import { newConversation, newTerminalPayload } from "@/nodes/terminal/launch";
 import { freshText, quietFor, relaunchTerminal, stopTerminal } from "@/nodes/terminal/registry";
+import { reassignMissionCard, startMissionCards } from "@/kanban/orchestrate";
 import { agentMessages } from "@/mcp/messages";
 import { outReport } from "@/mcp/protocol";
 import { nodesStore, sessionOf, terminalOf } from "@/store/nodes";
@@ -33,9 +34,13 @@ export function subTaskText(mission: string, task: SubTask, branch: string, hand
   return handover ? `${text} ${handover}` : text;
 }
 
-/** What an agent is told of a task that may come from a ticket: the orchestrator's note stops at the orchestrator (spec mission de nuit §5.1). */
-export function withTicketNote(mission: Mission, text: string): string {
-  return mission.tickets ? `${text} ${t().lines.ticketData}` : text;
+/**
+ * What an agent is told of a task that may come from a ticket or from a Kanban
+ * card, which GitHub may have filled: the orchestrator's note stops at the
+ * orchestrator (spec mission de nuit §5.1).
+ */
+export function withTicketNote(mission: Mission, text: string, task?: { card?: string }): string {
+  return mission.tickets || task?.card ? `${text} ${t().lines.ticketData}` : text;
 }
 
 /** What the next agent learns of the previous one (spec §7.2 reassign). */
@@ -223,7 +228,8 @@ export async function launchMission(orchestratorId: string): Promise<void> {
   const names = team.members.map((m) => `${m.name} (${m.task})`).join(", ");
   notify(orchestratorId, t().lines.goAhead(names, team.branch));
   const plan = mission.plan;
-  team.members.forEach((member, i) => void assign(orchestratorId, member, withTicketNote(mission, subTaskText(mission.name ?? "", plan[i], member.branch)), restarts.get(member.nodeId)));
+  void startMissionCards(orchestratorId, team.members, plan).catch(() => undefined);
+  team.members.forEach((member, i) => void assign(orchestratorId, member, withTicketNote(mission, subTaskText(mission.name ?? "", plan[i], member.branch), plan[i]), restarts.get(member.nodeId)));
 }
 
 /** `finish` (spec §7.7): created agents close, linked ones go back to the project. */
@@ -399,11 +405,12 @@ export async function reassignTask(orchestratorId: string, fromNodeId: string, t
   const latest = missionOf(nodesStore.getState().nodes[orchestratorId]) ?? mission;
   const members = latest.members.map((m) => (m.nodeId === from.nodeId ? { ...m, handedTo: to.name } : m.nodeId === to.nodeId ? to : m));
   setMission(orchestratorId, { members: members.some((m) => m.nodeId === to.nodeId) ? members : [...members, to] });
+  reassignMissionCard(orchestratorId, latest.plan, task.title, to.name);
   // The previous agent stops: its sub-task is another's now (final review H3).
   await pauseAgents([from.nodeId]).catch(() => 0);
   if (isRunning(from.nodeId)) {
     void ptySendText(from.nodeId, t().lines.handedAway(from.task, to.name)).catch(() => undefined);
   }
-  void assign(orchestratorId, to, withTicketNote(mission, subTaskText(mission.name ?? "", task, to.branch, handoverText(from))));
+  void assign(orchestratorId, to, withTicketNote(mission, subTaskText(mission.name ?? "", task, to.branch, handoverText(from)), task));
   return { name: to.name };
 }

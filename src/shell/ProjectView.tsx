@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Canvas } from "@/canvas/Canvas";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AgentsPanel } from "@/fleet/AgentsPanel";
@@ -11,8 +11,7 @@ import { RadialMenu } from "@/radial/RadialMenu";
 import { GitWindow } from "@/git/GitWindow";
 import { ReviewPanel } from "@/review/ReviewPanel";
 import { PlacementGhost } from "@/fleet/PlacementGhost";
-import { useWorkspaces } from "@/store/workspaces";
-import { Studio } from "@/studio/Studio";
+import { isCode, useWorkspaces } from "@/store/workspaces";
 import { ActivityRail } from "./ActivityRail";
 import { AgentCounts } from "./AgentCounts";
 import { CommandBar, CommandHint } from "./CommandBar";
@@ -30,6 +29,9 @@ import { WaitingNotice } from "./WaitingNotice";
 import { WorkspaceTabs } from "./WorkspaceTabs";
 import { shellMessages } from "./messages";
 import { ZoomControl } from "./ZoomControl";
+
+// CodeMirror and its languages load with the first opening, not with the application.
+const CodeWorkspace = lazy(() => import("@/studio/CodeWorkspace").then((m) => ({ default: m.CodeWorkspace })));
 
 /** A floating panel's error, where the panels open. */
 function panelCrash(error: Error, retry: () => void) {
@@ -49,6 +51,7 @@ export function ProjectView() {
   const status = useWorkspaces((s) => s.status);
   const error = useWorkspaces((s) => s.error);
   const activeId = useWorkspaces((s) => s.activeId);
+  const code = useWorkspaces((s) => isCode(s.workspaces.find((w) => w.id === s.activeId)));
   const panelOpen = useAgentsPanel((s) => s.open);
 
   useEffect(() => {
@@ -61,16 +64,22 @@ export function ProjectView() {
         <>
           <ErrorBoundary
             key={activeId}
-            scope="canvas"
+            scope={code ? "code workspace" : "canvas"}
             fallback={(error, retry) => (
               <div className="absolute inset-0 px-6 pb-6 pt-[104px]">
                 <CrashNotice error={error} retry={retry} />
               </div>
             )}
           >
-            <Canvas workspaceId={activeId} />
+            {code ? (
+              <Suspense fallback={null}>
+                <CodeWorkspace />
+              </Suspense>
+            ) : (
+              <Canvas workspaceId={activeId} />
+            )}
           </ErrorBoundary>
-          <ToolRail />
+          {!code && <ToolRail />}
           <ActivityRail />
           {panelOpen && (
             <ErrorBoundary scope="agents panel" fallback={panelCrash}>
@@ -78,26 +87,28 @@ export function ProjectView() {
             </ErrorBoundary>
           )}
           <WaitingNotice />
-          <div className="absolute bottom-[14px] left-3 z-30">
-            <GitChip />
-          </div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-[14px] z-30 flex flex-col items-center gap-2">
-            <CommandHint />
-            <CommandBar />
-          </div>
-          <div className="absolute bottom-[14px] right-3 z-30">
-            <ZoomControl />
-          </div>
+          {/* The canvas's floating bars: the code workspace has its own. */}
+          {!code && (
+            <>
+              <div className="absolute bottom-[14px] left-3 z-30">
+                <GitChip />
+              </div>
+              <div className="pointer-events-none absolute inset-x-0 bottom-[14px] z-30 flex flex-col items-center gap-2">
+                <CommandHint />
+                <CommandBar />
+              </div>
+              <div className="absolute bottom-[14px] right-3 z-30">
+                <ZoomControl />
+              </div>
+              <PlacementGhost />
+              <LinkMode />
+              <RadialMenu />
+            </>
+          )}
           <ModeExit />
-          <PlacementGhost />
-          <LinkMode />
-          <RadialMenu />
           <ErrorBoundary scope="review" fallback={panelCrash}>
             <ReviewPanel />
             <GitWindow />
-          </ErrorBoundary>
-          <ErrorBoundary scope="studio" fallback={panelCrash}>
-            <Studio />
           </ErrorBoundary>
           <ErrorBoundary scope="notes" fallback={panelCrash}>
             <Notes />

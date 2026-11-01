@@ -80,7 +80,7 @@ fn run(dir: &Path, args: &[&str], codes: &[i32]) -> Result<String, String> {
     }
 }
 
-fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
+pub(crate) fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
     run(dir, args, &[0])
 }
 
@@ -140,7 +140,7 @@ pub(crate) fn relative(path: &str) -> Result<&Path, String> {
 }
 
 /// An existing file of `root`, its real path checked to be inside (links included).
-fn inside(root: &Path, path: &str) -> Result<PathBuf, String> {
+pub(crate) fn inside(root: &Path, path: &str) -> Result<PathBuf, String> {
     let rel = relative(path)?;
     let base = std::fs::canonicalize(root).map_err(|err| err.to_string())?;
     let real = std::fs::canonicalize(base.join(rel))
@@ -234,7 +234,7 @@ pub fn parse_numstat(output: &str) -> HashMap<String, (Option<u32>, Option<u32>)
     counts
 }
 
-fn is_binary(bytes: &[u8]) -> bool {
+pub(crate) fn is_binary(bytes: &[u8]) -> bool {
     bytes.iter().take(8000).any(|b| *b == 0)
 }
 

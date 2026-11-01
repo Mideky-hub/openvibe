@@ -57,8 +57,11 @@ mod tests {
         fn enabled(&self, _: &log::Metadata) -> bool {
             true
         }
+        // The logger is the whole process's: the tests running alongside log here too.
         fn log(&self, record: &log::Record) {
-            self.0.lock().unwrap().push(record.args().to_string());
+            if record.target().ends_with("db::scrollback") {
+                self.0.lock().unwrap().push(record.args().to_string());
+            }
         }
         fn flush(&self) {}
     }

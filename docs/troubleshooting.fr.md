@@ -34,9 +34,9 @@ Le compteur de la barre du haut lit l'usage de Claude Code par un petit script l
 
 La vue lit les journaux `.jsonl` que Claude Code garde sous `~/.claude/projects` (ou sous le dossier de `CLAUDE_CONFIG_DIR`), sur les 30 derniers jours, en jours UTC. Elle reste vide si Claude Code n'a jamais tourné sur ce PC, si son dossier est ailleurs, ou si son historique a été vidé. Pour un historique très volumineux, OpenVibe s'arrête à des limites fixes (nombre de fichiers, octets lus, durée) et dit que les chiffres sont un minimum. Seul Claude Code est lu ; Codex n'est pas encore pris en charge. La vue n'affiche jamais le texte d'une conversation.
 
-## Le studio de code refuse d'enregistrer
+## Code Studio refuse d'enregistrer
 
-OpenVibe n'écrase jamais ce qu'un agent a écrit entre-temps. Si le fichier a changé sur le disque depuis son ouverture, le studio le dit et propose de **recharger** (tes modifications sont perdues) ou d'**écraser** avec ta version. Si le fichier a été supprimé, il propose de le recréer. Un projet hors dépôt git liste ses fichiers depuis le dossier lui-même, dans une limite.
+OpenVibe n'écrase jamais ce qu'un agent a écrit entre-temps. Si le fichier a changé sur le disque depuis son ouverture, le studio le dit et propose de **recharger** (tes modifications sont perdues) ou d'**écraser** avec ta version. Si le fichier a été supprimé, il propose de le recréer ou de le fermer sans garder tes modifications. Un projet hors dépôt git liste ses fichiers depuis le dossier lui-même, dans une limite.
 
 ## Un agent a disparu d'un groupe
 

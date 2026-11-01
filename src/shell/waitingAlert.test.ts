@@ -38,7 +38,7 @@ beforeEach(() => {
   nativeNotificationsStore.setState({ enabled: true });
   vi.mocked(onAction).mockResolvedValue({ unregister } as never);
   projectsStore.setState({ view: "project" });
-  workspacesStore.setState({ workspaces: [{ id: "w1", projectId: "p1", name: "Workspace 1", position: 0, pantheon: null }] });
+  workspacesStore.setState({ workspaces: [{ id: "w1", projectId: "p1", name: "Workspace 1", position: 0, pantheon: null, kind: "canvas" }] });
   nodesStore.setState({
     nodes: {
       isis: { workspaceId: "w1", kind: "terminal", payload: { title: "Isis", name: "Isis", agent: "claude", cwd: "C:/code", shell: "default", command: "" } },

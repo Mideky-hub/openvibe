@@ -16,6 +16,9 @@ export interface Project {
   liveAgents: number;
 }
 
+/** A workspace is a canvas, or the project's code workspace (an IDE). */
+export type WorkspaceKind = "canvas" | "code";
+
 export interface Workspace {
   id: string;
   projectId: string;
@@ -23,6 +26,7 @@ export interface Workspace {
   position: number;
   /** Pantheon of the agents outside any group (spec habillage §9.2). */
   pantheon: string | null;
+  kind: WorkspaceKind;
 }
 
 /** An Excalidraw image, stored as its data URL. */
@@ -67,8 +71,8 @@ export const openProject = (id: string) => write(() => call<void>("open_project"
 export const deleteProject = (id: string) => write(() => call<string[]>("delete_project", { id }));
 
 export const listWorkspaces = (projectId: string) => call<Workspace[]>("list_workspaces", { projectId });
-export const createWorkspace = (projectId: string, name: string) =>
-  write(() => call<Workspace>("create_workspace", { projectId, name }));
+export const createWorkspace = (projectId: string, name: string, kind: WorkspaceKind = "canvas") =>
+  write(() => call<Workspace>("create_workspace", { projectId, name, kind }));
 export const setWorkspacePantheon = (id: string, pantheon: string) =>
   write(() => call<void>("set_workspace_pantheon", { id, pantheon }));
 export const renameWorkspace = (id: string, name: string) =>

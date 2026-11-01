@@ -2,6 +2,7 @@ pub mod accounts;
 pub mod agents;
 pub mod app;
 pub mod git;
+pub mod github;
 pub mod mission;
 pub mod notes;
 pub mod project;
