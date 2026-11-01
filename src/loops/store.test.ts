@@ -59,6 +59,14 @@ beforeEach(() => {
 });
 
 describe("the loops store", () => {
+  it("saves nothing over a list it could not read: a read error must not wipe the loops (review)", async () => {
+    const store = createLoopsStore(engineDeps(), { read: () => Promise.reject(new Error("database is locked")), write: async (value) => void saved.push(value) });
+    await expect(store.getState().save(loop("9"))).rejects.toThrow();
+    await expect(store.getState().remove("1")).rejects.toThrow();
+    expect(saved).toEqual([]);
+    expect(store.getState().loaded).toBe(false);
+  });
+
   it("loads the saved loops all off: nothing runs after a restart (spec boucles §1)", async () => {
     const store = make();
     await store.getState().load();
