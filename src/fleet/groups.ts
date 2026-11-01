@@ -40,6 +40,9 @@ export interface GroupStaffing {
 
 const withModel = (payload: TerminalPayload, model: string | undefined): TerminalPayload => (model ? { ...payload, model } : payload);
 
+/** Long enough for a render: a timer, since frames stop while the window is minimized. */
+const MOUNT_MS = 100;
+
 /** Time between two agents of a new group starting (spec habillage §20). */
 export const LAUNCH_STAGGER_MS = 300;
 
@@ -88,9 +91,16 @@ export async function launchGroup(
     elements: [...api.getSceneElementsIncludingDeleted(), ...terminals, frame],
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
-  // 4 terminals fitted at once end up at 40 %, unreadable: the first ones are enough.
   const { width, height } = api.getAppState();
-  api.scrollToContent(readableTargets(frame, terminals, { width, height }), {
+  const targets = readableTargets(frame, terminals, { width, height });
+  // Excalidraw mounts a terminal once it was in view, and it starts there: the
+  // whole group first. Read before the caller frames anything of its own.
+  if (!targets.includes(frame)) {
+    api.scrollToContent([frame], { fitToViewport: true, viewportZoomFactor: 0.9, animate: false, maxZoom: 1 });
+    await new Promise((resolve) => setTimeout(resolve, MOUNT_MS));
+  }
+  // 4 terminals fitted at once end up at 40 %, unreadable: the first ones are enough.
+  api.scrollToContent(targets, {
     fitToViewport: true,
     viewportZoomFactor: 0.9,
     animate: true,
