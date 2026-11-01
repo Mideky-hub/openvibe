@@ -12,6 +12,12 @@ Ce qui est reporté. La spec en cours est `docs/superpowers/specs/2026-10-24-ope
 - Avoir une option Routeur dans l'orchestrateur, qui attribue pour chaque agent un modèle faible pour les tâches faibles Haiku 5.5, moyen Sonnet 5.5, elevé Opus, extrême Fable 5.1
 - Permettre d'activer le remote-control sur plusieurs terminaux, à l'unité ou au travers de l'orchestrateur pour gérer et avoir accès aux workflows à distance.
 
+- Ajouter une fonctionnalités IDE pour modifier manuellement le code.
+- Faciliter l'installation des agents (Claude Code, Gemini, Qwen Code, Cursor, Ollama, Aider etc... en un clic depuis l'interface, et permettre de configurer/installer des modèles locaux facilement sur Ollama)
+- Permettre à un orchestrateur, quand il est lié à plusieurs groupes, de donner du travail au groupe qui lui semble le plus pertinent. Quand il a des groupes (frontend, backend, design etc...), Il distribue sans vraiment de distinction les tâches attribuées. L'idée est d'avoir des groupes spécialisée.
+- Ajouter des foncitonnalitée de prise de notes et de gestion de mémoires types obsidian, attribuables à des groupes comme contexte optionnel, que toi au l'orchestrateur peut utiliser comme base potentielle de documentation supplémentaires. Avec une fonctionnalités d'affichage par graphique.
+- Quand un agent à une question, permettre de répondre facilement à sa question avec une notification type "un agent a une question", quand tu cliques, ça t'emmènes directement pour y répondre.
+
 ## Fonctionnalités inspirées de Symvibe
 
 ### Widgets du canvas (remplacent les nœuds Note, Kanban et Git Watcher de la spec V1)
