@@ -7,6 +7,7 @@ mod i18n;
 mod logging;
 mod mission;
 mod notes;
+mod power;
 mod process;
 mod pty;
 mod repo;
@@ -56,6 +57,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .manage(PtyManager::default())
+        .manage(power::KeepAwake::default())
         .setup(|app| {
             // Built here, not from the config, for the one thing the config cannot
             // say: the page reads the clipboard without WebView2's prompt, since
@@ -160,6 +162,8 @@ pub fn run() {
             commands::mission::mission_discard,
             commands::mission::mission_backlog,
             commands::mission::mission_issues,
+            commands::mission::mission_checks,
+            commands::mission::set_keep_awake,
             commands::notes::notes_all,
             commands::notes::notes_read,
             commands::notes::notes_version,

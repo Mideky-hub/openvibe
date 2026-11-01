@@ -66,7 +66,7 @@ function take(orchestratorId: string, mission: Mission, member: Member, report: 
   const brief = oneLine(task.brief);
   const text = t().lines.nextSubTask(mission.name ?? "", task.title, `${brief}${/[.!?]$/.test(brief) ? "" : "."}`, task.budgetMin, member.branch, mission.branch ?? "");
   // A new conversation: one task's context must not spill into the next, and its steps start over.
-  void assign(orchestratorId, next, text, restartIn(member.nodeId, member.worktree, model));
+  void assign(orchestratorId, next, text, restartIn(member.nodeId, member.worktree, model, mission.permission));
   return t().lines.taken(member.name, task.title, queue.length);
 }
 

@@ -5,6 +5,7 @@ import { canvasStore } from "@/canvas/canvasStore";
 import { missionMerge } from "@/ipc/mission";
 import { ptySendText } from "@/ipc/pty";
 import { langStore } from "@/i18n";
+import { buildSpawnSpec } from "@/nodes/terminal/launch";
 import { relaunchTerminal } from "@/nodes/terminal/registry";
 import type { TerminalPayload } from "@/nodes/types";
 import { agentActivityStore } from "@/store/agentActivity";
@@ -425,6 +426,13 @@ it("keeps the task an agent finished when reassign gives it another one", async 
   await setup({ members: [member("isis", "Isis", { task: "API" }), member("horus", "Horus", { task: "Login", report: done, merged: true })], plan: [{ title: "Login", brief: "b", agent: "Horus", budgetMin: 20 }, { title: "API", brief: "b", agent: "Isis", budgetMin: 30 }], queue: [] });
   await reassignTask("chef", "isis", "Horus");
   expect(missionNow().members.find((m) => m.name === "Horus")?.past).toEqual([{ task: "Login", status: "termine", summary: "Login fait", merged: true, spentMin: 10, budgetMin: 20, branch: "openvibe/auth-horus" }]);
+});
+
+it("keeps the mission's permissions through a new conversation, and launches with them", async () => {
+  await setup({ permission: "work" });
+  await afterReport("chef", "isis");
+  expect(relaunchTerminal).toHaveBeenCalledWith("isis", expect.objectContaining({ permission: "work" }), "new");
+  expect(buildSpawnSpec(terminalOf(nodesStore.getState().nodes.isis)!, "new").claude?.permission).toBe("work");
 });
 
 it("speaks English when the interface does", async () => {

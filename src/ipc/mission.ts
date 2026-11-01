@@ -26,6 +26,14 @@ export const missionAddAgent = (project: string, mission: string, agent: string)
 /** `mission`, `agent`: their worktrees' paths. */
 export const missionMerge = (mission: string, agent: string, branch: string) => call<MergeReport>("mission_merge", { mission, agent, branch });
 export const missionCleanup = (project: string, mission: string, agents: string[]) => call<Cleanup>("mission_cleanup", { project, mission, agents });
+/** What a night needs of the project (spec mission de nuit §5.2). */
+export interface ProjectChecks {
+  git: boolean;
+  gh: boolean;
+}
+
+export const missionChecks = (project: string) => call<ProjectChecks>("mission_checks", { project });
+export const setKeepAwake = (on: boolean) => call<void>("set_keep_awake", { on });
 export const missionBacklog = (project: string) => call<string>("mission_backlog", { project });
 /** The open issues with `label`, in `gh`'s JSON. */
 export const missionIssues = (project: string, label: string) => call<string>("mission_issues", { project, label });

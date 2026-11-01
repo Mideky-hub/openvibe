@@ -4,6 +4,8 @@
 use std::path::Path;
 use std::process::Command;
 
+use serde::Serialize;
+
 use crate::process::hide_window;
 use crate::pty::shell::which_locate;
 use crate::tr;
@@ -74,6 +76,37 @@ pub fn github_issues(project: &Path, label: &str) -> Result<String, String> {
     }
 }
 
+/// What a night needs of the project before it starts (spec mission de nuit §5.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct ProjectChecks {
+    pub git: bool,
+    /// `gh` answers and is logged in.
+    pub gh: bool,
+}
+
+fn succeeds(command: &mut Command) -> bool {
+    hide_window(command)
+        .output()
+        .is_ok_and(|output| output.status.success())
+}
+
+pub fn checks(project: &Path) -> ProjectChecks {
+    let git = succeeds(
+        Command::new("git")
+            .arg("-C")
+            .arg(project)
+            .args(["rev-parse", "--is-inside-work-tree"]),
+    );
+    let gh = which_locate("gh").is_some_and(|gh| {
+        succeeds(
+            Command::new(gh)
+                .current_dir(project)
+                .args(["auth", "status"]),
+        )
+    });
+    ProjectChecks { git, gh }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,6 +130,16 @@ mod tests {
     fn a_label_stays_one_argument() {
         // Glued to its flag: a label starting with a dash cannot become an option of gh.
         assert!(issue_args("--repo=x/y").contains(&"--label=--repo=x/y".to_string()));
+    }
+
+    #[test]
+    fn says_whether_the_folder_is_a_repository() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!checks(dir.path()).git);
+        assert!(succeeds(
+            Command::new("git").arg("-C").arg(dir.path()).arg("init")
+        ));
+        assert!(checks(dir.path()).git);
     }
 
     #[test]

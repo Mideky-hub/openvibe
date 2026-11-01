@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { langStore } from "@/i18n";
 import { nodesStore } from "@/store/nodes";
+import { usageStore } from "@/usage/usageStore";
 import { notify } from "./events";
 import { NEW_MISSION, type Mission } from "./mission";
 import { OvernightDialog } from "./OvernightDialog";
@@ -18,8 +19,10 @@ vi.mock("./events", () => ({ notify: vi.fn() }));
 let host: HTMLDivElement;
 let root: Root;
 
-async function show(mission: Partial<Mission> = {}) {
-  await nodesStore.getState().create("chef", { workspaceId: "w1", kind: "orchestrator", payload: { name: "Chef", mission: { ...NEW_MISSION, ...mission } } });
+const session = { title: "Chef", name: "Chef", agent: "claude" as const, cwd: "C:/p", shell: "default" as const, command: "", role: "orchestrator" as const };
+
+async function show(mission: Partial<Mission> = {}, withSession?: typeof session) {
+  await nodesStore.getState().create("chef", { workspaceId: "w1", kind: "orchestrator", payload: { name: "Chef", ...(withSession ? { session: withSession } : {}), mission: { ...NEW_MISSION, ...mission } } });
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -93,6 +96,35 @@ it("will not start without a time, too many agents, or a label: a repository's i
   expect(button("Préparer la nuit").disabled).toBe(true);
   await act(async () => type(field("Label des issues"), "nuit"));
   expect(button("Préparer la nuit").disabled).toBe(false);
+});
+
+it("defaults to files and commands, and always says that git push stays forbidden", async () => {
+  await show();
+  expect(field("Fichiers et commandes").checked).toBe(true);
+  expect(document.body.textContent).toContain("git push reste interdit");
+  await act(async () => field("Fichiers").click());
+  await act(async () => button("Préparer la nuit").click());
+  expect(missionNow().permission).toBe("edits");
+});
+
+it("will not start outside a repository, and needs gh only for GitHub", async () => {
+  mockIPC((cmd) => (cmd === "mission_checks" ? { git: true, gh: false } : undefined));
+  await show({}, session);
+  await vi.waitFor(() => expect(document.querySelector("[data-checks]")?.textContent).toContain("gh ne répond pas"));
+  expect(button("Préparer la nuit").disabled).toBe(true);
+  await act(async () => field("BACKLOG.md").click());
+  expect(document.querySelector("[data-checks]")?.textContent).not.toContain("gh ne répond pas");
+  expect(button("Préparer la nuit").disabled).toBe(false);
+});
+
+it("warns on the plan's usage without blocking, and says what can still put the PC to sleep", async () => {
+  usageStore.setState({ limits: { fiveHour: { usedPercent: 85 }, models: [] } as never });
+  await show();
+  const checks = document.querySelector("[data-checks]")?.textContent;
+  expect(checks).toContain("Usage du forfait à 85 %");
+  expect(checks).toContain("Fermer le capot");
+  expect(button("Préparer la nuit").disabled).toBe(false);
+  usageStore.setState({ limits: null });
 });
 
 it("speaks English", async () => {

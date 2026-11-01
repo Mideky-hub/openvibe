@@ -377,6 +377,26 @@ describe("a new agent in a chosen group (spec groupes spécialisés §4)", () =>
   });
 });
 
+describe("a mission's permissions (spec mission de nuit §5.3)", () => {
+  it("reach every agent of the team, and leave the linked ones at the end", async () => {
+    await setup({ permission: "work" });
+    await launchMission("chef");
+    expect(launchGroup).toHaveBeenCalledWith(expect.anything(), expect.anything(), undefined, expect.objectContaining({ permission: "work" }));
+    expect(terminalOf(nodesStore.getState().nodes.isis)?.permission).toBe("work");
+    expect(relaunchTerminal).toHaveBeenCalledWith("isis", expect.objectContaining({ permission: "work" }), "new");
+    endMission("chef", "Fini.");
+    expect(terminalOf(nodesStore.getState().nodes.isis)?.permission).toBeUndefined();
+    expect(relaunchTerminal).toHaveBeenLastCalledWith("isis", expect.objectContaining({ permission: undefined }), "new");
+  });
+
+  it("add nothing to a mission without a choice", async () => {
+    await setup();
+    await launchMission("chef");
+    expect(terminalOf(nodesStore.getState().nodes.isis)?.permission).toBeUndefined();
+    expect(vi.mocked(launchGroup).mock.calls[0][3]?.permission).toBeUndefined();
+  });
+});
+
 it("ends the mission: created agents closed, linked ones back in the project in a new conversation (spec §7.7)", async () => {
   await setup({ state: "en_cours", project: "C:/code/proj", frameId: "f1", members: [member("isis", "Isis", true), member("n1", "Horus", false)] });
   vi.spyOn(Date, "now").mockReturnValue(1_234_567);

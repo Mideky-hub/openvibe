@@ -69,6 +69,7 @@ export function buildSpawnSpec(payload: TerminalPayload, mode: LaunchMode): Spaw
     spec.claude = { mode, sessionId: payload.claudeSessionId ?? crypto.randomUUID(), title: payload.title, role: payload.role ?? "agent" };
     if (payload.remoteControl) spec.claude.remoteControl = payload.name || payload.title;
     if (payload.model) spec.claude.model = payload.model;
+    if (payload.permission) spec.claude.permission = payload.permission;
   }
   if (payload.agent === "ollama" && payload.ollama) spec.ollama = payload.ollama;
   return spec;

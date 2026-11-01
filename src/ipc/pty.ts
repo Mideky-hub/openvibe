@@ -5,6 +5,9 @@ import { call } from "./invoke";
 export type ShellKind = "default" | "powershell" | "pwsh" | "cmd" | "gitbash";
 export type ClaudeMode = "new" | "resume" | "continue";
 
+/** What a mission lets its agents do unasked (spec mission de nuit §5.3). */
+export type Permission = "ask" | "edits" | "work";
+
 export interface ClaudeLaunch {
   mode: ClaudeMode;
   sessionId: string;
@@ -14,6 +17,7 @@ export interface ClaudeLaunch {
   remoteControl?: string;
   /** `--model`, chosen by a mission's router (spec maj §3). */
   model?: string;
+  permission?: Permission;
 }
 
 /** Agents of the launch menu (spec habillage §8), in menu order. */

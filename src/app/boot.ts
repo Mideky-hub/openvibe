@@ -8,6 +8,7 @@ import { onAgentSubagents } from "@/ipc/mcp";
 import { onPtyExit, ptyList } from "@/ipc/pty";
 import { installMcp } from "@/mcp/router";
 import { installMissionClock } from "@/mission/clock";
+import { installKeepAwake } from "@/mission/keepAwake";
 import { installMissionEvents } from "@/mission/events";
 import { forgetLivePty, setLivePtys } from "@/nodes/terminal/registry";
 import { installWaitingAlerts } from "@/shell/waitingAlert";
@@ -55,6 +56,7 @@ export function boot(): Promise<void> {
     await installUsage();
     installMissionEvents();
     installMissionClock();
+    installKeepAwake();
     installWaitingAlerts();
     setLivePtys(await ptyList());
     await getCurrentWindow().onCloseRequested(saveBeforeClose);

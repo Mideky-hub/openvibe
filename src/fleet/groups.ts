@@ -5,7 +5,7 @@ import { returnKeyboardToCanvas } from "@/canvas/keyboardFocus";
 import { createGroupFrame, groupInfoOf, isGroup, withGroupFolded, withGroupSpeciality } from "@/canvas/groups";
 import { allowRemoval } from "@/canvas/removalGuard";
 import { createNodeElement, nodeKindOf } from "@/canvas/nodeElement";
-import type { AgentId } from "@/ipc/pty";
+import type { AgentId, Permission } from "@/ipc/pty";
 import { newTerminalPayload } from "@/nodes/terminal/launch";
 import { markForAutostart } from "@/nodes/terminal/registry";
 import type { TerminalPayload } from "@/nodes/types";
@@ -39,9 +39,12 @@ export interface GroupStaffing {
   cwds: readonly string[];
   /** Claude's model of each agent, chosen by a mission's router (spec maj §3). */
   models?: readonly (string | undefined)[];
+  /** What its mission lets them do unasked (spec mission de nuit §5.3). */
+  permission?: Permission;
 }
 
 const withModel = (payload: TerminalPayload, model: string | undefined): TerminalPayload => (model ? { ...payload, model } : payload);
+const withPermission = (payload: TerminalPayload, permission: Permission | undefined): TerminalPayload => (permission ? { ...payload, permission } : payload);
 
 /** Time between two agents of a new group starting (spec habillage §20). */
 export const LAUNCH_STAGGER_MS = 300;
@@ -81,7 +84,7 @@ export async function launchGroup(
     await nodesStore.getState().create(node.id, {
       workspaceId,
       kind: "terminal",
-      payload: withModel(newTerminalPayload({ ...options, cwd: staffing?.cwds[i] ?? options.cwd, agent }, agentName), staffing?.models?.[i]),
+      payload: withPermission(withModel(newTerminalPayload({ ...options, cwd: staffing?.cwds[i] ?? options.cwd, agent }, agentName), staffing?.models?.[i]), staffing?.permission),
     });
     markForAutostart(node.id, i * LAUNCH_STAGGER_MS);
     terminals.push({ ...node, frameId: frame.id });

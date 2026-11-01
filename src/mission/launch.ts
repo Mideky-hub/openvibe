@@ -10,7 +10,7 @@ import { linkOrchestrator } from "@/fleet/orchestrators";
 import { addTerminal, removeNodes } from "@/fleet/terminals";
 import { messages } from "@/i18n";
 import { missionAddAgent, missionCleanup, missionDiscard, missionMerge, missionPrepare, type Cleanup, type Worktree } from "@/ipc/mission";
-import { ptySendText, ptyWrite } from "@/ipc/pty";
+import { ptySendText, ptyWrite, type Permission } from "@/ipc/pty";
 import { newConversation, newTerminalPayload } from "@/nodes/terminal/launch";
 import { freshText, quietFor, relaunchTerminal, stopTerminal } from "@/nodes/terminal/registry";
 import { agentMessages } from "@/mcp/messages";
@@ -43,12 +43,13 @@ export function handoverText(from: Member): string {
 /**
  * A linked agent moves to `cwd` in a new conversation: a Claude session does
  * not resume from another folder (spec §7.3). It takes `model`, the router's,
- * or none to go back to Claude's own (spec maj §3).
+ * or none to go back to Claude's own (spec maj §3); likewise for what its
+ * mission lets it do unasked (spec mission de nuit §5.3).
  */
-export function restartIn(nodeId: string, cwd: string, model?: string): Promise<void> {
+export function restartIn(nodeId: string, cwd: string, model?: string, permission?: Permission): Promise<void> {
   const payload = terminalOf(nodesStore.getState().nodes[nodeId]);
   if (!payload) return Promise.resolve();
-  const patch = { cwd, model, ...newConversation() };
+  const patch = { cwd, model, permission, ...newConversation() };
   nodesStore.getState().update(nodeId, patch);
   return relaunchTerminal(nodeId, { ...payload, ...patch }, "new");
 }
@@ -64,9 +65,10 @@ function besideOrchestrator(orchestratorId: string, count: number) {
 const frameCenter = (frame: { x: number; y: number; width: number; height: number }) => ({ x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 });
 
 /** The terminal of an agent created for the mission, in its worktree. */
-const agentPayload = (name: string, cwd: string, model?: string) => ({
+const agentPayload = (name: string, cwd: string, model?: string, permission?: Permission) => ({
   ...newTerminalPayload({ ...defaultLaunchOptions(), cwd, agent: "claude" }, name),
   ...(model ? { model } : {}),
+  ...(permission ? { permission } : {}),
 });
 
 /** Like a linked agent, a group chosen in the plan may be gone at the go-ahead (spec groupes spécialisés §4). */
@@ -127,7 +129,7 @@ async function formTeam(orchestratorId: string, workspaceId: string, project: st
         { name: `Mission ${mission.name}`, role: "general", agents: created.map(() => "claude" as const) },
         defaultLaunchOptions(),
         besideOrchestrator(orchestratorId, created.length),
-        { pantheon, names: created.map((m) => m.name), cwds: created.map((m) => m.worktree), models: created.map((m) => m.model) },
+        { pantheon, names: created.map((m) => m.name), cwds: created.map((m) => m.worktree), models: created.map((m) => m.model), permission: mission.permission },
       );
       if (!group) throw new Error(t().launch.groupFailed);
       created.forEach((member, i) => (member.nodeId = group.nodeIds[i]));
@@ -139,7 +141,7 @@ async function formTeam(orchestratorId: string, workspaceId: string, project: st
       if (!group) continue;
       const frame = canvasStore.getState().frames.find((f) => f.id === group.id);
       if (!frame) throw new Error(t().launch.groupLost(group.name));
-      const nodeId = await addTerminal(workspaceId, agentPayload(member.name, member.worktree, member.model), frameCenter(frame), frame.id);
+      const nodeId = await addTerminal(workspaceId, agentPayload(member.name, member.worktree, member.model, mission.permission), frameCenter(frame), frame.id);
       if (!nodeId) throw new Error(t().launch.groupFailed);
       member.nodeId = nodeId;
       joined.push(nodeId);
@@ -147,7 +149,7 @@ async function formTeam(orchestratorId: string, workspaceId: string, project: st
     // launchGroup framed its own group only, and an agent out of sight does not start.
     if (joined.length > 0) showGroups([...new Set(members.flatMap((m) => m.group ?? []).concat(frameId ?? []))]);
     // Linked agents move only once the whole team exists (final review H2).
-    for (const member of members) if (member.linked) restarts.set(member.nodeId, restartIn(member.nodeId, member.worktree, member.model));
+    for (const member of members) if (member.linked) restarts.set(member.nodeId, restartIn(member.nodeId, member.worktree, member.model, mission.permission));
     return { project, slug: root.slug, branch: root.branch, worktree: root.path, frameId, members };
   } catch (error) {
     // Its terminals first: no agent may sit in a folder that goes.
@@ -306,13 +308,13 @@ async function newMember(orchestratorId: string, workspaceId: string, mission: M
   const model = modelFor(mission, task);
   let nodeId: string | null = null;
   if (frame) {
-    nodeId = await addTerminal(workspaceId, agentPayload(name, tree.path, model), frameCenter(frame), frame.id);
+    nodeId = await addTerminal(workspaceId, agentPayload(name, tree.path, model, mission.permission), frameCenter(frame), frame.id);
   } else {
     const group = await launchGroup(
       { name: `Mission ${mission.name}`, role: "general", agents: ["claude"] },
       defaultLaunchOptions(),
       besideOrchestrator(orchestratorId, 1),
-      { pantheon, names: [name], cwds: [tree.path], models: [model] },
+      { pantheon, names: [name], cwds: [tree.path], models: [model], permission: mission.permission },
     );
     if (group) {
       nodeId = group.nodeIds[0];

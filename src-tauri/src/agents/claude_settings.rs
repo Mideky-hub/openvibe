@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 
 use super::hooks_server::valid_node_id;
-use crate::pty::shell::Role;
+use crate::pty::shell::{Permission, Role};
 
 const NOTIFICATIONS: &str =
     "permission_prompt|elicitation_dialog|elicitation_url_dialog|agent_needs_input|idle_prompt";
@@ -35,6 +35,37 @@ pub fn settings_json(url: &str, role: Role) -> Value {
         },
         "permissions": permissions,
     })
+}
+
+/// What needs a yes in Claude, for an agent nobody watches. Read-only tools ask nothing.
+const WORK_TOOLS: [&str; 7] = [
+    "Edit",
+    "Write",
+    "NotebookEdit",
+    "Bash",
+    "WebFetch",
+    "WebSearch",
+    "Agent",
+];
+
+/// Never without its mission saying so: this text rule is the first of two barriers (see `NO_PUSH_ENV`).
+const MISSION_DENIES: [&str; 3] = ["Bash(git push *)", "Bash(git push)", "Bash(gh pr create *)"];
+
+/// A mission's choice, in this session's settings only: the user's files stay as they are (spec mission de nuit §5.3).
+pub fn apply_permission(settings: &mut Value, permission: Option<Permission>) {
+    let Some(permission) = permission else {
+        return;
+    };
+    let rules = &mut settings["permissions"];
+    if permission == Permission::Work {
+        let allow = rules["allow"].as_array_mut();
+        allow
+            .into_iter()
+            .for_each(|allow| allow.extend(WORK_TOOLS.map(Value::from)));
+    }
+    let mut deny: Vec<Value> = rules["deny"].as_array().cloned().unwrap_or_default();
+    deny.extend(MISSION_DENIES.map(Value::from));
+    rules["deny"] = Value::Array(deny);
 }
 
 /// The status line OpenVibe gives Claude (spec maj §6): the session's usage
@@ -154,6 +185,7 @@ pub fn write(
     url: &str,
     role: Role,
     status: Option<&StatusLine>,
+    permission: Option<Permission>,
 ) -> io::Result<PathBuf> {
     if !valid_node_id(node_id) {
         return Err(io::Error::new(
@@ -167,6 +199,7 @@ pub fn write(
     std::fs::create_dir_all(dir)?;
     let path = dir.join(format!("{node_id}.json"));
     let mut settings = settings_json(url, role);
+    apply_permission(&mut settings, permission);
     if let Some(status) = status {
         // Without its script, Claude goes without the status line, never without its hooks.
         match std::fs::write(&status.script, STATUS_SCRIPT) {
@@ -246,12 +279,20 @@ mod tests {
     fn writes_rewrites_and_removes_a_terminal_s_file() {
         let dir = tempfile::tempdir().unwrap();
         let hooks = dir.path().join("hooks");
-        let path = write(&hooks, "n1", URL, Role::Agent, None).unwrap();
+        let path = write(&hooks, "n1", URL, Role::Agent, None, None).unwrap();
         assert_eq!(path, hooks.join("n1.json"));
         let read: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(read, settings_json(URL, Role::Agent));
-        write(&hooks, "n1", "http://127.0.0.1:1/other", Role::Agent, None).unwrap();
+        write(
+            &hooks,
+            "n1",
+            "http://127.0.0.1:1/other",
+            Role::Agent,
+            None,
+            None,
+        )
+        .unwrap();
         assert!(
             std::fs::read_to_string(&path)
                 .unwrap()
@@ -264,10 +305,10 @@ mod tests {
     #[test]
     fn refuses_a_node_id_that_would_leave_the_folder() {
         let dir = tempfile::tempdir().unwrap();
-        assert!(write(dir.path(), "../evil", URL, Role::Agent, None).is_err());
+        assert!(write(dir.path(), "../evil", URL, Role::Agent, None, None).is_err());
         assert!(!dir.path().join("../evil.json").exists());
         let english = crate::i18n::in_english(|| {
-            write(dir.path(), "../evil", URL, Role::Agent, None).unwrap_err()
+            write(dir.path(), "../evil", URL, Role::Agent, None, None).unwrap_err()
         });
         assert_eq!(english.to_string(), "invalid node id: ../evil");
     }
@@ -275,8 +316,8 @@ mod tests {
     #[test]
     fn clears_the_files_of_the_previous_run() {
         let dir = tempfile::tempdir().unwrap();
-        write(dir.path(), "a", URL, Role::Agent, None).unwrap();
-        write(dir.path(), "b", URL, Role::Agent, None).unwrap();
+        write(dir.path(), "a", URL, Role::Agent, None, None).unwrap();
+        write(dir.path(), "b", URL, Role::Agent, None, None).unwrap();
         std::fs::write(dir.path().join("keep.txt"), "x").unwrap();
         clear(dir.path());
         let left: Vec<_> = std::fs::read_dir(dir.path())
@@ -405,7 +446,7 @@ mod tests {
             config: dir.path().join("curl.cfg"),
             user: None,
         };
-        let path = write(dir.path(), "n1", URL, Role::Agent, Some(&line)).unwrap();
+        let path = write(dir.path(), "n1", URL, Role::Agent, Some(&line), None).unwrap();
         let read: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert!(read.get("statusLine").is_none());
@@ -421,7 +462,7 @@ mod tests {
             config: dir.path().join("curl.cfg"),
             user: None,
         };
-        let path = write(dir.path(), "n1", URL, Role::Agent, Some(&line)).unwrap();
+        let path = write(dir.path(), "n1", URL, Role::Agent, Some(&line), None).unwrap();
         let read: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(read["statusLine"], status_line_json(&line));
@@ -508,6 +549,71 @@ mod tests {
             settings_json(URL, Role::Agent)["permissions"]
                 .get("deny")
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn a_mission_chooses_in_this_sessions_settings_only() {
+        let work = |permission| {
+            let mut settings = settings_json(URL, Role::Agent);
+            apply_permission(&mut settings, permission);
+            settings["permissions"].clone()
+        };
+        assert_eq!(work(None), settings_json(URL, Role::Agent)["permissions"]);
+        let full = work(Some(Permission::Work));
+        let allow = full["allow"].as_array().unwrap();
+        assert!(allow.contains(&json!("mcp__openvibe")));
+        assert!(allow.contains(&json!("Bash")));
+        assert!(allow.contains(&json!("Edit")));
+        // Asking and files alone open no command.
+        for permission in [Permission::Ask, Permission::Edits] {
+            assert!(
+                !work(Some(permission))["allow"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&json!("Bash"))
+            );
+        }
+    }
+
+    #[test]
+    fn git_push_is_denied_whatever_the_mission_chose() {
+        for permission in [Permission::Ask, Permission::Edits, Permission::Work] {
+            let mut settings = settings_json(URL, Role::Agent);
+            apply_permission(&mut settings, Some(permission));
+            let deny = settings["permissions"]["deny"].as_array().unwrap().clone();
+            assert!(deny.contains(&json!("Bash(git push *)")), "{permission:?}");
+            assert!(deny.contains(&json!("Bash(git push)")), "{permission:?}");
+        }
+    }
+
+    #[test]
+    fn a_mission_keeps_a_managers_own_refusals() {
+        let mut settings = settings_json(URL, Role::Orchestrator);
+        apply_permission(&mut settings, Some(Permission::Ask));
+        let deny = settings["permissions"]["deny"].as_array().unwrap();
+        assert!(deny.contains(&json!("Edit")));
+        assert!(deny.contains(&json!("Bash(git push *)")));
+    }
+
+    #[test]
+    fn the_settings_file_carries_the_missions_choice() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write(
+            dir.path(),
+            "n1",
+            URL,
+            Role::Agent,
+            None,
+            Some(Permission::Work),
+        )
+        .unwrap();
+        let read: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        assert!(
+            read["permissions"]["allow"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("Bash"))
         );
     }
 }
