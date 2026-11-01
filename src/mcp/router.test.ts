@@ -311,6 +311,11 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
       expect(notify).toHaveBeenCalledWith("chef", "Isis a rendu compte (done) : Login fait");
     });
 
+    it("keeps what an agent leaves to check by hand (spec mission de nuit §6.2)", async () => {
+      await call("isis", "report", { summary: "Fait", status: "done", check: "Le bouton\nsur Windows 10" });
+      expect(missionOf(nodesStore.getState().nodes.chef)?.members[0].report?.check).toBe("Le bouton sur Windows 10");
+    });
+
     it("records a report no orchestrator hears, and says so (spec première version §5.4)", async () => {
       const unheard = "Compte rendu enregistré, mais l'orchestrateur est fermé : personne ne le lira pour l'instant.";
       vi.mocked(notify).mockClear();

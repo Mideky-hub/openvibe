@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { langStore } from "@/i18n";
-import { launchMission } from "@/mission/launch";
+import { endMission, launchMission } from "@/mission/launch";
 import { NEW_MISSION, type Mission } from "@/mission/mission";
 import { missionOf } from "@/mission/store";
 import { readTickets } from "@/mission/tickets";
@@ -59,6 +59,21 @@ describe("tickets (spec mission de nuit §5.1)", () => {
     langStore.setState({ lang: "en" });
     await setup({});
     expect(textOf(await orchestratorTool("chef", "tickets", {}))).toBe('No ticket source: the user chooses it in "Overnight run".');
+  });
+});
+
+describe("what is left to check by hand (spec mission de nuit §6.2)", () => {
+  it("keeps what finish says, on one line each, blank ones dropped", async () => {
+    await setup({ state: "en_cours" });
+    await orchestratorTool("chef", "terminer", { bilan: "Fini", check: ["Relire\nla migration", "  ", 3] });
+    expect(endMission).toHaveBeenCalledWith("chef", "Fini");
+    expect(missionOf(nodesStore.getState().nodes.chef)?.handChecks).toEqual(["Relire la migration"]);
+  });
+
+  it("asks nothing of a finish without any", async () => {
+    await setup({ state: "en_cours" });
+    await orchestratorTool("chef", "terminer", { bilan: "Fini" });
+    expect(missionOf(nodesStore.getState().nodes.chef)).not.toHaveProperty("handChecks");
   });
 });
 

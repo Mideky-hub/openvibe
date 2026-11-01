@@ -103,7 +103,11 @@ export function orchestratorTools() {
       inputSchema: { type: "object", properties: { subtask: { type: "string" }, agent: { type: "string" } }, required: ["subtask", "agent"] },
     },
     { name: "merge", description: d.merge, inputSchema: NO_ARGS },
-    { name: "finish", description: d.finish, inputSchema: { type: "object", properties: { summary: { type: "string" } }, required: ["summary"] } },
+    {
+      name: "finish",
+      description: d.finish,
+      inputSchema: { type: "object", properties: { summary: { type: "string" }, check: { type: "array", items: { type: "string" }, description: d.finishCheck } }, required: ["summary"] },
+    },
     {
       name: "remote_control",
       description: d.remoteControl,
@@ -313,6 +317,8 @@ function finish(orchestratorId: string, mission: Mission, args: Record<string, u
   if (mission.state !== "en_cours") return refused(t().orchestrator.noMission);
   const summary = typeof args.bilan === "string" ? args.bilan.trim() : "";
   if (!summary) return refused(t().orchestrator.summaryMissing);
+  const handChecks = Array.isArray(args.check) ? args.check.filter((line): line is string => typeof line === "string" && line.trim() !== "").map(oneLine) : [];
+  if (handChecks.length > 0) setMission(orchestratorId, { handChecks });
   endMission(orchestratorId, summary);
   return said(t().orchestrator.ended);
 }

@@ -9,7 +9,7 @@ pub const AGENT_FR: &str = "Tu travailles dans OpenVibe, un canvas de terminaux 
 - declare_steps (argument steps) : quand ta tâche demande plusieurs étapes (ou les phases d'un workflow), déclare-les avant de commencer, en titres courts (par exemple Plan, Recherche, Implémentation, Vérification). OpenVibe les montre en frise sous ton terminal.
 - step (arguments title, state) : marque chaque étape « in_progress » quand tu la commences, « done » quand elle est finie, « failed » si elle échoue.
 Pendant qu'un Workflow ou des sous-agents travaillent, tu attends et ne peux rien marquer : la frise resterait figée jusqu'à la fin. Quand tu leur confies des étapes, écris dans la consigne de chaque agent le titre exact de son étape et demande-lui de la marquer lui-même avec l'outil mcp__openvibe__step (in_progress en commençant, done ou failed en finissant). Des agents qui travaillent en parallèle ont chacun leur étape.
-- report (arguments summary, status) : quand OpenVibe t'a confié une sous-tâche de mission, termine par un résumé et un statut (done, blocked, failed).
+- report (arguments summary, status, check facultatif) : quand OpenVibe t'a confié une sous-tâche de mission, commit, puis termine par un résumé et un statut (done, blocked, failed) ; dans check, ce que l'utilisateur devra vérifier à la main.
 - notes (argument name, facultatif) : les notes Markdown du projet, sa mémoire, dans .openvibe/notes/. Sans argument, la liste, avec celles attachées à ton groupe ; avec name, le texte d'une note. Lis celles attachées à ton groupe avant de commencer.
 Délègue à tes sous-agents les sous-tâches qui s'y prêtent. Pour une simple question, sans étapes, n'utilise pas ces outils.";
 
@@ -17,7 +17,7 @@ pub const AGENT_EN: &str = "You work in OpenVibe, a canvas of agent terminals. T
 - declare_steps (argument steps): when your task takes several steps (or the phases of a workflow), declare them before you start, as short titles (for example Plan, Research, Implementation, Verification). OpenVibe shows them as a strip under your terminal.
 - step (arguments title, state): mark each step \"in_progress\" when you start it, \"done\" when it is finished, \"failed\" if it fails.
 While a Workflow or sub-agents are working, you wait and cannot mark anything: the strip would stay frozen until the end. When you hand steps to them, write the exact title of its step in each agent's instructions and ask it to mark it itself with the tool mcp__openvibe__step (in_progress when starting, done or failed when finishing). Agents working in parallel each have their own step.
-- report (arguments summary, status): when OpenVibe has given you a mission sub-task, finish with a summary and a status (done, blocked, failed).
+- report (arguments summary, status, optional check): when OpenVibe has given you a mission sub-task, commit, then finish with a summary and a status (done, blocked, failed); in check, what the user will have to check by hand.
 - notes (optional argument name): the project's Markdown notes, its memory, in .openvibe/notes/. With no argument, the list, showing those attached to your group; with name, the text of a note. Read those attached to your group before you start.
 Delegate to your sub-agents the sub-tasks that suit them. For a simple question, with no steps, do not use these tools.";
 
@@ -35,7 +35,7 @@ pub const ORCHESTRATOR_FR: &str = "Tu es l'orchestrateur d'une équipe d'agents 
 - interrupt : arrête le tour d'un agent au travail, comme Échap ; write « continue » le reprend.
 - reassign : donne une sous-tâche à un autre agent de la mission qui a rendu compte, ou à un agent « new » ; il reçoit le compte rendu et la branche du précédent.
 - merge : fusionne dans la branche de la mission les branches des agents qui ont rendu compte « done » ; te dit les conflits.
-- finish : clôt la mission avec ton bilan.
+- finish : clôt la mission avec ton bilan (summary) et, dans check, ce que l'utilisateur devra vérifier à la main : c'est en tête du rapport du matin.
 - remote_control : active ou coupe Remote Control (suivre et piloter une session depuis claude.ai ou le téléphone) pour des agents de l'équipe, « all », ou « me » ; te rend leurs liens, à donner à l'utilisateur.
 - notes (argument name, facultatif) : les notes Markdown du projet, sa mémoire. Sans argument, la liste, avec celles attachées aux groupes de tes agents ; avec name, le texte d'une note. Consulte-les pour découper le travail.
 Le budget global est du temps réel depuis le feu vert : des agents en parallèle le partagent, leurs budgets ne s'additionnent pas ; chaque sous-tâche doit seulement y tenir. Dans une mission de nuit (mission : overnight), c'est le temps d'absence de l'utilisateur et le budget d'un agent n'est qu'une cible.
@@ -60,7 +60,7 @@ pub const ORCHESTRATOR_EN: &str = "You are the orchestrator of a team of Claude 
 - interrupt: stops the turn of an agent at work, like Esc; write \"continue\" resumes it.
 - reassign: gives a sub-task to another agent of the mission that has reported, or to a \"new\" agent; it receives the previous one's report and branch.
 - merge: merges into the mission's branch the branches of the agents that reported \"done\"; tells you the conflicts.
-- finish: closes the mission with your summary.
+- finish: closes the mission with your summary, and in check what the user will have to check by hand: it tops the morning report.
 - remote_control: turns Remote Control on or off (follow and drive a session from claude.ai or the phone) for agents of the team (by name), \"all\", or \"me\"; gives you their links, to pass on to the user.
 - notes (optional argument name): the project's Markdown notes, its memory. With no argument, the list, showing those attached to your agents' groups; with name, the text of a note. Consult them to split the work.
 The overall budget is real time from the go-ahead: agents in parallel share it, their budgets do not add up; each sub-task only has to fit in it. In an overnight mission (mission: overnight), it is the time the user is away and an agent's budget is only a target.
@@ -186,6 +186,16 @@ mod tests {
                 assert!(prompt.contains(phrase), "{phrase}");
             }
         }
+    }
+
+    #[test]
+    fn both_sides_say_what_to_check_by_hand() {
+        // Spec mission de nuit §6.2: the morning report gathers it.
+        for prompt in [AGENT_FR, AGENT_EN, ORCHESTRATOR_FR, ORCHESTRATOR_EN] {
+            assert!(prompt.contains("check"), "{prompt}");
+        }
+        assert!(AGENT_FR.contains("commit, puis"));
+        assert!(AGENT_EN.contains("commit, then"));
     }
 
     #[test]

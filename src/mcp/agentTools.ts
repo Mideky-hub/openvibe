@@ -47,7 +47,7 @@ export function agentTools() {
       description: d.report,
       inputSchema: {
         type: "object",
-        properties: { summary: { type: "string" }, status: { type: "string", enum: ["done", "blocked", "failed"] } },
+        properties: { summary: { type: "string" }, status: { type: "string", enum: ["done", "blocked", "failed"] }, check: { type: "string", description: d.reportCheck } },
         required: ["summary", "status"],
       },
     },
@@ -87,7 +87,8 @@ export function report(nodeId: string, args: Record<string, unknown>): ToolResul
   if (!summary) return refused(t().agent.summarize);
   if (status !== "termine" && status !== "bloque" && status !== "echec") return refused(t().agent.unknownStatus(String(status)));
   // `merge` merges every « done » branch again: a merged one stays so until then (final review H2).
-  updateMember(found.orchestratorId, nodeId, { report: { summary, status, at: Date.now() } });
+  const check = typeof args.check === "string" ? oneLine(args.check) : "";
+  updateMember(found.orchestratorId, nodeId, { report: { summary, status, at: Date.now(), ...(check ? { check } : {}) } });
   // Queued even when nobody listens: a relaunched or restored orchestrator hears it then (final review R3).
   notify(found.orchestratorId, t().agent.reported(found.member.name, outReport(status), oneLine(summary)));
   // The queue moves on without it: a stopped orchestrator must not stall the night.

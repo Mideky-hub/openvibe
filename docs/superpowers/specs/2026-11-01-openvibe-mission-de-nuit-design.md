@@ -128,7 +128,7 @@ Constat H2 : les fils et les groupes ne sont connus que de l'espace affiché. Un
 
 ### 6.2 Le rapport du matin (tranche 7)
 
-Dans le panneau, à la fin d'une mission de nuit : la durée, chaque tâche faite, échouée ou bloquée avec son agent, son temps, sa branche et son résumé, les tâches restées dans la file, et ce qu'il faut vérifier à la main (`report` prend un champ `check` facultatif, l'orchestrateur et les agents le remplissent).
+Dans le panneau, à la fin d'une mission de nuit : la durée, chaque tâche faite, échouée, bloquée ou pas finie avec son agent, son temps, sa branche et son résumé, les tâches restées dans la file, et en tête ce qu'il faut vérifier à la main (`report` et `finish` prennent un champ `check` facultatif). Il s'affiche aussi quand le temps est écoulé sans que `finish` soit venu : un orchestrateur mort ne doit pas cacher ce qui s'est passé. « Nettoyer la mission » l'efface avec le reste.
 
 ## 7. Phase 2 — Des PR brouillons (non construite)
 

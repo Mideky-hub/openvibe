@@ -32,6 +32,7 @@ export interface PastTask {
   spentMin: number;
   budgetMin: number;
   branch: string;
+  check?: string;
 }
 
 /** A group by its id, which survives a renaming, and the name to show. */
@@ -44,6 +45,8 @@ export interface Report {
   summary: string;
   status: ReportStatus;
   at: number;
+  /** What the agent leaves to check by hand (spec mission de nuit §6.2). */
+  check?: string;
 }
 
 /** An agent of the formed team, in its worktree. */
@@ -113,6 +116,8 @@ export interface Mission {
   tickets?: TicketSource;
   /** What its agents may do unasked; none outside a night (spec mission de nuit §5.3). */
   permission?: Permission;
+  /** What `finish` leaves to check by hand. */
+  handChecks?: string[];
   /** The dialog was the go-ahead: the plan starts as soon as it is proposed (spec mission de nuit §5.1). */
   autoLaunch?: boolean;
 }
@@ -153,6 +158,7 @@ function readPast(raw: unknown): PastTask | null {
     spentMin: typeof r.spentMin === "number" ? r.spentMin : 0,
     budgetMin: typeof r.budgetMin === "number" ? r.budgetMin : 0,
     branch: typeof r.branch === "string" ? r.branch : "",
+    ...(typeof r.check === "string" ? { check: r.check } : {}),
   };
 }
 
@@ -173,7 +179,7 @@ function readMember(raw: unknown): Member | null {
   if (r.merged === true) member.merged = true;
   const report = r.report as Record<string, unknown> | undefined;
   if (report && typeof report.summary === "string" && typeof report.status === "string" && STATUSES.includes(report.status)) {
-    member.report = { summary: report.summary, status: report.status as ReportStatus, at: typeof report.at === "number" ? report.at : 0 };
+    member.report = { summary: report.summary, status: report.status as ReportStatus, at: typeof report.at === "number" ? report.at : 0, ...(typeof report.check === "string" ? { check: report.check } : {}) };
   }
   if (typeof r.extraMin === "number") member.extraMin = r.extraMin;
   if (r.overdue === 1 || r.overdue === 2) member.overdue = r.overdue;
@@ -234,6 +240,7 @@ export function readMission(raw: unknown): Mission | undefined {
   const tickets = readTicketSource(r.tickets);
   if (tickets) mission.tickets = tickets;
   if (r.autoLaunch === true) mission.autoLaunch = true;
+  if (Array.isArray(r.handChecks)) mission.handChecks = r.handChecks.filter((line): line is string => typeof line === "string");
   if (r.permission === "ask" || r.permission === "edits" || r.permission === "work") mission.permission = r.permission;
   return mission;
 }
@@ -334,6 +341,7 @@ export function pastTask(member: Member, report: Report): PastTask {
     spentMin: spentMin(member, report.at),
     budgetMin: member.budgetMin,
     branch: member.branch,
+    ...(report.check ? { check: report.check } : {}),
   };
 }
 
