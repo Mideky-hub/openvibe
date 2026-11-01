@@ -43,3 +43,8 @@ it("copies a one-shot terminal as a plain shell: an install never runs again una
   expect(copy).toMatchObject({ agent: "shell", command: "", cwd: "C:/api", shell: "cmd" });
   expect(copy.oneShot).toBeUndefined();
 });
+
+it("leaves a mission's permissions to its own agents: a copy asks as usual (review)", () => {
+  const copy = cloneTerminalPayload({ ...claude, permission: "work" }, "Osiris");
+  expect(copy.permission).toBeUndefined();
+});
