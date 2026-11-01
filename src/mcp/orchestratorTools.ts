@@ -7,7 +7,7 @@ import { budgetOf, memberTime, NEW_AGENT, oneLine, proposedPlan, proposedTasks, 
 import { freeMembers, giveNext, pumpQueue } from "@/mission/queue";
 import { LEVELS, modelLabel } from "@/mission/router";
 import { readTickets } from "@/mission/tickets";
-import { agentGroup, agentState, linkedClaudeAgents, linkedGroups, missionOf, orchestratorShown, setMission, updateMember } from "@/mission/store";
+import { agentGroup, agentState, linkedClaudeAgents, linkedGroups, missionOf, canvasKnown, setMission, updateMember } from "@/mission/store";
 import { terminalText } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore, sessionOf, terminalOf } from "@/store/nodes";
@@ -155,13 +155,13 @@ function describeMission(orchestratorId: string, mission: Mission): ToolResult {
         // Once an agent holds the sub-task, its own model counts: reassign may have given it to one that keeps its own.
         model: modelOfSubTask(mission, s),
       })) ?? null,
-    linked_agents: orchestratorShown(orchestratorId)
+    linked_agents: canvasKnown(orchestratorId)
       ? linkedClaudeAgents(orchestratorId)
           .filter((a) => !team.has(a.nodeId))
           .map((a) => ({ name: a.name, state: outAgentState(agentState(a.nodeId)), ...agentGroup(a.nodeId) }))
       : null,
-    linked_groups: orchestratorShown(orchestratorId) ? linkedGroups(orchestratorId).map(({ name, speciality }) => ({ name, speciality })) : null,
-    linked_agents_note: orchestratorShown(orchestratorId) ? null : t().orchestrator.hiddenAgents,
+    linked_groups: canvasKnown(orchestratorId) ? linkedGroups(orchestratorId).map(({ name, speciality }) => ({ name, speciality })) : null,
+    linked_agents_note: canvasKnown(orchestratorId) ? null : t().orchestrator.hiddenAgents,
     queue_waiting: mission.queue?.length ?? 0,
     left_min: remainingGlobal(mission, Date.now()) ?? null,
     overnight: mission.overnight === true,
@@ -176,7 +176,7 @@ function proposePlan(orchestratorId: string, mission: Mission, args: Record<stri
   if (mission.state === "terminee") return refused(t().orchestrator.finished);
   const onCanvas = (s: Record<string, unknown> | null) => !sameName(String(s?.agent ?? ""), NEW_AGENT) || Boolean(s?.groupe);
   const named = Array.isArray(args.sous_taches) && args.sous_taches.some((s) => onCanvas(s as Record<string, unknown> | null));
-  if (named && !orchestratorShown(orchestratorId)) return refused(t().orchestrator.hiddenWorkspace);
+  if (named && !canvasKnown(orchestratorId)) return refused(t().orchestrator.hiddenWorkspace);
   const result = proposedPlan(args, mission, linkedClaudeAgents(orchestratorId).map((a) => a.name), linkedGroups(orchestratorId));
   if (typeof result === "string") return refused(result);
   setMission(orchestratorId, { state: "plan", ...result, error: undefined });
@@ -202,7 +202,7 @@ async function tickets(orchestratorId: string, mission: Mission): Promise<ToolRe
 function addTasks(orchestratorId: string, mission: Mission, args: Record<string, unknown>): ToolResult {
   if (mission.state === "terminee") return refused(t().orchestrator.finished);
   const grouped = Array.isArray(args.tasks) && args.tasks.some((s) => Boolean((s as Record<string, unknown> | null)?.groupe));
-  if (grouped && !orchestratorShown(orchestratorId)) return refused(t().orchestrator.hiddenWorkspace);
+  if (grouped && !canvasKnown(orchestratorId)) return refused(t().orchestrator.hiddenWorkspace);
   const tasks = proposedTasks(args, mission, linkedGroups(orchestratorId));
   if (typeof tasks === "string") return refused(tasks);
   const queue = [...(mission.queue ?? []), ...tasks];
@@ -233,8 +233,8 @@ function describeTeam(orchestratorId: string, mission: Mission): ToolResult {
   if (!formed(mission)) return refused(t().orchestrator.notFormed);
   const nodes = nodesStore.getState().nodes;
   const now = Date.now();
-  // Groups live on the canvas: out of sight they are unknown, which null would not say.
-  const shown = orchestratorShown(orchestratorId);
+  // Groups live on the scene: never read, they are unknown, which null would not say.
+  const shown = canvasKnown(orchestratorId);
   return json(
     mission.members.map((m) => ({
       name: m.name,
@@ -319,7 +319,7 @@ function finish(orchestratorId: string, mission: Mission, args: Record<string, u
 
 /** Its team as `remote_control` names it: the linked Claude agents and the mission's members. */
 function teamOf(orchestratorId: string, mission: Mission): { nodeId: string; name: string }[] {
-  const team = orchestratorShown(orchestratorId) ? linkedClaudeAgents(orchestratorId) : [];
+  const team = canvasKnown(orchestratorId) ? linkedClaudeAgents(orchestratorId) : [];
   for (const member of mission.members) {
     if (!member.handedTo && !team.some((t) => t.nodeId === member.nodeId)) team.push({ nodeId: member.nodeId, name: member.name });
   }

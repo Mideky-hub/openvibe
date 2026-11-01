@@ -123,7 +123,8 @@ Comportements de Claude Code à vérifier dans une vraie session : voir le rappo
 Constat H2 : les fils et les groupes ne sont connus que de l'espace affiché. Une mission de nuit ne doit dépendre d'aucun espace affiché.
 
 - Les fils et les groupes se lisent dans la scène enregistrée de l'espace de l'orchestrateur quand il n'est pas affiché : `propose_plan`, `mission()`, `team`, `remote_control` et le lancement voient ce qu'ils voient à l'écran.
-- La formation de l'équipe, l'ajout d'un agent et la fin écrivent dans cette scène, et les agents démarrent sans attendre d'être montrés. La note `linked_agents_note` disparaît avec le cas qu'elle décrivait.
+- La formation de l'équipe, l'ajout d'un agent et la fin écrivent dans cette scène, qui reste à jour en mémoire et enregistrée, et les agents démarrent sans attendre d'être montrés.
+- `linked_agents_note` ne reste que pour une scène jamais lue : c'est alors le seul cas où les fils sont inconnus.
 
 ### 6.2 Le rapport du matin (tranche 7)
 

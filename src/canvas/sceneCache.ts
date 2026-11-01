@@ -1,8 +1,8 @@
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { BinaryFileData, BinaryFiles, ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
-import { loadWorkspace } from "@/ipc/db";
+import { loadWorkspace, saveScene } from "@/ipc/db";
 import { nodesStore } from "@/store/nodes";
-import type { SavedAppState } from "./sceneSync";
+import { liveNodeIds, type SavedAppState } from "./sceneSync";
 
 export interface LoadedScene {
   initialData: ExcalidrawInitialDataState;
@@ -58,6 +58,26 @@ export function rememberScene(
   savedFileIds: string[],
 ) {
   cache.set(workspaceId, { initialData: { elements, appState, files }, savedFileIds });
+}
+
+/** The scene of a workspace as last known, deleted elements included; undefined if never read. */
+export function cachedElements(workspaceId: string): readonly ExcalidrawElement[] | undefined {
+  return cache.get(workspaceId)?.initialData.elements ?? undefined;
+}
+
+/**
+ * Replaces the scene of a workspace that is not on screen, kept and saved as
+ * the canvas would: the save purges the rows of nodes it does not list, so it
+ * lists them all (spec mission de nuit §6.1).
+ */
+export function editStoredScene(workspaceId: string, elements: readonly ExcalidrawElement[]) {
+  const scene = cache.get(workspaceId);
+  if (!scene) return;
+  cache.set(workspaceId, { ...scene, initialData: { ...scene.initialData, elements } });
+  const live = elements.filter((e) => !e.isDeleted);
+  void saveScene(workspaceId, JSON.stringify(live), JSON.stringify(scene.initialData.appState ?? {}), liveNodeIds(elements)).catch((error: unknown) =>
+    console.warn("stored scene not saved", error),
+  );
 }
 
 export function forgetScene(workspaceId: string) {

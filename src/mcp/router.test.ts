@@ -2,6 +2,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { canvasStore } from "@/canvas/canvasStore";
+import { forgetScene, rememberScene } from "@/canvas/sceneCache";
 import { nodesStore, terminalOf } from "@/store/nodes";
 import { answer, handleCall } from "./router";
 import type { McpCall } from "@/ipc/mcp";
@@ -160,6 +161,19 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
       const mission = JSON.parse(textOf(await call("chef", "mission", {})));
       expect(mission.linked_agents).toEqual([expect.objectContaining({ name: "Isis", group: null, speciality: null })]);
       expect(mission.linked_groups).toEqual([]);
+    });
+  });
+
+  describe("a workspace not on screen whose scene is known (spec mission de nuit §6.1)", () => {
+    it("reads its linked agents and groups as on screen", async () => {
+      await nodesStore.getState().create("ailleurs", { workspaceId: "w8", kind: "orchestrator", payload: { name: "Ailleurs" } });
+      rememberScene("w8", [{ id: "g", type: "frame", name: "Interface", isDeleted: false, frameId: null, x: 0, y: 0, width: 1, height: 1, customData: { openvibe: { kind: "group", role: "frontend", pantheon: "norse", speciality: "Frontend" } } }, { id: "ailleurs", type: "embeddable", isDeleted: false, frameId: null, x: 0, y: 0, width: 1, height: 1, customData: { kind: "orchestrator" } }, { id: "a", type: "arrow", isDeleted: false, frameId: null, startBinding: { elementId: "ailleurs" }, endBinding: { elementId: "g" } }] as never, {} as never, {}, []);
+      const mission = JSON.parse(textOf(await call("ailleurs", "mission", {})));
+      expect(mission.linked_groups).toEqual([{ name: "Interface", speciality: "Frontend" }]);
+      expect(mission.linked_agents).toEqual(expect.any(Array));
+      expect(mission.linked_agents_note).toBeNull();
+      expect(textOf(await call("ailleurs", "propose_plan", plan))).toContain("Plan proposé");
+      forgetScene("w8");
     });
   });
 

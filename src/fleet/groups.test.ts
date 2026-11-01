@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { canvasStore } from "@/canvas/canvasStore";
@@ -7,11 +7,14 @@ import { nodesStore, terminalOf } from "@/store/nodes";
 import { terminalStatusStore } from "@/store/terminalStatus";
 import { workspacesStore } from "@/store/workspaces";
 import { toast } from "sonner";
-import { addAgentToGroup, closeGroup, launchGroup, setGroupFolded, setGroupSpeciality, showGroups } from "./groups";
+import { cachedElements, forgetScene, rememberScene } from "@/canvas/sceneCache";
+import { relaunchTerminal } from "@/nodes/terminal/registry";
+import { addAgentToGroup, closeGroup, closeStoredGroup, launchGroup, setGroupFolded, setGroupSpeciality, showGroups } from "./groups";
+import { removeFromStoredScene } from "./terminals";
 
 vi.mock("@excalidraw/excalidraw", () => ({ CaptureUpdateAction: { IMMEDIATELY: "i" }, newElementWith: (e: object, patch: object) => ({ ...e, ...patch }) }));
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
-vi.mock("@/nodes/terminal/registry", () => ({ markForAutostart: vi.fn() }));
+vi.mock("@/nodes/terminal/registry", () => ({ markForAutostart: vi.fn(), relaunchTerminal: vi.fn(() => Promise.resolve()), disposeTerminal: vi.fn() }));
 vi.mock("./naming", async (importOriginal) => ({ ...(await importOriginal<typeof import("./naming")>()), nameForNewAgent: vi.fn(() => Promise.resolve("Isis")) }));
 vi.mock("./terminals", async (importOriginal) => ({ ...(await importOriginal<typeof import("./terminals")>()), addTerminal: vi.fn(() => Promise.resolve()) }));
 
@@ -90,6 +93,77 @@ it("gives each agent of a staffed group the model the router chose, and none oth
     { pantheon: "egyptian", names: ["Isis", "Horus"], cwds: ["C:/a", "C:/b"], models: ["opus", undefined] },
   );
   expect(made!.nodeIds.map((id) => terminalOf(nodesStore.getState().nodes[id])?.model)).toEqual(["opus", undefined]);
+});
+
+describe("a scene not on screen (spec mission de nuit §6.1)", () => {
+  const options = { cwd: "C:/code", shell: "default" as const, title: "", command: "" };
+  const saved = () => saves[saves.length - 1];
+  let saves: { elementsJson: string; nodeIds: string[] }[];
+
+  beforeEach(() => {
+    saves = [];
+    vi.mocked(relaunchTerminal).mockClear();
+    mockIPC((cmd, args) => {
+      if (cmd === "save_scene") saves.push(args as (typeof saves)[number]);
+      return undefined;
+    });
+    workspacesStore.setState({ activeId: "other" });
+    rememberScene("w1", [{ id: "kept", type: "embeddable", isDeleted: false, x: 0, y: 0, width: 10, height: 10, customData: { kind: "terminal" } }] as never, {} as never, {}, []);
+  });
+
+  it("makes a group in the stored scene, saves every node, and starts its agents: nothing mounts them", async () => {
+    const scroll = vi.mocked(canvasStore.getState().api!.scrollToContent);
+    scroll.mockClear();
+    const made = await launchGroup({ name: "Mission Auth", role: "general", agents: ["claude"] }, options, { x: 0, y: 0 }, { pantheon: "egyptian", names: ["Isis"], cwds: ["C:/w/isis"], workspaceId: "w1" });
+    const ids = cachedElements("w1")!.map((e) => e.id);
+    expect(ids).toEqual(expect.arrayContaining(["kept", made!.frameId, made!.nodeIds[0]]));
+    expect(scene).toEqual([]);
+    expect(scroll).not.toHaveBeenCalled();
+    expect(relaunchTerminal).toHaveBeenCalledWith(made!.nodeIds[0], expect.objectContaining({ cwd: "C:/w/isis" }), "new");
+    // The save purges the rows of nodes it does not list.
+    expect(saved().nodeIds).toEqual(expect.arrayContaining(["kept", made!.nodeIds[0]]));
+    forgetScene("w1");
+  });
+
+  it("adds a terminal to it, and starts it", async () => {
+    const payload = { title: "", name: "Thor", agent: "claude" as const, cwd: "C:/w/thor", shell: "default" as const, command: "" };
+    const { addTerminal } = await vi.importActual<typeof import("./terminals")>("./terminals");
+    const id = await addTerminal("w1", payload, { x: 0, y: 0 });
+    expect(cachedElements("w1")!.map((e) => e.id)).toContain(id);
+    expect(relaunchTerminal).toHaveBeenCalledWith(id, payload, "new");
+    forgetScene("w1");
+  });
+
+  it("closes a group there with its terminals and wires, and frees them", async () => {
+    const { disposeTerminal } = await import("@/nodes/terminal/registry");
+    const wire = { id: "w", type: "arrow", isDeleted: false, customData: { openvibe: { kind: "wire" } }, startBinding: { elementId: "chef" }, endBinding: { elementId: "f1" } };
+    rememberScene(
+      "w1",
+      [
+        { id: "kept", type: "embeddable", isDeleted: false, frameId: null, customData: { kind: "terminal" } },
+        { id: "f1", type: "frame", isDeleted: false, frameId: null, customData: { openvibe: { kind: "group", role: "general", pantheon: "egyptian" } } },
+        { id: "t1", type: "embeddable", isDeleted: false, frameId: "f1", customData: { kind: "terminal" } },
+        wire,
+      ] as never,
+      {} as never,
+      {},
+      [],
+    );
+    closeStoredGroup("w1", "f1");
+    expect(cachedElements("w1")!.filter((e) => e.isDeleted).map((e) => e.id)).toEqual(["f1", "t1", "w"]);
+    expect(disposeTerminal).toHaveBeenCalledWith("t1");
+    expect(disposeTerminal).not.toHaveBeenCalledWith("f1");
+    await vi.waitFor(() => expect(saved()?.nodeIds).toEqual(["kept"]));
+    forgetScene("w1");
+  });
+
+  it("leaves a scene on screen to its canvas", () => {
+    workspacesStore.setState({ activeId: "w1" });
+    scene = [{ id: "t1", type: "embeddable" }];
+    removeFromStoredScene("w1", new Set(["t1"]));
+    expect(scene[0].isDeleted).toBeUndefined();
+    forgetScene("w1");
+  });
 });
 
 it("closes a group with the wires that led to it (final review H2)", () => {

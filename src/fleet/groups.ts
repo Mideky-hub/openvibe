@@ -7,9 +7,9 @@ import { allowRemoval } from "@/canvas/removalGuard";
 import { createNodeElement, nodeKindOf } from "@/canvas/nodeElement";
 import type { AgentId, Permission } from "@/ipc/pty";
 import { newTerminalPayload } from "@/nodes/terminal/launch";
-import { markForAutostart } from "@/nodes/terminal/registry";
+import { markForAutostart, relaunchTerminal } from "@/nodes/terminal/registry";
 import type { TerminalPayload } from "@/nodes/types";
-import { nodesStore } from "@/store/nodes";
+import { nodesStore, terminalOf } from "@/store/nodes";
 import { messages } from "@/i18n";
 import { fleetMessages } from "./messages";
 import { isRunning, statusOf } from "@/store/terminalStatus";
@@ -23,7 +23,8 @@ import { nextName } from "./names";
 import { nameForNewAgent, namesInWorkspace, pantheonForNewGroup } from "./naming";
 import { viewportCenter } from "./placement";
 import { ROLES, type RoleId } from "./roles";
-import { addTerminal, type Point } from "./terminals";
+import { sceneAccess } from "./sceneAccess";
+import { addTerminal, removeFromStoredScene, type Point } from "./terminals";
 import { isWire } from "./wires";
 
 export interface GroupPlan {
@@ -41,6 +42,8 @@ export interface GroupStaffing {
   models?: readonly (string | undefined)[];
   /** What its mission lets them do unasked (spec mission de nuit §5.3). */
   permission?: Permission;
+  /** The orchestrator's workspace, on screen or not (spec mission de nuit §6.1). */
+  workspaceId?: string;
 }
 
 const withModel = (payload: TerminalPayload, model: string | undefined): TerminalPayload => (model ? { ...payload, model } : payload);
@@ -61,12 +64,13 @@ export async function launchGroup(
   staffing?: GroupStaffing,
 ): Promise<{ frameId: string; nodeIds: string[] } | null> {
   const { api, view } = canvasStore.getState();
-  const workspaceId = workspacesStore.getState().activeId;
-  if (!api || !workspaceId || plan.agents.length === 0) return null;
+  const workspaceId = staffing?.workspaceId ?? workspacesStore.getState().activeId;
+  const first = workspaceId ? sceneAccess(workspaceId) : null;
+  if (!first || !workspaceId || plan.agents.length === 0) return null;
   const pantheon = staffing?.pantheon ?? pantheonForNewGroup(workspaceId);
   const grid = groupGrid(plan.agents.length);
   const center = at ?? viewportCenter(view);
-  const obstacles = api.getSceneElements().map(({ x, y, width, height }) => ({ x, y, width, height }));
+  const obstacles = first.elements().filter((e) => !e.isDeleted).map(({ x, y, width, height }) => ({ x, y, width, height }));
   const origin = clearSpot(
     { x: center.x - grid.width / 2, y: center.y - grid.height / 2, width: grid.width, height: grid.height },
     obstacles,
@@ -90,10 +94,18 @@ export async function launchGroup(
     terminals.push({ ...node, frameId: frame.id });
     nodeIds.push(node.id);
   }
-  api.updateScene({
-    elements: [...api.getSceneElementsIncludingDeleted(), ...terminals, frame],
-    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-  });
+  // Read after the waits: the user may have left the workspace or come back to it.
+  const scene = sceneAccess(workspaceId);
+  if (!scene) return null;
+  scene.write([...scene.elements(), ...terminals, frame]);
+  if (!scene.shown || !api) {
+    // Nothing mounts a terminal out of sight (spec mission de nuit §6.1).
+    for (const id of nodeIds) {
+      const payload = terminalOf(nodesStore.getState().nodes[id]);
+      if (payload) void relaunchTerminal(id, payload, "new");
+    }
+    return { frameId: frame.id, nodeIds };
+  }
   // 4 terminals fitted at once end up at 40 %, unreadable: the first ones are enough.
   const { width, height } = api.getAppState();
   api.scrollToContent(readableTargets(frame, terminals, { width, height }), {
@@ -200,17 +212,28 @@ export function closeGroup(groupId: string) {
   const api = canvasStore.getState().api;
   if (!api) return;
   const elements = api.getSceneElementsIncludingDeleted();
-  const group = new Set(elements.filter((e) => !e.isDeleted && (e.id === groupId || e.frameId === groupId)).map((e) => e.id));
-  const ends = (e: ExcalidrawElement) => (e.type === "arrow" ? [e.startBinding?.elementId, e.endBinding?.elementId] : []);
-  const going = new Set(
-    elements.filter((e) => !e.isDeleted && (group.has(e.id) || (isWire(e) && ends(e).some((id) => id !== undefined && group.has(id))))).map((e) => e.id),
-  );
+  const going = goingWithGroup(elements, groupId);
   allowRemoval(going);
   api.updateScene({
     elements: elements.map((e) => (going.has(e.id) ? newElementWith(e, { isDeleted: true }) : e)),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
   returnKeyboardToCanvas();
+}
+
+/** A group, its terminals and the wires that led to them. */
+function goingWithGroup(elements: readonly ExcalidrawElement[], groupId: string): Set<string> {
+  const group = new Set(elements.filter((e) => !e.isDeleted && (e.id === groupId || e.frameId === groupId)).map((e) => e.id));
+  const ends = (e: ExcalidrawElement) => (e.type === "arrow" ? [e.startBinding?.elementId, e.endBinding?.elementId] : []);
+  return new Set(
+    elements.filter((e) => !e.isDeleted && (group.has(e.id) || (isWire(e) && ends(e).some((id) => id !== undefined && group.has(id))))).map((e) => e.id),
+  );
+}
+
+/** Closes a group in a scene not on screen (spec mission de nuit §6.1). */
+export function closeStoredGroup(workspaceId: string, groupId: string) {
+  const scene = sceneAccess(workspaceId);
+  if (scene && !scene.shown) removeFromStoredScene(workspaceId, goingWithGroup(scene.elements(), groupId));
 }
 
 /** Asks first when agents of the group are still running (spec §11.4). */

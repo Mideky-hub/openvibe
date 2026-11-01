@@ -1,7 +1,8 @@
 import { canvasStore } from "@/canvas/canvasStore";
-import { groupOf } from "@/canvas/groups";
+import { framesFromScene, groupOf } from "@/canvas/groups";
+import { cachedElements } from "@/canvas/sceneCache";
 import { AGENTS } from "@/fleet/catalog";
-import { linkedAgents, NO_LINKS } from "@/fleet/wires";
+import { linkedAgents, NO_LINKS, orchestratorLinks } from "@/fleet/wires";
 import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore, terminalOf, type NodeRecord } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
@@ -54,15 +55,30 @@ export function memberOf(nodeId: string, { evenClosed = false } = {}): { orchest
   return null;
 }
 
-/** Whether the orchestrator's workspace is on screen: its canvas — wires, groups — is only known then (final review H2). */
+/** Whether the orchestrator's workspace is on screen. */
 export function orchestratorShown(orchestratorId: string): boolean {
   const record = nodesStore.getState().nodes[orchestratorId];
   return record !== undefined && record.workspaceId === workspacesStore.getState().activeId;
 }
 
+/** A workspace's wires and groups: live on screen, from its stored scene otherwise (spec mission de nuit §6.1). */
+export function workspaceCanvas(workspaceId: string | undefined): Pick<ReturnType<typeof canvasStore.getState>, "frames" | "links"> {
+  if (workspaceId === undefined || workspaceId === workspacesStore.getState().activeId) return canvasStore.getState();
+  const elements = cachedElements(workspaceId) ?? [];
+  return { frames: framesFromScene(elements), links: orchestratorLinks(elements) };
+}
+
+/** Whether the orchestrator's canvas is known: on screen, or its scene was read. */
+export function canvasKnown(orchestratorId: string): boolean {
+  const record = nodesStore.getState().nodes[orchestratorId];
+  return record !== undefined && (orchestratorShown(orchestratorId) || cachedElements(record.workspaceId) !== undefined);
+}
+
+const canvasOfNode = (nodeId: string) => workspaceCanvas(nodesStore.getState().nodes[nodeId]?.workspaceId);
+
 /** The Claude agents wired to an orchestrator: only they have OpenVibe's tools for a mission (spec §2). */
 export function linkedClaudeAgents(orchestratorId: string): { nodeId: string; name: string }[] {
-  const { links, frames } = canvasStore.getState();
+  const { links, frames } = canvasOfNode(orchestratorId);
   const nodes = nodesStore.getState().nodes;
   return linkedAgents(links[orchestratorId] ?? NO_LINKS, frames).agentIds.flatMap((nodeId) => {
     // An agent already working for another running mission is not free to be enrolled in this one.
@@ -75,19 +91,19 @@ export function linkedClaudeAgents(orchestratorId: string): { nodeId: string; na
 
 /** The groups wired to an orchestrator, with what each is for (spec groupes spécialisés §3). */
 export function linkedGroups(orchestratorId: string): { id: string; name: string; speciality: string | null }[] {
-  const { links, frames } = canvasStore.getState();
+  const { links, frames } = canvasOfNode(orchestratorId);
   return linkedAgents(links[orchestratorId] ?? NO_LINKS, frames).groups.map((f) => ({ id: f.id, name: f.name, speciality: f.group?.speciality ?? null }));
 }
 
 /** An agent's group and speciality as the orchestrator reads them: null without one. */
 export function agentGroup(nodeId: string): { group: string | null; speciality: string | null } {
-  const group = groupOf(canvasStore.getState().frames, nodeId);
+  const group = groupOf(canvasOfNode(nodeId).frames, nodeId);
   return { group: group?.name ?? null, speciality: group?.group.speciality ?? null };
 }
 
 /** The group a member belongs to: the one it joined, else the one it stands in. */
 export function memberGroupId(member: Member): string | null {
-  return member.group ?? groupOf(canvasStore.getState().frames, member.nodeId)?.id ?? null;
+  return member.group ?? groupOf(canvasOfNode(member.nodeId).frames, member.nodeId)?.id ?? null;
 }
 
 export type AgentState = "travaille" | "attend" | "inactif" | "arrêté";
