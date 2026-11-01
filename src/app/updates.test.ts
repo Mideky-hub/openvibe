@@ -144,3 +144,18 @@ it("saves everything before an update even with the studio open and clean (revie
   expect(flushAll).toHaveBeenCalled();
   expect(update.install).toHaveBeenCalled();
 });
+
+it("leaves the update being installed open when a check finds it again (review)", async () => {
+  const first = fakeUpdate();
+  let finish: () => void = () => undefined;
+  first.download.mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+  vi.mocked(check).mockResolvedValue(first as never);
+  await checkForUpdate();
+  const installing = installUpdate();
+  vi.mocked(check).mockResolvedValue(fakeUpdate() as never);
+  await checkForUpdate();
+  expect(first.close).not.toHaveBeenCalled();
+  finish();
+  await installing;
+  expect(first.install).toHaveBeenCalled();
+});

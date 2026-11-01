@@ -29,6 +29,8 @@ export const useUpdates = <T>(selector: (state: UpdatesState) => T) => useStore(
 
 /** The update found by the last check, downloaded and installed by `installUpdate`. */
 let found: Update | null = null;
+/** The one `installUpdate` holds: a check that finds the release again must not close it. */
+let installing: Update | null = null;
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -56,7 +58,7 @@ export async function checkForUpdate({ manual = false } = {}) {
     }
     const previous = found;
     found = update;
-    if (previous) void previous.close().catch(() => undefined);
+    if (previous && previous !== installing) void previous.close().catch(() => undefined);
     // An automatic check never closes a dialog the user has open.
     updatesStore.setState((s) => ({ available: { version: update.version, notes: update.body ?? "" }, dialogOpen: manual || s.dialogOpen }));
   } catch (error) {
@@ -74,21 +76,26 @@ export async function installUpdate() {
   if (!update) return;
   let total = 0;
   let received = 0;
+  installing = update;
   updatesStore.setState({ progress: 0 });
-  await update.download((event: DownloadEvent) => {
-    if (event.event === "Started") total = event.data.contentLength ?? 0;
-    if (event.event === "Progress") received += event.data.chunkLength;
-    updatesStore.setState({ progress: event.event === "Finished" ? 1 : total > 0 ? Math.min(1, received / total) : 0 });
-  });
-  // The installer closes OpenVibe: changes only the user can decide on stop it here, agents untouched.
-  if (hasUnsavedWork()) {
-    updatesStore.setState({ progress: null });
-    toast.warning(messages(appMessages).updateWaitsForSave);
-    return;
+  try {
+    await update.download((event: DownloadEvent) => {
+      if (event.event === "Started") total = event.data.contentLength ?? 0;
+      if (event.event === "Progress") received += event.data.chunkLength;
+      updatesStore.setState({ progress: event.event === "Finished" ? 1 : total > 0 ? Math.min(1, received / total) : 0 });
+    });
+    // The installer closes OpenVibe: changes only the user can decide on stop it here, agents untouched.
+    if (hasUnsavedWork()) {
+      updatesStore.setState({ progress: null });
+      toast.warning(messages(appMessages).updateWaitsForSave);
+      return;
+    }
+    await saveEverything();
+    await call<void>("prepare_for_update");
+    await update.install();
+  } finally {
+    installing = null;
   }
-  await saveEverything();
-  await call<void>("prepare_for_update");
-  await update.install();
 }
 
 /** For the app's whole life: 10 s after the start, then every 6 h, while automatic checks are on. */
