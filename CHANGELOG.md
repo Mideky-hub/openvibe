@@ -4,6 +4,8 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Fixed
+- The README model-router tables now use the effort IDs accepted by the orchestrator (`low`, `medium`, `high`, `extreme`), with French labels alongside them in the French README.
 ## [1.2.0-beta.1] - 2026-11-01
 
 ### Added
