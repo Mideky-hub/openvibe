@@ -149,6 +149,7 @@ export const fleetMessages = defineMessages(
       none: "Aucun agent",
       groupMenu: "Menu du groupe",
       orchestrators: "Orchestrateurs",
+      launchMission: (name: string) => `Lancer la mission de ${name}`,
     },
     command: {
       unknownTarget: (target: string) => `Cible inconnue : ${target}`,
@@ -381,6 +382,7 @@ export const fleetMessages = defineMessages(
       none: "No agent",
       groupMenu: "Group menu",
       orchestrators: "Orchestrators",
+      launchMission: (name: string) => `Launch ${name}'s mission`,
     },
     command: {
       unknownTarget: (target: string) => `Unknown target: ${target}`,
