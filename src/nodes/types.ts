@@ -62,7 +62,64 @@ export interface GoalsPayload {
   goals: Goal[];
 }
 
-export type NodePayload = TerminalPayload | OrchestratorPayload | KanbanPayload | FilePayload | GoalsPayload;
+/** The six colors of a calendar event (issue #32), each a theme token `--ov-event-<color>`. */
+export const EVENT_COLORS = ["terracotta", "ochre", "sage", "slate", "lilac", "rose"] as const;
+export type EventColor = (typeof EVENT_COLORS)[number];
+
+/** One event of a calendar (issue #32). */
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  /** Local day, YYYY-MM-DD. */
+  date: string;
+  allDay: boolean;
+  /** HH:MM, "" for an all-day event. */
+  time: string;
+  color: EventColor;
+  notes: string;
+}
+
+/** Content of a calendar widget (issue #32): its events; the month shown is not saved. */
+export interface CalendarPayload {
+  events: CalendarEvent[];
+}
+
+export type NodePayload = TerminalPayload | OrchestratorPayload | KanbanPayload | FilePayload | GoalsPayload | CalendarPayload;
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME = /^\d{2}:\d{2}$/;
+
+/** A real day written YYYY-MM-DD. */
+export function isDate(value: unknown): value is string {
+  if (typeof value !== "string" || !DATE.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
+}
+
+/** Reads a stored calendar payload. Never fails: events without an id, a title or a day, and repeated ids, are dropped. */
+export function readCalendarPayload(raw: unknown): CalendarPayload {
+  const r = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+  const events: CalendarEvent[] = [];
+  const seen = new Set<string>();
+  for (const event of Array.isArray(r.events) ? r.events : []) {
+    if (typeof event !== "object" || event === null) continue;
+    const e = event as Record<string, unknown>;
+    if (typeof e.id !== "string" || !e.id || seen.has(e.id) || typeof e.title !== "string" || !isDate(e.date)) continue;
+    seen.add(e.id);
+    const allDay = e.allDay === true;
+    events.push({
+      id: e.id,
+      title: e.title,
+      date: e.date,
+      allDay,
+      time: !allDay && typeof e.time === "string" && TIME.test(e.time) ? e.time : "",
+      color: EVENT_COLORS.includes(e.color as EventColor) ? (e.color as EventColor) : "terracotta",
+      notes: typeof e.notes === "string" ? e.notes : "",
+    });
+  }
+  return { events };
+}
 
 /** Reads a stored goals payload. Never fails: unreadable goals and repeated ids are dropped. */
 export function readGoalsPayload(raw: unknown): GoalsPayload {

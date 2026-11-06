@@ -1,5 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { readFilePayload, readGoalsPayload, readOrchestratorPayload, readTerminalPayload } from "./types";
+import { readCalendarPayload, readFilePayload, readGoalsPayload, readOrchestratorPayload, readTerminalPayload } from "./types";
+
+describe("readCalendarPayload (issue #32)", () => {
+  it("keeps a current calendar as it is", () => {
+    const payload = {
+      events: [
+        { id: "e1", title: "Démo", date: "2026-11-06", allDay: true, time: "", color: "sage", notes: "" },
+        { id: "e2", title: "Revue", date: "2026-11-09", allDay: false, time: "14:30", color: "slate", notes: "salle 2" },
+      ],
+    };
+    expect(readCalendarPayload(payload)).toEqual(payload);
+  });
+
+  it("drops unreadable or repeated events, mends what it can, and reads anything else as an empty calendar", () => {
+    expect(
+      readCalendarPayload({
+        events: [
+          { id: "e1", title: "a", date: "2026-11-06", allDay: "yes", time: 9, color: "neon" },
+          { id: "e1", title: "again", date: "2026-11-07" },
+          { id: "e2", title: "no date" },
+          { id: "e3", title: "bad date", date: "06/11/2026" },
+          null,
+          { title: "no id", date: "2026-11-06" },
+        ],
+      }),
+    ).toEqual({ events: [{ id: "e1", title: "a", date: "2026-11-06", allDay: false, time: "", color: "terracotta", notes: "" }] });
+    expect(readCalendarPayload(null)).toEqual({ events: [] });
+    expect(readCalendarPayload({ events: "x" })).toEqual({ events: [] });
+  });
+});
 
 describe("readGoalsPayload (issue #36)", () => {
   it("keeps a current list as it is", () => {
