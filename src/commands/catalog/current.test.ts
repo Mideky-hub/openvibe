@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { showNode } from "@/canvas/arrive";
+import { uiStore } from "@/store/ui";
 import { focusGroup } from "@/canvas/canvasFocus";
 import { canvasStore } from "@/canvas/canvasStore";
 import { agentsPanelStore } from "@/fleet/agentsPanelState";
@@ -20,6 +21,7 @@ import { CURRENT } from "./current";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
 vi.mock("@/canvas/arrive", () => ({ showNode: vi.fn(() => true), arrive: vi.fn(), arrivingNode: vi.fn(() => null) }));
+vi.mock("@/canvas/viewSettled", () => ({ whenViewSettled: vi.fn(() => Promise.resolve()) }));
 vi.mock("@/canvas/canvasFocus", () => ({ focusGroup: vi.fn(() => true), releaseToCanvas: vi.fn() }));
 vi.mock("@/fleet/broadcast", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/fleet/broadcast")>()),
@@ -159,6 +161,8 @@ describe("Terminal · <prénom> and Groupe · <nom> (spec fenêtre §7.3)", () =
     expect(pendingUiRequest()).toEqual({ kind: "groupMenu", id: "g1" });
     await find("group.rename").run(ctx("isis"));
     expect(focusGroup).toHaveBeenCalledWith("g1");
+    // The name field opens once the view has settled, not on the scroll's first frame.
+    await vi.waitFor(() => expect(uiStore.getState().renamingGroup).toBe("g1"));
   });
 
   it("copies the terminal's selection, greyed without one, and pastes the clipboard into it", async () => {

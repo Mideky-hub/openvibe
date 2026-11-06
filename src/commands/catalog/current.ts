@@ -1,5 +1,6 @@
 import { showNode } from "@/canvas/arrive";
 import { focusGroup } from "@/canvas/canvasFocus";
+import { whenViewSettled } from "@/canvas/viewSettled";
 import { canvasStore } from "@/canvas/canvasStore";
 import { groupOf, isGroup, type SceneGroup } from "@/canvas/groups";
 import { setAgentsFilter, setAgentsPanel } from "@/fleet/agentsPanelState";
@@ -147,10 +148,10 @@ export const CURRENT: readonly Command[] = [
   command("group.rename", {
     section: groupSection,
     available: hasGroup,
-    // Its label edits the name: the group comes into view first.
+    // Its label edits the name: the group comes into view first, and the field waits for the scroll to end.
     run: forGroup((id) => {
       focusGroup(id);
-      requestAnimationFrame(() => uiStore.getState().setRenamingGroup(id));
+      void whenViewSettled().then(() => uiStore.getState().setRenamingGroup(id));
     }),
   }),
   command("group.addAgent", {

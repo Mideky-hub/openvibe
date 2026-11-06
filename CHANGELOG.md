@@ -6,6 +6,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ### Fixed
 - The palette no longer fails with an error when a terminal closes between opening it and pressing Enter, and a command's pending request to open a menu or editor is dropped when you switch tab, project or the home screen, instead of firing at a later mount (#44).
+- **Renaming a group** from the palette now waits for the view to reach it before opening the name field, so the labels no longer drift when the group was off screen (#7).
 - A token left in `curl.cfg` by a previous run is deleted at startup, and a Codex terminal launched under `cmd` from a profile path holding `%`, `!` or `^` is covered by tests (it starts without the hook, with a warning in the log, rather than with a wrong path).
 - A node's × now closes it at the first click, instead of selecting it first (#47).
 - **Icon libraries:** what a library drops (embeddable content, frames, images) is now logged, and Excalidraw no longer tries its `esm.sh` font fallback, which flooded the console with ~460 blocked requests on each load (#13).
