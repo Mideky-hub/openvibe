@@ -58,7 +58,7 @@ export function TerminalNode({ nodeId }: { nodeId: string }) {
             >
               <Copy />
             </HeaderButton>
-            <HeaderButton label={t.close} onClick={() => requestClose(nodeId)}>
+            <HeaderButton close label={t.close} onClick={() => requestClose(nodeId)}>
               <X />
             </HeaderButton>
           </>
