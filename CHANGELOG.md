@@ -5,6 +5,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 ## [Unreleased]
 
 ### Fixed
+- A token left in `curl.cfg` by a previous run is deleted at startup, and a Codex terminal launched under `cmd` from a profile path holding `%`, `!` or `^` is covered by tests (it starts without the hook, with a warning in the log, rather than with a wrong path).
 - A node's × now closes it at the first click, instead of selecting it first (#47).
 - **Icon libraries:** what a library drops (embeddable content, frames, images) is now logged, and Excalidraw no longer tries its `esm.sh` font fallback, which flooded the console with ~460 blocked requests on each load (#13).
 - OpenVibe's MCP server is stricter with what agents send: a malformed request gets a proper JSON-RPC error instead of a silent answer, a flood of calls is turned away (503) instead of holding a thread each, and a terminal relaunched as its previous process exits keeps its access to OpenVibe's tools.
