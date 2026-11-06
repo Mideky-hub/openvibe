@@ -50,6 +50,8 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 - **Missions:** a mission works the same when its workspace has not been displayed since startup: the orchestrator sees its linked agents and groups, ending the mission closes its group instead of only stopping the agents, and the budget clock checks it. Orchestrators created before the bigger default size open at 640 × 760 (#69).
 - **Resume all:** a terminal that fails to restart from the "Resume all" offer now shows the usual "could not resume" message instead of an unhandled error.
 
+### Fixed
+- The README model-router tables now use the effort IDs accepted by the orchestrator (`low`, `medium`, `high`, `extreme`), with French labels alongside them in the French README.
 ## [1.2.0-beta.1] - 2026-11-01
 
 ### Added
