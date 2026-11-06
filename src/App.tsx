@@ -12,6 +12,7 @@ import { HomeScreen } from "@/home/HomeScreen";
 import { AppToaster } from "@/shell/AppToaster";
 import { ProjectView } from "@/shell/ProjectView";
 import { StatusScreen } from "@/shell/StatusScreen";
+import { ShortcutsDialog } from "@/shell/ShortcutsDialog";
 import { TroubleshootingDialog } from "@/shell/TroubleshootingDialog";
 import { UpdateDialog } from "@/shell/UpdateDialog";
 import { AccountsDialog } from "@/accounts/AccountsDialog";
@@ -61,6 +62,9 @@ export default function App() {
       </ErrorBoundary>
       <ErrorBoundary scope="troubleshooting dialog" fallback={() => null}>
         <TroubleshootingDialog />
+      </ErrorBoundary>
+      <ErrorBoundary scope="shortcuts dialog" fallback={() => null}>
+        <ShortcutsDialog />
       </ErrorBoundary>
       <AppToaster />
     </>
