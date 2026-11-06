@@ -6,6 +6,9 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ### Fixed
 - The palette no longer fails with an error when a terminal closes between opening it and pressing Enter, and a command's pending request to open a menu or editor is dropped when you switch tab, project or the home screen, instead of firing at a later mount (#44).
+- **Remote Control:** the `remote_control` tool refuses "all" when the orchestrator's workspace is not shown (instead of silently leaving linked agents out), and `ecrire` refuses while a Remote Control flow is typing in that agent. The other points of the card were already in: no-link start is an error, Turn off and Retry offered after an error, links of removed nodes cleared, "next start" toast for stopped sessions, no command typed over a draft, orchestrator lines held during a flow, duplicate names refused (#79).
+- **MCP answers:** `step` now reads the state back with the words the agent sent (`in_progress`, `done`, `failed`) in French too, instead of "en cours", "fait" or "échec". `mission` already returns `linked_agents: null` with a `linked_agents_note` when the orchestrator's workspace is not shown (#30).
+- **Model router:** removing an orchestrator in the middle of a mission now sends its linked agents back to the project and to Claude's default model, instead of leaving them on the router's. "Clean the mission" keeping the router and the mission description showing each agent's real model were already in (#62).
 - **Workspaces:** two workspaces of a project can no longer share a name (case aside), by creation or rename, with an error saying so. The rest of the project-list robustness card was already in: folders checked outside the database lock, no "Rename" on a missing project, agent names in the delete confirmation, the agent list awaited before "New console", save failures toasted (#31).
 - **Step timeline:** a declared step list with duplicate titles (case aside) is refused, the sub-agent "×N" stays visible next to a truncated title, an in-progress step no longer pulses under a stopped terminal, and sub-agent counts survive a page reload (#75).
 - **Renaming a group** from the palette now waits for the view to reach it before opening the name field, so the labels no longer drift when the group was off screen (#7).
@@ -21,6 +24,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 - A request that makes OpenVibe's local server fail is now written to the log with its address (never its token), so the failure can be traced; the server keeps answering the next ones (#6).
 - **Missions:** an agent wired to two orchestrators can no longer join a second mission while the first one is launching or before its sub-task is typed; the orchestrator is told the agent works for another running mission instead of "not linked" (#64).
 - **Agent activity:** resizing a terminal without hooks (Shell, Codex, Gemini…) no longer lights WORKING while it redraws, and a badge no longer stays stale when two changes arrive out of order or the clock is set back (#14).
+- **Missions:** a mission works the same when its workspace has not been displayed since startup: the orchestrator sees its linked agents and groups, ending the mission closes its group instead of only stopping the agents, and the budget clock checks it. Orchestrators created before the bigger default size open at 640 × 760 (#69).
 
 ## [1.2.0-beta.1] - 2026-11-01
 
