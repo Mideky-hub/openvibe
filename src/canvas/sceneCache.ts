@@ -2,6 +2,7 @@ import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { BinaryFileData, BinaryFiles, ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
 import { loadWorkspace, saveScene } from "@/ipc/db";
 import { nodesStore } from "@/store/nodes";
+import { grownOrchestrators } from "./nodeElement";
 import { liveNodeIds, type SavedAppState } from "./sceneSync";
 
 export interface LoadedScene {
@@ -36,7 +37,7 @@ async function readScene(workspaceId: string): Promise<LoadedScene> {
   );
   const scene: LoadedScene = {
     initialData: {
-      elements: data.elementsJson ? (JSON.parse(data.elementsJson) as ExcalidrawElement[]) : [],
+      elements: data.elementsJson ? grownOrchestrators(JSON.parse(data.elementsJson) as ExcalidrawElement[]) : [],
       appState: data.appStateJson ? (JSON.parse(data.appStateJson) as SavedAppState) : {},
       files,
     },
