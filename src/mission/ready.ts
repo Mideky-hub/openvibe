@@ -16,16 +16,19 @@ const TRUST_MAX_DOWNS = 4;
 const TICK_MS = 250;
 /**
  * Claude's prompt is up: the last `❯` line on screen is its input box, under a
- * rule (final review H2: a resumed conversation pushes the welcome banner off
- * the screen). A trust prompt's `❯` sits under no rule.
+ * rule or the top of its frame (final review H2: a resumed conversation pushes
+ * the welcome banner off the screen). A trust prompt's cursor sits under no rule.
  */
 export function claudeUp(screen: string): boolean {
   const lines = screen.split("\n").map((line) => line.trim());
   for (let i = lines.length - 1; i >= 0; i--) {
-    if (lines[i].startsWith("❯")) return i > 0 && lines[i - 1].startsWith("──");
+    if (SELECTED.test(lines[i])) return i > 0 && /^[─╭]─/.test(lines[i - 1]);
   }
   return false;
 }
+
+/** A line with Claude's cursor: its input box or the selected option of a menu (`❯`, or `>` in a frame or on another layout). */
+const SELECTED = /^(?:│\s*)?[❯>]/;
 
 /**
  * The next key for Claude's « trust this folder » prompt, or null while it does
@@ -35,7 +38,7 @@ export function claudeUp(screen: string): boolean {
  */
 export function trustKey(screen: string): string | null {
   if (!/trust/i.test(screen) || !/folder/i.test(screen)) return null;
-  const selected = screen.split("\n").find((line) => line.trimStart().startsWith("❯"));
+  const selected = screen.split("\n").find((line) => SELECTED.test(line.trim()));
   if (!selected) return null;
   return /yes/i.test(selected) ? "\r" : "\x1b[B";
 }
