@@ -147,6 +147,13 @@ export function memberGroupId(member: Member): string | null {
   return member.group ?? groupOf(canvasOfNode(member.nodeId).frames, member.nodeId)?.id ?? null;
 }
 
+/** The group of a member with its name, for the mission map (#63): null when it stands in none. */
+export function memberGroupOf(member: Member): { id: string; name: string } | null {
+  const id = memberGroupId(member);
+  const frame = id === null ? undefined : canvasOfNode(member.nodeId).frames.find((f) => f.id === id);
+  return id === null ? null : { id, name: frame?.name ?? "" };
+}
+
 export type AgentState = "travaille" | "attend" | "inactif" | "arrêté";
 
 /** An agent's state as the orchestrator reads it (spec §7.2 `equipe`). */
