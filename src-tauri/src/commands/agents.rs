@@ -14,7 +14,7 @@ use crate::agents::activity::{Activity, Change, HookSource, Tracker};
 use crate::agents::hooks_server::{self, HookHit, HookServer, HookSink};
 use crate::agents::mcp::{Pending, Tokens};
 use crate::agents::subagents::SubagentCounts;
-use crate::agents::{claude_settings, mcp_files, prompts};
+use crate::agents::{claude_settings, gemini_settings, mcp_files, prompts};
 use crate::error::AppResult;
 use crate::pty::shell::{Agent, AgentHooks, Permission, Role};
 use crate::sync::lock;
@@ -252,15 +252,17 @@ pub fn server_running(app: &AppHandle) -> bool {
     app.state::<AgentState>().hooks.is_some()
 }
 
-/// The hooks a new process gets: Claude's settings file, Codex's notify URL.
+/// The hooks a new process gets: Claude's settings file, Codex's notify URL,
+/// Gemini's system defaults file.
 /// Without a server, Claude starts without `--settings`.
 /// Where a terminal reports to (spec première version §4.3): the token is in
-/// the URL Claude reads from its settings file only; the status line and Codex
+/// the URL Claude reads from its settings file only; the status line, Codex and Gemini
 /// run commands, so their URLs are bare and curl reads the token from a file.
 pub struct HookUrls {
     pub settings: String,
     pub status: String,
     pub codex: String,
+    pub gemini: String,
 }
 
 pub fn hook_urls(server: &HookServer, node_id: &str) -> HookUrls {
@@ -268,6 +270,7 @@ pub fn hook_urls(server: &HookServer, node_id: &str) -> HookUrls {
         settings: server.url(HookSource::Claude, node_id),
         status: server.bare_status_url(node_id),
         codex: server.bare_url(HookSource::Codex, node_id),
+        gemini: server.bare_url(HookSource::Gemini, node_id),
     }
 }
 
@@ -336,6 +339,21 @@ pub fn hooks_for(
             curl_config: state.curl_config.clone(),
             ..Default::default()
         },
+        // Without the curl config, no hooks: the token would go on a command line.
+        Agent::Gemini => {
+            let Some(config) = &state.curl_config else {
+                return AgentHooks::default();
+            };
+            let own = gemini_settings::system_defaults();
+            let file =
+                gemini_settings::write(&state.hooks_dir, node_id, &urls.gemini, config, Some(&own))
+                    .inspect_err(|err| log::error!("hooks of {node_id} not written: {err}"))
+                    .ok();
+            AgentHooks {
+                gemini_defaults: file,
+                ..Default::default()
+            }
+        }
         _ => AgentHooks::default(),
     }
 }
@@ -372,6 +390,7 @@ pub fn ended(app: &AppHandle, node_id: &str) {
     let state = app.state::<AgentState>();
     lock(&state.tracker).remove(node_id);
     claude_settings::remove(&state.hooks_dir, node_id);
+    gemini_settings::remove(&state.hooks_dir, node_id);
     state.mcp_tokens.revoke(node_id);
     mcp_files::remove(&state.mcp_dir, node_id);
     clear_subagents(app, &state, node_id);
@@ -456,5 +475,8 @@ mod tests {
             assert!(!command.contains("tok-secret"), "{command}");
         }
         assert!(!line["command"].as_str().unwrap().contains("tok-secret"));
+        let gemini = gemini_settings::hook_command(&urls.gemini, &PathBuf::from("curl.cfg"));
+        assert!(gemini.contains("/hook/gemini/n1"), "{gemini}");
+        assert!(!gemini.contains("tok-secret"), "{gemini}");
     }
 }
