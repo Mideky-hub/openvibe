@@ -10,6 +10,7 @@ import { langStore } from "./i18n";
 import { startTheme } from "./app/theme";
 import { trackTerminalFocus } from "./canvas/keyboardFocus";
 import { installShortcuts } from "./commands/dispatch";
+import { installCloseThrough } from "./canvas/closeThrough";
 import { installPinchZoom } from "./canvas/pinchZoom";
 import { installRadial } from "./radial/install";
 import "./index.css";
@@ -24,6 +25,7 @@ installShortcuts(window);
 trackTerminalFocus(document);
 installRadial(window);
 installPinchZoom(window);
+installCloseThrough(window);
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
