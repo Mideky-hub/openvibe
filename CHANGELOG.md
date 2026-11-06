@@ -5,6 +5,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 ## [Unreleased]
 
 ### Fixed
+- **Icon libraries:** what a library drops (embeddable content, frames, images) is now logged, and Excalidraw no longer tries its `esm.sh` font fallback, which flooded the console with ~460 blocked requests on each load (#13).
 - Pinching on a laptop trackpad now zooms the canvas, also when the fingers are over a terminal, a board or an orchestrator (#89).
 - A shortcut pressed with a menu open no longer ends placement or link mode, and a click outside the palette closes it without moving the keyboard to what lies underneath.
 - **Mission clock:** an overrun warning that was still waiting for a busy orchestrator is no longer lost if OpenVibe closes, and restarting OpenVibe after a long pause no longer fires a burst of "global budget used up" toasts: each one waits for its orchestrator to be restarted.
