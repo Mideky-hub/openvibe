@@ -1,5 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { readFilePayload, readOrchestratorPayload, readTerminalPayload } from "./types";
+import { readFilePayload, readGoalsPayload, readOrchestratorPayload, readTerminalPayload } from "./types";
+
+describe("readGoalsPayload (issue #36)", () => {
+  it("keeps a current list as it is", () => {
+    const payload = { goals: [{ id: "g1", text: "Ship", done: true }, { id: "g2", text: "Test", done: false }] };
+    expect(readGoalsPayload(payload)).toEqual(payload);
+  });
+
+  it("drops unreadable or repeated goals and reads anything else as an empty list", () => {
+    expect(
+      readGoalsPayload({
+        goals: [{ id: "g1", text: "a", done: "yes" }, { id: "g1", text: "again", done: false }, { text: "no id" }, null, { id: "g2", text: 3 }],
+      }),
+    ).toEqual({ goals: [{ id: "g1", text: "a", done: false }] });
+    expect(readGoalsPayload(null)).toEqual({ goals: [] });
+    expect(readGoalsPayload({ goals: "x" })).toEqual({ goals: [] });
+  });
+});
 
 describe("readTerminalPayload", () => {
   it("reads a payload saved before agents and names existed", () => {

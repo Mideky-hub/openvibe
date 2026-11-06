@@ -50,7 +50,34 @@ export interface FilePayload {
   path: string;
 }
 
-export type NodePayload = TerminalPayload | OrchestratorPayload | KanbanPayload | FilePayload;
+/** One goal of a goals list (issue #36). */
+export interface Goal {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
+/** Content of a goals checklist widget (issue #36): its goals, in the user's order. */
+export interface GoalsPayload {
+  goals: Goal[];
+}
+
+export type NodePayload = TerminalPayload | OrchestratorPayload | KanbanPayload | FilePayload | GoalsPayload;
+
+/** Reads a stored goals payload. Never fails: unreadable goals and repeated ids are dropped. */
+export function readGoalsPayload(raw: unknown): GoalsPayload {
+  const r = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+  const goals: Goal[] = [];
+  const seen = new Set<string>();
+  for (const goal of Array.isArray(r.goals) ? r.goals : []) {
+    if (typeof goal !== "object" || goal === null) continue;
+    const g = goal as Record<string, unknown>;
+    if (typeof g.id !== "string" || !g.id || seen.has(g.id) || typeof g.text !== "string") continue;
+    seen.add(g.id);
+    goals.push({ id: g.id, text: g.text, done: g.done === true });
+  }
+  return { goals };
+}
 
 /** Reads a stored file payload; null without a usable path. */
 export function readFilePayload(raw: unknown): FilePayload | null {
