@@ -6,6 +6,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ### Fixed
 - Pinching on a laptop trackpad now zooms the canvas, also when the fingers are over a terminal, a board or an orchestrator (#89).
+- A shortcut pressed with a menu open no longer ends placement or link mode, and a click outside the palette closes it without moving the keyboard to what lies underneath.
 
 ## [1.2.0-beta.1] - 2026-11-01
 
