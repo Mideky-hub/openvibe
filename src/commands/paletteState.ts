@@ -59,3 +59,8 @@ export function closePalette() {
   paletteStore.setState({ open: false, query: "", context: null, returnFocus: null });
   if (returnFocus?.isConnected) returnFocus.focus();
 }
+
+/** The line the keyboard chose, if it was chosen for this query and is still listed; otherwise the first line. */
+export function chosenKey(chosen: { query: string; key: string }, query: string, keys: readonly string[]): string {
+  return chosen.query === query && keys.includes(chosen.key) ? chosen.key : (keys[0] ?? "");
+}
