@@ -8,7 +8,7 @@ import { terminalStatusStore } from "@/store/terminalStatus";
 import { workspacesStore } from "@/store/workspaces";
 import { toast } from "sonner";
 import { cachedElements, forgetScene, rememberScene } from "@/canvas/sceneCache";
-import { relaunchTerminal } from "@/nodes/terminal/registry";
+import { markForAutostart, relaunchTerminal } from "@/nodes/terminal/registry";
 import { addAgentToGroup, closeGroup, closeStoredGroup, launchGroup, setGroupFolded, setGroupSpeciality, showGroups } from "./groups";
 import { removeFromStoredScene } from "./terminals";
 
@@ -58,6 +58,27 @@ it("staffs a mission's group with the names, folders and pantheon it is given, a
     ["Horus", "C:/w/auth-horus"],
   ]);
   expect(frame?.customData?.openvibe).toMatchObject({ kind: "group", pantheon: "egyptian" });
+});
+
+it("marks each agent of a new group as starting before its node appears: never ARRÊTÉ before it mounts (issue #3)", async () => {
+  const marked = new Set<string>();
+  vi.mocked(markForAutostart).mockImplementation((id) => void marked.add(id));
+  const unmarkedOnArrival: string[] = [];
+  const known = new Set(Object.keys(nodesStore.getState().nodes));
+  const unsubscribe = nodesStore.subscribe(({ nodes }) => {
+    for (const id of Object.keys(nodes)) {
+      if (known.has(id)) continue;
+      known.add(id);
+      if (!marked.has(id)) unmarkedOnArrival.push(id);
+    }
+  });
+  try {
+    await launchGroup({ name: "Duo", role: "general", agents: ["shell", "shell"] }, { cwd: "C:/code", shell: "default", title: "", command: "" }, { x: 0, y: 0 });
+  } finally {
+    unsubscribe();
+    vi.mocked(markForAutostart).mockReset();
+  }
+  expect(unmarkedOnArrival).toEqual([]);
 });
 
 it("sets a group's speciality as one undoable step, and leaves other frames alone (spec groupes spécialisés §2)", () => {
