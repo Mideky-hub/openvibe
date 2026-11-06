@@ -17,13 +17,23 @@ function fakeBackend(initial: string[] = [], activeSetting: string | null = null
   });
   const db = {
     workspaces: initial.map((name, i) => make(name, i)),
+    reorders: [] as string[][],
     settings: new Map<string, unknown>(activeSetting ? [["ui.activeWorkspaceId.p1", activeSetting]] : []),
   };
   mockIPC((cmd, raw) => {
     const args = raw as Record<string, string>;
     switch (cmd) {
       case "list_workspaces":
-        return db.workspaces.filter((w) => w.projectId === args.projectId).map((w) => ({ ...w }));
+        return db.workspaces
+          .filter((w) => w.projectId === args.projectId)
+          .sort((a, b) => a.position - b.position)
+          .map((w) => ({ ...w }));
+      case "reorder_workspaces": {
+        const ids = raw as unknown as { ids: string[] };
+        db.reorders.push(ids.ids);
+        db.workspaces = db.workspaces.map((w) => ({ ...w, position: ids.ids.indexOf(w.id) }));
+        return;
+      }
       case "create_workspace": {
         // One code workspace per project: the backend hands back the existing one.
         const existing = args.kind === "code" && db.workspaces.find((w) => w.kind === "code");
@@ -133,7 +143,7 @@ describe("workspaces store", () => {
     await state().load("p1");
     await state().move("w3", 0);
     expect(names()).toEqual(["C", "A", "B"]);
-    expect(db.settings.get("ui.workspaceOrder.p1")).toEqual(["w3", "w1", "w2"]);
+    expect(db.reorders.at(-1)).toEqual(["w3", "w1", "w2"]);
     await state().move("w3", 99);
     expect(names()).toEqual(["A", "B", "C"]);
     store = createWorkspacesStore();

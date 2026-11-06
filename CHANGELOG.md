@@ -4,7 +4,13 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Added
+- The Agents panel shows a "Launch a mission" button on each orchestrator whose mission is planned, so a mission starts in one click without opening its node; clicking an orchestrator in the panel no longer moves the view (#2).
+- **Workspace tabs:** the order you give them by dragging (or Alt+←/→) is now saved with the workspaces through a `reorder_workspaces` command, and survives a restart (#85).
+
 ### Fixed
+- **Status line:** a change to your own `statusLine` in Claude's settings is now picked up during the session instead of only at launch; the usage bar slowness, newline, reset date, resumed-session and cache points of the card were already in (#20).
+- The Agents button announces how many agents wait for your reply, for screen readers too, and the mention chips of the prompt input have the same square corners as the rest of the interface.
 - **Icon panel card:** each category already had its own loading and error state, the thumbnail cache was bounded and dropped failed drawings, rotated icons centred by their turned bounds, the panel stayed without a canvas, copies got fresh seeds and an icon dropped on a group joined its frame; the per-category failure and the search-while-loading messages are now covered by tests (#16).
 - The palette no longer shows the previous line as selected for a frame after each keystroke or arrow key: the line chosen by the arrows only holds for the search it was made for.
 - **Theme & UI polish card:** the git chip's branch truncation (now covered by a test), the Agents panel stopping above the resume offer, its filter reset on reopen from the rail, the toast shadow out-ranking sonner's injected style and the first-paint theme script were already in; the agent rows' hover actions (Center, Review, Pause/Resume, Close) are complete (#60).
@@ -32,6 +38,8 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 - **Missions:** an agent wired to two orchestrators can no longer join a second mission while the first one is launching or before its sub-task is typed; the orchestrator is told the agent works for another running mission instead of "not linked" (#64).
 - **Agent activity:** resizing a terminal without hooks (Shell, Codex, Gemini…) no longer lights WORKING while it redraws, and a badge no longer stays stale when two changes arrive out of order or the clock is set back (#14).
 - **Missions:** a mission works the same when its workspace has not been displayed since startup: the orchestrator sees its linked agents and groups, ending the mission closes its group instead of only stopping the agents, and the budget clock checks it. Orchestrators created before the bigger default size open at 640 × 760 (#69).
+- **Resume all:** a terminal that fails to restart from the "Resume all" offer now shows the usual "could not resume" message instead of an unhandled error.
+- **Folding groups card:** folding a group to its label was already in; tests now pin that a folded group stays folded after a restart and that folding or unfolding never stops, relaunches or moves its agents (#83).
 
 ## [1.2.0-beta.1] - 2026-11-01
 
