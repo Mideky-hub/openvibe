@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { flushAll } from "@/lib/flush";
 import { nodesStore } from "@/store/nodes";
+import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import { framesFromScene, hiddenNodeIds } from "./groups";
 import { currentScene, editStoredScene, forgetScene, loadScene, rememberScene } from "./sceneCache";
 
 afterEach(() => {
@@ -33,6 +35,18 @@ it("grows an orchestrator saved at its old 320 × 420 to today's size, from the 
     { id: "resized", x: 10, y: 20, width: 500, height: 600 },
     { id: "note", x: 10, y: 20, width: 320, height: 420 },
   ]);
+});
+
+it("reads a folded group back folded, its agents still locked and hidden, after a restart (#83)", async () => {
+  const elements = [
+    { id: "g", type: "frame", isDeleted: false, x: 0, y: 0, width: 800, height: 500, name: "G", customData: { openvibe: { kind: "group", role: "general", pantheon: "greek", folded: true } } },
+    { id: "t", type: "embeddable", isDeleted: false, x: 40, y: 60, width: 400, height: 300, frameId: "g", locked: true, customData: { kind: "terminal" } },
+  ];
+  mockIPC((cmd) => (cmd === "load_workspace" ? { nodes: [], files: [], elementsJson: JSON.stringify(elements), appStateJson: null } : undefined));
+  const read = (await loadScene("w1")).initialData.elements as ExcalidrawElement[];
+  expect(framesFromScene(read)[0].group?.folded).toBe(true);
+  expect([...hiddenNodeIds(framesFromScene(read))]).toEqual(["t"]);
+  expect(read[1]).toMatchObject({ x: 40, y: 60, locked: true });
 });
 
 describe("a stored scene being edited (review)", () => {
