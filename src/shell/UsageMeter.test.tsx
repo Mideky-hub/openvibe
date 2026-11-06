@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { nodesStore } from "@/store/nodes";
+import { forgetTokenReport } from "@/usage/tokenReport";
 import { usageStore } from "@/usage/usageStore";
 import { UsageMeter } from "./UsageMeter";
 
@@ -26,6 +27,7 @@ let root: Root;
 beforeEach(async () => {
   mockIPC(() => undefined);
   usageStore.setState({ sessions: {}, limits: null });
+  forgetTokenReport();
   await nodesStore.getState().create("isis", {
     workspaceId: "w1",
     kind: "terminal",
@@ -70,6 +72,25 @@ it("opens the 30-day tokens from the detail, and comes back to it", async () => 
   expect(document.querySelector("[data-usage-detail]")).toBeNull();
   await act(async () => document.querySelector<HTMLButtonElement>('[data-tokens] [aria-label="Usage"]')!.click());
   expect(document.querySelector("[data-usage-detail]")).not.toBeNull();
+});
+
+it("maps the 30 days of activity in the detail from Claude's logs, so a restart loses none of it", async () => {
+  // A fresh launch: no status line yet, the logs on the disk hold the history.
+  const counts = (input: number) => ({ input, output: 0, cacheRead: 0, cacheWrite: 0 });
+  const logs = {
+    days: [{ date: "2026-11-05", counts: counts(1_200) }, { date: "2026-11-06", counts: counts(0) }],
+    sessions: [{ sessionId: "s-old", model: "claude-opus-5-5", counts: counts(1_200) }],
+    models: [],
+    filesScanned: 1,
+    truncated: false,
+  };
+  mockIPC((cmd) => (cmd === "token_usage" ? logs : undefined));
+  await act(async () => meter().click());
+  const activity = document.querySelector("[data-usage-detail] [data-activity]");
+  expect(activity).not.toBeNull();
+  expect(activity!.querySelectorAll("[data-activity-day]")).toHaveLength(2);
+  expect(document.querySelector("[data-usage-detail]")!.textContent).toContain("Activité · 30 jours");
+  expect(activity!.textContent).toContain("1 / 2");
 });
 
 it("shows a model's own weekly limit in the bar even when it is the only window sent", async () => {

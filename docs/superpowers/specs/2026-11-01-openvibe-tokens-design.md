@@ -25,6 +25,14 @@ Dans le détail de l'usage (clic sur le compteur de la barre du haut), un lien �
 - **Par modèle** : la répartition des 30 jours.
 - Un pied de page : nombre de fichiers lus, « tronqué » le cas échéant, et la mention « lu sur ce PC, rien n'est envoyé ».
 
+### 4.1 Activité (issue #74)
+
+Dans le détail de l'usage lui-même, avant le lien « Tokens », une section « Activité · 30 jours » tirée de la même lecture (une lecture récente de moins d'une minute sert aux deux écrans) :
+
+- **Carte d'activité** : une colonne par semaine, une ligne par jour (lundi en premier), chaque jour teinté de l'accent en quatre paliers selon le jour le plus chargé ; jour sans activité sur `--ov-line`. Survol : la date et les tokens.
+- **Statistiques** : jours actifs sur la fenêtre, série en cours (jusqu'à aujourd'hui, ou hier tant qu'aujourd'hui est vide), plus longue série, jour le plus chargé, moyenne par jour actif, nombre de sessions et moyenne par session. Au-delà des 200 sessions que liste Rust, le nombre devient « 200 et plus » et la moyenne disparaît (ce seraient les plus grosses seules).
+- Les journaux étant sur le disque, rien n'est perdu à un redémarrage d'OpenVibe ; rien n'est écrit de plus.
+
 ## 5. Hors périmètre
 
 Le coût en dollars (les tarifs changent ; le compteur d'usage donne déjà le coût des sessions de cette exécution), Codex, un historique au-delà de 30 jours, un export.
