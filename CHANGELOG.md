@@ -5,6 +5,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 ## [Unreleased]
 
 ### Added
+- **Mission map:** under a running orchestrator, the team now shows as a tree (the orchestrator, then its consoles under their groups) that follows the agents' states live, with a filter by state and a search. An inspector goes to the chosen console, pauses it (or the whole team from the orchestrator), frames the team, and closes through the usual confirmation (#63).
 - The Agents panel shows a "Launch a mission" button on each orchestrator whose mission is planned, so a mission starts in one click without opening its node; clicking an orchestrator in the panel no longer moves the view (#2).
 - **Workspace tabs:** the order you give them by dragging (or Alt+←/→) is now saved with the workspaces through a `reorder_workspaces` command, and survives a restart (#85).
 - **Tokens:** the 30-day view now also reads Codex's local logs (`~/.codex/sessions`, or `CODEX_HOME`), read-only and on this PC only: its sessions get their own row with their main model, next to OpenVibe's agents and the other Claude sessions. A missing or unreadable log folder, Claude's or Codex's, now counts for nothing instead of showing an error (#76).
