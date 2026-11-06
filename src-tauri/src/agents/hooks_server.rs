@@ -4,6 +4,7 @@
 
 use std::io::Read;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
@@ -92,10 +93,55 @@ impl HookServer {
 /// `Content-Length` would abort the whole application, token or not.
 const MAX_ANNOUNCED_BODY: usize = 64 * 1024 * 1024;
 
-/// Starts the server; every request is answered on its own thread: a tools call
-/// waits for the interface, and a client that announces a body and sends none
-/// holds its own thread, not the others. tiny_http reads what is left of that
-/// body even for a refused caller.
+/// MCP requests answered at once: each may wait 30 s for the interface, so a
+/// flood of them would else hold a thread each. Past it, 503 (issue #53).
+const MAX_MCP_IN_FLIGHT: usize = 64;
+/// The same for hooks and status lines, counted apart: a flood of MCP calls
+/// leaves the agents' activity heard.
+const MAX_HOOKS_IN_FLIGHT: usize = 64;
+
+/// A bounded count of requests being answered.
+struct Slots {
+    busy: AtomicUsize,
+    max: usize,
+}
+
+impl Slots {
+    fn new(max: usize) -> Arc<Self> {
+        Arc::new(Self {
+            busy: AtomicUsize::new(0),
+            max,
+        })
+    }
+
+    /// A slot, or `None` when all of them are taken.
+    fn take(self: &Arc<Self>) -> Option<Slot> {
+        if self.busy.fetch_add(1, Ordering::AcqRel) >= self.max {
+            self.busy.fetch_sub(1, Ordering::AcqRel);
+            return None;
+        }
+        Some(Slot(Arc::clone(self)))
+    }
+
+    #[cfg(test)]
+    fn busy(&self) -> usize {
+        self.busy.load(Ordering::Acquire)
+    }
+}
+
+/// Given back when dropped, however its request ended.
+struct Slot(Arc<Slots>);
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        self.0.busy.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+/// Starts the server; every request is answered on its own thread, within a
+/// bounded number per kind: a tools call waits for the interface, and a client
+/// that announces a body and sends none holds its own thread, not the others.
+/// tiny_http reads what is left of that body even for a refused caller.
 pub fn start(sink: impl HookSink) -> std::io::Result<HookServer> {
     let server =
         Server::http("127.0.0.1:0").map_err(|err| std::io::Error::other(err.to_string()))?;
@@ -107,6 +153,8 @@ pub fn start(sink: impl HookSink) -> std::io::Result<HookServer> {
     let token = uuid::Uuid::new_v4().to_string();
     let expected: Arc<str> = token.as_str().into();
     let sink = Arc::new(sink);
+    let mcp_slots = Slots::new(MAX_MCP_IN_FLIGHT);
+    let hook_slots = Slots::new(MAX_HOOKS_IN_FLIGHT);
     std::thread::spawn(move || {
         for request in server.incoming_requests() {
             if request
@@ -120,10 +168,12 @@ pub fn start(sink: impl HookSink) -> std::io::Result<HookServer> {
             }
             let sink = Arc::clone(&sink);
             if request.url().split('?').next() == Some("/mcp") {
-                dispatch(request, move |request| answer_mcp(request, &*sink));
+                dispatch(request, &mcp_slots, move |request| {
+                    answer_mcp(request, &*sink)
+                });
             } else {
                 let expected = Arc::clone(&expected);
-                dispatch(request, move |request| {
+                dispatch(request, &hook_slots, move |request| {
                     answer_hook(request, &expected, &*sink)
                 });
             }
@@ -146,10 +196,11 @@ fn answer_hook(mut request: Request, token: &str, sink: &dyn HookSink) {
     let _ = request.respond(Response::empty(status));
 }
 
-/// One thread per request. When the system refuses the thread, the caller is
-/// told so (503) instead of the process panicking.
-fn dispatch(request: Request, answer: impl FnOnce(Request) + Send + 'static) {
-    dispatch_with(request, answer, |job| {
+/// One thread per request, while a slot is free. When none is, or the system
+/// refuses the thread, the caller is told so (503) instead of the process
+/// running out of threads or panicking.
+fn dispatch(request: Request, slots: &Arc<Slots>, answer: impl FnOnce(Request) + Send + 'static) {
+    dispatch_with(request, slots, answer, |job| {
         std::thread::Builder::new()
             .name("local-request".into())
             .spawn(job)
@@ -157,22 +208,30 @@ fn dispatch(request: Request, answer: impl FnOnce(Request) + Send + 'static) {
     });
 }
 
-/// `spawn` starts the job; on failure the request is answered 503.
+/// `spawn` starts the job, which holds its slot until it is over; without a
+/// slot, or on failure, the request is answered 503.
 fn dispatch_with(
     request: Request,
+    slots: &Arc<Slots>,
     answer: impl FnOnce(Request) + Send + 'static,
     spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> std::io::Result<()>,
 ) {
-    let slot = Arc::new(Mutex::new(Some(request)));
-    let job_slot = Arc::clone(&slot);
+    let Some(held) = slots.take() else {
+        log::warn!("request not served, too many at once");
+        let _ = request.respond(Response::empty(503));
+        return;
+    };
+    let pending = Arc::new(Mutex::new(Some(request)));
+    let job_pending = Arc::clone(&pending);
     let job = Box::new(move || {
-        if let Some(request) = crate::sync::lock(&job_slot).take() {
+        let _held = held;
+        if let Some(request) = crate::sync::lock(&job_pending).take() {
             answer(request);
         }
     });
     if let Err(err) = spawn(job) {
         log::error!("request not served, no thread: {err}");
-        if let Some(request) = crate::sync::lock(&slot).take() {
+        if let Some(request) = crate::sync::lock(&pending).take() {
             let _ = request.respond(Response::empty(503));
         }
     }
@@ -1056,10 +1115,8 @@ mod tests {
         assert_eq!(exchange(server.port, "POST", "/mcp", &ok, call).0, 200);
     }
 
-    #[test]
-    fn a_request_without_a_thread_is_answered_503() {
-        // A listener of our own, its spawner always failing.
-        let probe = Server::http("127.0.0.1:0").unwrap();
+    /// A request received on a listener of our own, and the client that sent it.
+    fn probe_request(probe: &Server) -> (TcpStream, Request) {
         let port = probe.server_addr().to_ip().unwrap().port();
         let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
         client
@@ -1070,15 +1127,109 @@ mod tests {
                 b"POST /mcp HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
             )
             .unwrap();
-        let request = probe.recv().unwrap();
+        (client, probe.recv().unwrap())
+    }
+
+    fn response_of(mut client: TcpStream) -> String {
+        let mut response = String::new();
+        let _ = client.read_to_string(&mut response);
+        response
+    }
+
+    #[test]
+    fn a_request_without_a_thread_is_answered_503() {
+        // A listener of our own, its spawner always failing.
+        let probe = Server::http("127.0.0.1:0").unwrap();
+        let (client, request) = probe_request(&probe);
+        let slots = Slots::new(4);
         dispatch_with(
             request,
+            &slots,
             |_| panic!("must not run"),
             |_| Err(std::io::Error::other("no thread")),
         );
-        let mut response = String::new();
-        let _ = client.read_to_string(&mut response);
+        let response = response_of(client);
         assert!(response.starts_with("HTTP/1.1 503"), "{response}");
+        assert_eq!(slots.busy(), 0, "the refused request gives its slot back");
+    }
+
+    #[test]
+    fn a_request_past_the_limit_is_answered_503_without_a_thread() {
+        let probe = Server::http("127.0.0.1:0").unwrap();
+        let slots = Slots::new(1);
+        let held = slots.take().unwrap();
+        let (client, request) = probe_request(&probe);
+        dispatch_with(
+            request,
+            &slots,
+            |_| panic!("must not run"),
+            |_| panic!("no thread past the limit"),
+        );
+        let response = response_of(client);
+        assert!(response.starts_with("HTTP/1.1 503"), "{response}");
+
+        // Once the slot is back, the next request is answered, and holds it meanwhile.
+        drop(held);
+        let (client, request) = probe_request(&probe);
+        let during = Arc::clone(&slots);
+        dispatch_with(
+            request,
+            &slots,
+            move |request| {
+                assert!(during.take().is_none(), "the request holds the only slot");
+                let _ = request.respond(Response::empty(204));
+            },
+            |job| {
+                job();
+                Ok(())
+            },
+        );
+        let response = response_of(client);
+        assert!(response.starts_with("HTTP/1.1 204"), "{response}");
+        assert_eq!(slots.busy(), 0);
+    }
+
+    #[test]
+    fn a_flood_of_mcp_calls_is_bounded_and_the_hooks_are_still_heard() {
+        let (tx, rx) = mpsc::channel();
+        let server = start(Arc::new(TestSink::new(tx))).unwrap();
+        let port = server.port;
+        // Each call waits 1.5 s for its answer: more of them than slots.
+        let callers: Vec<_> = (0..MAX_MCP_IN_FLIGHT + 8)
+            .map(|_| {
+                std::thread::spawn(move || {
+                    exchange(
+                        port,
+                        "POST",
+                        "/mcp",
+                        &[("Authorization", "Bearer tok-pending")],
+                        br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+                    )
+                    .0
+                })
+            })
+            .collect();
+        std::thread::sleep(Duration::from_millis(500));
+        let path = format!("/hook/claude/n1?t={}", server.token);
+        assert_eq!(
+            send(
+                server.port,
+                "POST",
+                &path,
+                br#"{"hook_event_name":"UserPromptSubmit"}"#
+            ),
+            204,
+            "MCP calls must not take the hooks' slots"
+        );
+        assert!(rx.recv_timeout(Duration::from_secs(1)).is_ok());
+        let statuses: Vec<u16> = callers.into_iter().map(|c| c.join().unwrap()).collect();
+        assert!(statuses.contains(&503), "{statuses:?}");
+        assert!(
+            statuses.iter().all(|&s| s == 200 || s == 503),
+            "{statuses:?}"
+        );
+        // Still serving once the flood is over.
+        assert!(still_serving(server.port, &server.token));
     }
 
     #[test]
