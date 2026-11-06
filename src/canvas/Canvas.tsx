@@ -29,7 +29,7 @@ import { DotGrid } from "./overlay/DotGrid";
 import { GroupBackdrops } from "./overlay/GroupBackdrops";
 import { GroupLabels } from "./overlay/GroupLabels";
 import { StepTimelines } from "./overlay/StepTimelines";
-import { loadScene, rememberScene, type LoadedScene } from "./sceneCache";
+import { currentScene, loadScene, rememberScene, type LoadedScene } from "./sceneCache";
 import { EXCALIDRAW_UI_OPTIONS, withSceneDefaults } from "./sceneDefaults";
 import { sceneGone, sceneReady } from "./sceneReady";
 import { createSceneSync, liveNodeIds, liveNodeRects } from "./sceneSync";
@@ -57,7 +57,7 @@ export function Canvas({ workspaceId }: { workspaceId: string }) {
 
   if (error) return <Centered>{t.loadFailed(error)}</Centered>;
   if (!scene) return <Centered>{t.loading}</Centered>;
-  return <LoadedCanvas workspaceId={workspaceId} scene={scene} />;
+  return <LoadedCanvas workspaceId={workspaceId} scene={currentScene(workspaceId, scene)} />;
 }
 
 function Centered({ children }: { children: ReactNode }) {

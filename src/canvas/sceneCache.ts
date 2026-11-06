@@ -61,6 +61,14 @@ export function rememberScene(
   cache.set(workspaceId, { initialData: { elements, appState, files }, savedFileIds });
 }
 
+/**
+ * What a canvas mounted again must start from: the scene as last remembered.
+ * Fast Refresh remounts it with the scene first read, which would be saved over the current one.
+ */
+export function currentScene(workspaceId: string, given: LoadedScene): LoadedScene {
+  return cache.get(workspaceId) ?? given;
+}
+
 /** The scene of a workspace as last known, deleted elements included; undefined if never read. */
 export function cachedElements(workspaceId: string): readonly ExcalidrawElement[] | undefined {
   return cache.get(workspaceId)?.initialData.elements ?? undefined;
