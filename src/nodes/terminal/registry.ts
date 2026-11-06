@@ -3,7 +3,11 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { toast } from "sonner";
 import "@xterm/xterm/css/xterm.css";
+import { AGENTS } from "@/fleet/catalog";
+import { fleetMessages } from "@/fleet/messages";
+import { messages } from "@/i18n";
 import { ptyKill, ptyResize, ptyWrite } from "@/ipc/pty";
 import type { TerminalPayload } from "@/nodes/types";
 import { nodesStore, sessionOf, updateSession } from "@/store/nodes";
@@ -260,7 +264,9 @@ export function resumeTerminal(nodeId: string) {
   const entry = entries.get(nodeId) ?? create(nodeId);
   autostart.cancel(nodeId);
   const mode = payload.agent === "claude" && payload.claudeSessionId ? "resume" : "new";
-  void relaunchSession(nodeId, entry.term, payload, mode, () => freshen(entry));
+  void relaunchSession(nodeId, entry.term, payload, mode, () => freshen(entry)).catch(() => {
+    toast.warning(messages(fleetMessages).broadcast.resumeFailed(payload.name || AGENTS[payload.agent].label));
+  });
 }
 
 /** Resolves once the new process is spawned. */
