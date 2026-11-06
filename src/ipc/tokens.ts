@@ -8,10 +8,13 @@ export interface TokenCounts {
   cacheWrite: number;
 }
 
-/** What Rust read from Claude's local logs over the last 30 days (spec Tokens); mirrors `tokens::Report`. */
+/** The agent whose logs a session comes from; mirrors `tokens::Agent`. */
+export type TokenAgent = "claude" | "codex";
+
+/** What Rust read from Claude's and Codex's local logs over the last 30 days (spec Tokens); mirrors `tokens::Report`. */
 export interface TokenReport {
   days: { date: string; counts: TokenCounts }[];
-  sessions: { sessionId: string; model: string | null; counts: TokenCounts }[];
+  sessions: { sessionId: string; agent: TokenAgent; model: string | null; counts: TokenCounts }[];
   models: { model: string; counts: TokenCounts }[];
   filesScanned: number;
   truncated: boolean;
