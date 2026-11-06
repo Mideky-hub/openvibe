@@ -77,6 +77,9 @@ export const setWorkspacePantheon = (id: string, pantheon: string) =>
   write(() => call<void>("set_workspace_pantheon", { id, pantheon }));
 export const renameWorkspace = (id: string, name: string) =>
   write(() => call<void>("rename_workspace", { id, name }));
+/** Saves the tab order of a project: `ids` first, in that order. */
+export const reorderWorkspaces = (projectId: string, ids: string[]) =>
+  write(() => call<void>("reorder_workspaces", { projectId, ids }));
 export const deleteWorkspace = (id: string) => write(() => call<void>("delete_workspace", { id }));
 export const saveScene = (workspaceId: string, elementsJson: string, appStateJson: string, nodeIds: string[]) =>
   write(() => call<void>("save_scene", { workspaceId, elementsJson, appStateJson, nodeIds }));
@@ -85,3 +88,4 @@ export const saveFiles = (workspaceId: string, files: StoredFile[]) =>
 export const saveNode = (id: string, workspaceId: string, kind: NodeKind, payloadJson: string) =>
   write(() => call<void>("save_node", { id, workspaceId, kind, payloadJson }));
 export const setSetting = (key: string, value: unknown) => write(() => call<void>("set_setting", { key, value }));
+export const deleteSetting = (key: string) => write(() => call<void>("delete_setting", { key }));

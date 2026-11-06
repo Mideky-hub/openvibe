@@ -22,6 +22,8 @@ import { forgetWorkspaces } from "./forget";
 import { loadLanguage } from "@/i18n/settings";
 import { loadThemeSettings } from "./theme";
 import { loadNativeNotifications } from "./nativeNotifications";
+import { loadAgentSettings } from "./agentSettings";
+import { loadShortcuts } from "@/commands/shortcutSettings";
 import { loadUpdateSettings, startUpdateChecks } from "./updates";
 import { syncWindowTitle } from "./windowTitle";
 
@@ -38,6 +40,8 @@ export function boot(): Promise<void> {
     await loadThemeSettings();
     await loadUpdateSettings();
     await loadNativeNotifications();
+    await loadAgentSettings();
+    await loadShortcuts();
     await loadAgentsPanel();
     await onPtyExit(({ nodeId, exitCode }) => {
       forgetLivePty(nodeId);

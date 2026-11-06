@@ -5,7 +5,9 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 ## [Unreleased]
 
 ### Added
+- **Settings:** the settings menu now also sets the default agent (automatic, or any agent that starts without options and is found on this PC; a missing one falls back to Claude, Codex, then Shell), the activity threshold (1, 1.5, 3 or 5 s of quiet output before an agent without hooks reads READY, applied by Rust's tracker at once) and the keyboard shortcuts. "Keyboard shortcuts…" opens a dialog where each of the application's shortcuts takes new keys: keys another function has are refused and the dialog names it, as are copy, paste, undo and the canvas's own keys, and keys without Ctrl or F1–F12; "Reset" and "Reset all" give the default keys back. All three are saved and survive a restart, and the palette shows the keys given (#84).
 - The Agents panel shows a "Launch a mission" button on each orchestrator whose mission is planned, so a mission starts in one click without opening its node; clicking an orchestrator in the panel no longer moves the view (#2).
+- **Workspace tabs:** the order you give them by dragging (or Alt+←/→) is now saved with the workspaces through a `reorder_workspaces` command, and survives a restart (#85).
 
 ### Fixed
 - The README model-router tables now use the effort IDs accepted by the orchestrator (`low`, `medium`, `high`, `extreme`), with French labels alongside them in the French README.

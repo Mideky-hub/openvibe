@@ -1,10 +1,12 @@
 import { createStore, useStore } from "zustand";
 import {
   createWorkspace,
+  deleteSetting,
   deleteWorkspace,
   getSetting,
   listWorkspaces,
   renameWorkspace,
+  reorderWorkspaces,
   setSetting,
   setWorkspacePantheon,
   type Workspace,
@@ -18,7 +20,8 @@ export type { Workspace, WorkspaceKind };
 
 /** Plan 2 kept a single active workspace; it seeds the first project opened. */
 const LEGACY_ACTIVE_KEY = "ui.activeWorkspaceId";
-const orderKey = (projectId: string) => `ui.workspaceOrder.${projectId}`;
+/** Before the order moved to the database, a drag saved the ids in this setting. */
+const legacyOrderKey = (projectId: string) => `ui.workspaceOrder.${projectId}`;
 const activeKey = (projectId: string) => `ui.activeWorkspaceId.${projectId}`;
 
 export interface WorkspacesState {
@@ -38,7 +41,7 @@ export interface WorkspacesState {
   /** Deletes a workspace (never the last one) and selects its neighbor if it was active. */
   remove: (id: string) => Promise<void>;
   select: (id: string) => void;
-  /** Puts a tab at `index` (clamped); the order is saved in the settings, per project. */
+  /** Puts a tab at `index` (clamped); the order is saved with the workspaces. */
   move: (id: string, index: number) => Promise<void>;
   setPantheon: (id: string, pantheon: string) => Promise<void>;
   /**
@@ -58,22 +61,26 @@ export function canRemove(workspaces: readonly Workspace[], workspace: Workspace
   return isCode(workspace) || workspaces.filter((w) => !isCode(w)).length > 1;
 }
 
-/** The workspaces in the order saved for the project; unknown ids are dropped, new ones go last. */
-export function inSavedOrder(workspaces: Workspace[], saved: unknown): Workspace[] {
-  if (!Array.isArray(saved)) return workspaces;
-  const rank = (w: Workspace) => {
-    const i = saved.indexOf(w.id);
-    return i === -1 ? Number.MAX_SAFE_INTEGER : i;
-  };
-  return [...workspaces].sort((a, b) => rank(a) - rank(b));
-}
-
 /** "Workspace N" with the smallest N not already taken. */
 export function nextDefaultName(workspaces: Workspace[]): string {
   const taken = new Set(workspaces.map((w) => w.name.toLowerCase()));
   let n = 1;
   while (taken.has(`workspace ${n}`)) n++;
   return `Workspace ${n}`;
+}
+
+/** One-off: applies the tab order saved in the old setting, then drops the key. */
+async function migrateLegacyOrder(projectId: string, workspaces: Workspace[]): Promise<Workspace[]> {
+  const key = legacyOrderKey(projectId);
+  const saved = await getSetting<unknown>(key);
+  if (saved === null || saved === undefined) return workspaces;
+  const known = new Map(workspaces.map((w) => [w.id, w]));
+  const ids = (Array.isArray(saved) ? saved : []).filter((id): id is string => typeof id === "string" && known.has(id));
+  const ordered = [...new Set(ids)].map((id) => known.get(id)!);
+  const next = [...ordered, ...workspaces.filter((w) => !ordered.includes(w))];
+  if (ordered.length > 0) await reorderWorkspaces(projectId, next.map((w) => w.id));
+  await deleteSetting(key);
+  return ordered.length > 0 ? next : workspaces;
 }
 
 export function createWorkspacesStore() {
@@ -95,9 +102,9 @@ export function createWorkspacesStore() {
         set({ projectId, workspaces: [], activeId: null, lastCanvasId: null, status: "loading", error: undefined });
         try {
           let workspaces = (await listWorkspaces(projectId)).map(withKind);
+          workspaces = await migrateLegacyOrder(projectId, workspaces);
           if (!workspaces.some((w) => !isCode(w)))
             workspaces = [withKind(await createWorkspace(projectId, nextDefaultName(workspaces))), ...workspaces];
-          workspaces = inSavedOrder(workspaces, await getSetting<unknown>(orderKey(projectId)).catch(() => null));
           const saved = (await getSetting<string>(activeKey(projectId))) ?? (await getSetting<string>(LEGACY_ACTIVE_KEY));
           const activeId = workspaces.some((w) => w.id === saved) ? saved! : workspaces[0].id;
           if (get().projectId === projectId) set({ workspaces, activeId, status: "ready" });
@@ -164,7 +171,7 @@ export function createWorkspacesStore() {
         next.splice(Math.max(0, Math.min(index, next.length)), 0, workspaces[from]);
         set({ workspaces: next });
         // The order is a convenience: a refused save keeps it for the session.
-        await setSetting(orderKey(projectId), next.map((w) => w.id)).catch((error: unknown) => console.warn("workspace order not saved", error));
+        await reorderWorkspaces(projectId, next.map((w) => w.id)).catch((error: unknown) => console.warn("workspace order not saved", error));
       },
 
       setPantheon: async (id, pantheon) => {

@@ -132,6 +132,7 @@ pub fn run() {
             commands::workspace::list_workspaces,
             commands::workspace::create_workspace,
             commands::workspace::rename_workspace,
+            commands::workspace::reorder_workspaces,
             commands::workspace::delete_workspace,
             commands::workspace::load_workspace,
             commands::workspace::save_scene,
@@ -139,6 +140,7 @@ pub fn run() {
             commands::workspace::save_node,
             commands::workspace::get_setting,
             commands::workspace::set_setting,
+            commands::workspace::delete_setting,
             commands::project::list_projects,
             commands::project::create_project,
             commands::project::rename_project,
@@ -184,6 +186,7 @@ pub fn run() {
             commands::notes::notes_agent_list,
             commands::notes::notes_agent_read,
             commands::agents::agent_activity_snapshot,
+            commands::agents::set_activity_threshold,
             commands::agents::mcp_reply,
         ])
         .build(tauri::generate_context!())

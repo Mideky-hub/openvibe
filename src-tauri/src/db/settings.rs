@@ -23,6 +23,11 @@ pub fn set(conn: &Connection, key: &str, value: &serde_json::Value) -> AppResult
     Ok(())
 }
 
+pub fn delete(conn: &Connection, key: &str) -> AppResult<()> {
+    conn.execute("DELETE FROM settings WHERE key = ?1", [key])?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -39,6 +44,26 @@ mod tests {
                 assert_eq!(
                     get(conn, "ui.activeWorkspaceId")?,
                     Some(serde_json::json!("w2"))
+                );
+                delete(conn, "ui.activeWorkspaceId")?;
+                assert_eq!(get(conn, "ui.activeWorkspaceId")?, None);
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn keeps_numbers_and_objects_as_they_were_set() {
+        Db::open_in_memory()
+            .unwrap()
+            .with(|conn| {
+                let shortcuts = serde_json::json!({ "Ctrl+P": "Ctrl+K" });
+                set(conn, "ui.shortcuts", &shortcuts)?;
+                set(conn, "agents.activityThresholdMs", &serde_json::json!(3000))?;
+                assert_eq!(get(conn, "ui.shortcuts")?, Some(shortcuts));
+                assert_eq!(
+                    get(conn, "agents.activityThresholdMs")?,
+                    Some(serde_json::json!(3000))
                 );
                 Ok(())
             })
