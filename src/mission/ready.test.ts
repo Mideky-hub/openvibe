@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TRUST_QUIET_MS, trustKey, whenReady, type ReadyProbe } from "./ready";
+import { claudeUp, TRUST_QUIET_MS, trustKey, whenReady, type ReadyProbe } from "./ready";
 
 const TRUST = "Accessing workspace:\n\nQuick safety check: Is this a project you created or one you trust?\n\n❯ No, exit\n  Yes, I trust this folder\n\nEnter to confirm · Esc to cancel";
 const TRUST_YES = TRUST.replace("❯ No, exit\n  Yes", "  No, exit\n❯ Yes");
@@ -106,5 +106,24 @@ describe("whenReady (spec orchestrateur §7.3)", () => {
     const a = agent(TRUST);
     expect(await whenReady(a.probe, a.wait, false)).toBe(false);
     expect(a.pressed).toEqual([]);
+  });
+});
+
+describe("claudeUp across Claude's layouts (backlog H2)", () => {
+  const ASCII = "──────────────────────── Claude · demo ─\n> \n────────────────────────────────────────";
+  const BOXED = "╭──────────────────────────────────────╮\n│ > Try \"fix lint errors\"               │\n╰──────────────────────────────────────╯\n  ? for shortcuts";
+  const TRUST_GT = "Do you trust the files in this folder?\n\n> 1. Yes, proceed\n  2. No, exit";
+
+  it("reads an input box drawn with > under a rule", () => {
+    expect(claudeUp(ASCII)).toBe(true);
+  });
+  it("reads an input box inside a rounded frame", () => {
+    expect(claudeUp(BOXED)).toBe(true);
+  });
+  it("does not take a trust menu drawn with > for the input box", () => {
+    expect(claudeUp(TRUST_GT)).toBe(false);
+  });
+  it("answers a trust menu drawn with > and numbers", () => {
+    expect(trustKey(TRUST_GT)).toBe("\r");
   });
 });
