@@ -13,7 +13,7 @@ import { goToSections } from "./goTo";
 import { GoToRow } from "./GoToRow";
 import { goTo } from "./goToRun";
 import { commandsMessages } from "./messages";
-import { closePalette, modeOf, setPaletteQuery, stripPrefix, usePalette } from "./paletteState";
+import { chosenKey, closePalette, modeOf, setPaletteQuery, stripPrefix, usePalette } from "./paletteState";
 import { agentsStore, useAgents } from "@/fleet/agentsStore";
 import { loopCommands } from "@/loops/commands";
 import { presetCommands } from "@/presets/commands";
@@ -68,10 +68,10 @@ function PaletteBody() {
     mode === "goTo"
       ? (filesFirst ? [...files.map(fileKey), ...goToList.flatMap((s) => s.items.map((i) => i.key))] : [...goToList.flatMap((s) => s.items.map((i) => i.key)), ...files.map(fileKey)])
       : functionList.flatMap((s) => s.items.filter((l) => l.disabled === null).map((l) => l.command.id));
-  const [chosen, setChosen] = useState("");
-  // The first line is chosen when it opens and after each keystroke (spec fenêtre §7.1).
-  useEffect(() => setChosen(""), [query]);
-  const value = keys.includes(chosen) ? chosen : (keys[0] ?? "");
+  // The first line is chosen when it opens and after each keystroke (spec fenêtre §7.1): a choice
+  // made for another query is ignored at once, not after an effect, so no stale line shows for a frame.
+  const [chosen, setChosen] = useState({ query: "", key: "" });
+  const value = chosenKey(chosen, query, keys);
   const pressedOutside = useRef(false);
 
   return (
@@ -96,7 +96,7 @@ function PaletteBody() {
           shouldFilter={false}
           loop
           value={value}
-          onValueChange={setChosen}
+          onValueChange={(key) => setChosen({ query, key })}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.preventDefault();
