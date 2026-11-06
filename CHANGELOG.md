@@ -4,6 +4,9 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Fixed
+- A shortcut pressed with a menu open no longer ends placement or link mode, and a click outside the palette closes it without moving the keyboard to what lies underneath.
+
 ## [1.2.0-beta.1] - 2026-11-01
 
 ### Added
