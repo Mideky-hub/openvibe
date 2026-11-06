@@ -770,6 +770,61 @@ mod tests {
         assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
     }
 
+    /// Runs a hook command as Gemini CLI does: PowerShell with `-Command` on
+    /// Windows, then its exit code check; bash elsewhere. The event's JSON on stdin.
+    fn run_as_gemini(command: &str, input: &[u8]) -> Option<std::process::ExitStatus> {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let curl = if cfg!(windows) { "curl.exe" } else { "curl" };
+        which::which(curl).ok()?;
+        let mut shell = if cfg!(windows) {
+            let mut shell = Command::new(which::which("powershell.exe").ok()?);
+            shell
+                .args(["-NoProfile", "-NonInteractive", "-Command"])
+                .arg(format!(
+                    "{command}; if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}"
+                ));
+            shell
+        } else {
+            let mut shell = Command::new(which::which("bash").ok()?);
+            shell.args(["-c", command]);
+            shell
+        };
+        let mut child = shell
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .ok()?;
+        child.stdin.take()?.write_all(input).ok()?;
+        child.wait().ok()
+    }
+
+    #[test]
+    fn gemini_s_hook_command_reaches_the_server_and_never_fails_the_turn() {
+        use super::super::{claude_settings, gemini_settings};
+        let (tx, rx) = mpsc::channel();
+        let server = start(Arc::new(TestSink::new(tx))).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let config = claude_settings::write_curl_config(dir.path(), &server.token).unwrap();
+        let url = server.bare_url(HookSource::Gemini, "g1");
+        let ask = r#"{"hook_event_name":"Notification","notification_type":"ToolPermission","message":"Écrire « a.txt » ?"}"#;
+        let command = gemini_settings::hook_command(&url, &config);
+        let Some(status) = run_as_gemini(&command, ask.as_bytes()) else {
+            return; // no shell or no curl on this machine
+        };
+        assert!(status.success(), "{status:?}");
+        let hit = rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        assert_eq!(
+            (hit.node_id.as_str(), hit.activity, hit.message.as_deref()),
+            ("g1", Activity::Waiting, Some("Écrire « a.txt » ?"))
+        );
+        // OpenVibe gone: Gemini must not read a failed hook.
+        let gone = gemini_settings::hook_command("http://127.0.0.1:1/hook/gemini/g1", &config);
+        let status = run_as_gemini(&gone, b"{}").unwrap();
+        assert!(status.success(), "{status:?}");
+    }
+
     #[test]
     fn passes_a_status_line_s_json_to_its_terminal() {
         let (tx, _rx) = mpsc::channel();
