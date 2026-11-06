@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Command } from "cmdk";
 import { FileText } from "lucide-react";
 import { useMessages } from "@/i18n";
@@ -72,9 +72,21 @@ function PaletteBody() {
   // The first line is chosen when it opens and after each keystroke (spec fenêtre §7.1).
   useEffect(() => setChosen(""), [query]);
   const value = keys.includes(chosen) ? chosen : (keys[0] ?? "");
+  const pressedOutside = useRef(false);
 
   return (
-    <div data-palette-backdrop className="fixed inset-0 z-50" onPointerDown={(e) => e.target === e.currentTarget && closePalette()}>
+    <div
+      data-palette-backdrop
+      className="fixed inset-0 z-50"
+      // Closed on the click, not the pointerdown: the mousedown that follows would
+      // land on what lies under the palette and move the keyboard there (plan F1).
+      // A selection dragged out of the field ends with a click on the backdrop: that one stays.
+      onMouseDown={(e) => {
+        pressedOutside.current = e.target === e.currentTarget;
+        if (pressedOutside.current) e.preventDefault();
+      }}
+      onClick={(e) => e.target === e.currentTarget && pressedOutside.current && closePalette()}
+    >
       <div
         className="ov-glass-strong absolute left-1/2 -translate-x-1/2 overflow-hidden rounded-[14px]"
         style={{ top: TITLE_BAR_HEIGHT + 6, width: "min(560px, calc(100vw - 32px))", boxShadow: "var(--ov-glass-hi), var(--ov-glass-edge), var(--ov-shadow)" }}
