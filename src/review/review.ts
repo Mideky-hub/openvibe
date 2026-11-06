@@ -5,13 +5,15 @@ import { nodesStore } from "@/store/nodes";
 
 /** One line of a file's diff, numbered on its side (spec maj §5). */
 export interface DiffLine {
-  kind: "add" | "del" | "ctx" | "hunk" | "meta";
+  kind: "add" | "del" | "ctx" | "hunk" | "meta" | "cut";
   text: string;
   old?: number;
   new?: number;
 }
 
 const HUNK = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+/** What `review.rs` appends to a diff it cut: French text, so the interface shows its own words instead. */
+const CUT_MARKER = "[diff tronqué]";
 
 /** A unified diff as lines to show: hunks, added, removed and kept lines; the headers before the first hunk are left out. */
 export function parseDiff(diff: string): { lines: DiffLine[]; binary: boolean } {
@@ -28,8 +30,8 @@ export function parseDiff(diff: string): { lines: DiffLine[]; binary: boolean } 
       old = Number(hunk[1]);
       next = Number(hunk[2]);
       lines.push({ kind: "hunk", text });
-    } else if (text === "[diff tronqué]") {
-      lines.push({ kind: "meta", text });
+    } else if (text === CUT_MARKER) {
+      lines.push({ kind: "cut", text });
     } else if (!inHunk) {
       if (/^Binary files .* differ$/.test(text)) binary = true;
     } else if (text.startsWith("+")) {
