@@ -88,12 +88,13 @@ export async function launchGroup(
     const node = createNodeElement("terminal", { x: origin.x + cell.x + cell.width / 2, y: origin.y + cell.y + cell.height / 2 });
     const agentName = staffing?.names[i] ?? nextName(pantheon, taken);
     taken.push(agentName);
+    // Marked before its node exists: the agents panel would read it ARRÊTÉ meanwhile.
+    markForAutostart(node.id, i * LAUNCH_STAGGER_MS);
     await nodesStore.getState().create(node.id, {
       workspaceId,
       kind: "terminal",
       payload: withPermission(withModel(newTerminalPayload({ ...options, cwd: staffing?.cwds[i] ?? options.cwd, agent }, agentName), staffing?.models?.[i]), staffing?.permission),
     });
-    markForAutostart(node.id, i * LAUNCH_STAGGER_MS);
     terminals.push({ ...node, frameId: frame.id });
     nodeIds.push(node.id);
   }
