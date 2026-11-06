@@ -677,6 +677,42 @@ mod tests {
     }
 
     #[test]
+    fn cmd_and_git_bash_keep_spaces_and_apostrophes_in_one_argument() {
+        // cmd: double quotes hold the spaces, the apostrophe needs no escape.
+        assert_eq!(
+            quote(ShellSyntax::Cmd, r"C:\Users\O'Brien\My Projects"),
+            "\"C:\\Users\\O'Brien\\My Projects\""
+        );
+        // Git Bash: single quotes hold the spaces, the apostrophe closes and reopens.
+        assert_eq!(
+            quote(ShellSyntax::Posix, "C:/Users/O'Brien/My Projects"),
+            r"'C:/Users/O'\''Brien/My Projects'"
+        );
+        assert_eq!(quote(ShellSyntax::Posix, "''"), r"''\'''\'''");
+    }
+
+    #[test]
+    fn a_title_with_a_space_and_an_apostrophe_stays_one_argument_in_cmd_and_git_bash() {
+        let under = |syntax| {
+            agent_command(
+                &spec(Agent::Claude, claude(ClaudeMode::New, "L'agent d'Isis")),
+                syntax,
+                &AgentHooks::default(),
+            )
+            .unwrap()
+            .unwrap()
+        };
+        assert_eq!(
+            under(ShellSyntax::Cmd),
+            "claude --session-id 0b9c4b5e-6f1a-4c39-9d2e-8f6c2d1a7e10 -n \"L'agent d'Isis\""
+        );
+        assert_eq!(
+            under(ShellSyntax::Posix),
+            r"MSYS_NO_PATHCONV=1 claude --session-id 0b9c4b5e-6f1a-4c39-9d2e-8f6c2d1a7e10 -n 'L'\''agent d'\''Isis'"
+        );
+    }
+
+    #[test]
     fn new_claude_session_passes_id_and_title() {
         let cmd = agent_command(
             &spec(Agent::Claude, claude(ClaudeMode::New, "Mon agent")),
