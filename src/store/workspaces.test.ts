@@ -143,7 +143,7 @@ describe("workspaces store", () => {
     await state().load("p1");
     await state().move("w3", 0);
     expect(names()).toEqual(["C", "A", "B"]);
-    expect(db.reorders.at(-1)).toEqual(["w3", "w1", "w2"]);
+    expect(db.reorders[db.reorders.length - 1]).toEqual(["w3", "w1", "w2"]);
     await state().move("w3", 99);
     expect(names()).toEqual(["A", "B", "C"]);
     store = createWorkspacesStore();
