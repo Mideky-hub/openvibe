@@ -69,6 +69,12 @@ describe("nextDefaultName", () => {
     expect(nextDefaultName(ws("Workspace 2"))).toBe("Workspace 1");
     expect(nextDefaultName(ws("Workspace 1", "Workspace 2"))).toBe("Workspace 3");
   });
+
+  it("treats names alike whatever their case, as the database does", () => {
+    const ws = (...n: string[]) =>
+      n.map((name, i) => ({ id: String(i), projectId: "p1", name, position: i, pantheon: null, kind: "canvas" as const }));
+    expect(nextDefaultName(ws("workspace 1"))).toBe("Workspace 2");
+  });
 });
 
 describe("workspaces store", () => {
