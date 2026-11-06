@@ -8,10 +8,12 @@ import { onFlushAll } from "@/lib/flush";
 import { rebasePath } from "@/lib/paths";
 import {
   readFilePayload,
+  readGoalsPayload,
   readKanbanPayload,
   readOrchestratorPayload,
   readTerminalPayload,
   type FilePayload,
+  type GoalsPayload,
   type KanbanPayload,
   type OrchestratorPayload,
   type TerminalPayload,
@@ -21,7 +23,8 @@ export type NodeRecord =
   | { workspaceId: string; kind: "terminal"; payload: TerminalPayload }
   | { workspaceId: string; kind: "orchestrator"; payload: OrchestratorPayload }
   | { workspaceId: string; kind: "file"; payload: FilePayload }
-  | { workspaceId: string; kind: "kanban"; payload: KanbanPayload };
+  | { workspaceId: string; kind: "kanban"; payload: KanbanPayload }
+  | { workspaceId: string; kind: "goals"; payload: GoalsPayload };
 
 export interface NodesState {
   nodes: Record<string, NodeRecord>;
@@ -30,7 +33,7 @@ export interface NodesState {
   /** Adds a node and saves it at once (its row must exist before its scrollback). */
   create: (id: string, record: NodeRecord) => Promise<void>;
   /** Changes a node; the save waits 500 ms for further changes. */
-  update: (id: string, patch: Partial<TerminalPayload> | Partial<OrchestratorPayload> | Partial<KanbanPayload> | Partial<FilePayload>) => void;
+  update: (id: string, patch: Partial<TerminalPayload> | Partial<OrchestratorPayload> | Partial<KanbanPayload> | Partial<FilePayload> | Partial<GoalsPayload>) => void;
   /** Saves a node now, e.g. when an undo brings back a node purged from SQLite. */
   persist: (id: string) => Promise<void>;
   /** Drops the nodes of a deleted workspace and returns their ids. */
@@ -125,14 +128,15 @@ function readRecord(workspaceId: string, node: StoredNode): NodeRecord | null {
     return file ? { workspaceId, kind: "file", payload: file } : null;
   }
   if (node.kind === "kanban") return { workspaceId, kind: "kanban", payload: readKanbanPayload(raw) };
+  if (node.kind === "goals") return { workspaceId, kind: "goals", payload: readGoalsPayload(raw) };
   if (node.kind !== "terminal") return null;
   const payload = readTerminalPayload(raw);
   return payload ? { workspaceId, kind: "terminal", payload } : null;
 }
 
-/** The name a node shows: an agent's or an orchestrator's, "" for a board or a file. */
+/** The name a node shows: an agent's or an orchestrator's, "" for a board, a file or a goals list. */
 export function nodeNameOf(record: NodeRecord | undefined): string {
-  return record && record.kind !== "kanban" && record.kind !== "file" ? record.payload.name : "";
+  return record?.kind === "terminal" || record?.kind === "orchestrator" ? record.payload.name : "";
 }
 
 /** The terminal payload of a node; undefined for an orchestrator or a missing node. */
@@ -167,7 +171,7 @@ export function rebaseTerminalFolders(from: string, to: string) {
       if (Object.keys(patch).length > 0) nodesStore.getState().update(id, patch);
       continue;
     }
-    // A Kanban or a file node has no folder of its own.
+    // A Kanban, a file or a goals node has no folder of its own.
     if (node.kind !== "terminal") continue;
     const cwd = rebasePath(node.payload.cwd, from, to);
     if (cwd) nodesStore.getState().update(id, { cwd });

@@ -13,6 +13,7 @@ import { AGENT_COMMANDS } from "./agents";
 vi.mock("@excalidraw/excalidraw", () => ({}));
 vi.mock("@/fleet/quickActions", () => ({ launchAt: vi.fn(), newConsole: vi.fn(), launchFour: vi.fn(), placeOrchestrator: vi.fn() }));
 vi.mock("@/kanban/place", () => ({ placeKanban: vi.fn() }));
+vi.mock("@/goals/place", () => ({ placeGoals: vi.fn() }));
 vi.mock("@/fleet/broadcast", () => ({ pauseAll: vi.fn(() => Promise.resolve()), resumeAll: vi.fn(() => Promise.resolve()), workspaceTerminalIds: () => ["isis"] }));
 
 const busy: CommandContext = { project: true, workspaceId: "w1", terminalCount: 1, terminalId: "isis" };
@@ -50,6 +51,7 @@ describe("Agents (spec fenêtre §7.3)", () => {
       "Lancer 4 agents",
       "Orchestrateur",
       "Kanban",
+      "Objectifs",
       "Composer un groupe…",
       "Tout mettre en pause",
       "Tout reprendre",

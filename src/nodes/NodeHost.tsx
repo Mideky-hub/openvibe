@@ -5,6 +5,7 @@ import { nodeKindOf } from "@/canvas/nodeElement";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { CrashNotice } from "@/shell/CrashNotice";
 import { FileNode } from "./file/FileNode";
+import { GoalsNode } from "./goals/GoalsNode";
 import { KanbanNode } from "./kanban/KanbanNode";
 import { OrchestratorNode } from "./orchestrator/OrchestratorNode";
 import { TerminalNode } from "./terminal/TerminalNode";
@@ -37,6 +38,8 @@ function NodeOfKind({ element }: { element: NonDeleted<ExcalidrawEmbeddableEleme
       return <OrchestratorNode nodeId={element.id} />;
     case "file":
       return <FileNode nodeId={element.id} />;
+    case "goals":
+      return <GoalsNode nodeId={element.id} />;
     default:
       return <div className="grid h-full place-items-center rounded-md border bg-card text-muted-foreground">{t.unknownNode}</div>;
   }
