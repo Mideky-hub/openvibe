@@ -101,7 +101,7 @@ export function OrchestratorNode({ nodeId }: { nodeId: string }) {
             <DropdownMenuItem onSelect={() => void setRemoteControlAll([nodeId, ...linked.agentIds], false)}>{t.remoteOff}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <HeaderButton label={t.close} onClick={() => requestCloseOrchestrator(nodeId)}>
+        <HeaderButton close label={t.close} onClick={() => requestCloseOrchestrator(nodeId)}>
           <X />
         </HeaderButton>
       </header>
