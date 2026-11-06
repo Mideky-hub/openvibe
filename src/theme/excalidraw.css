@@ -9,7 +9,7 @@
 /* Both themes: Excalidraw's own variables follow the OpenVibe tokens. `:root`
    outranks Excalidraw's `.excalidraw.theme--dark`, whatever the sheet order. */
 :root .excalidraw.excalidraw {
-  --color-selection: var(--ov-accent);
+  --color-selection: var(--ov-accent-scene);
   --color-primary: var(--ov-accent);
   --color-primary-darker: color-mix(in srgb, var(--ov-accent) 85%, black);
   --color-primary-darkest: color-mix(in srgb, var(--ov-accent) 70%, black);
