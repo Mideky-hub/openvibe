@@ -26,6 +26,8 @@ describe("createNodeElement", () => {
 describe("isOpenVibeLink", () => {
   it("accepts our node links only", () => {
     expect(isOpenVibeLink("openvibe://kanban/3f2a-b1")).toBe(true);
+    expect(isOpenVibeLink("openvibe://goals/3f2a-b1")).toBe(true);
+    expect(isOpenVibeLink("openvibe://calendar/3f2a-b1")).toBe(true);
     expect(isOpenVibeLink("https://youtube.com/watch?v=x")).toBe(false);
     expect(isOpenVibeLink("openvibe://browser/1")).toBe(false);
     expect(isOpenVibeLink("openvibe://note/1?x=<script>")).toBe(false);

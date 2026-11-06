@@ -13,6 +13,8 @@ pub enum NodeKind {
     Kanban,
     Git,
     File,
+    Goals,
+    Calendar,
 }
 
 impl NodeKind {
@@ -24,6 +26,8 @@ impl NodeKind {
             NodeKind::Kanban => "kanban",
             NodeKind::Git => "git",
             NodeKind::File => "file",
+            NodeKind::Goals => "goals",
+            NodeKind::Calendar => "calendar",
         }
     }
 }
@@ -144,6 +148,54 @@ mod tests {
                 let kind: String =
                     conn.query_row("SELECT kind FROM nodes WHERE id = 'f1'", [], |r| r.get(0))?;
                 assert_eq!(kind, "file");
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn stores_goals_nodes() {
+        Db::open_in_memory()
+            .unwrap()
+            .with(|conn| {
+                let w = test_workspace(conn, "A")?;
+                let goals = r#"{"goals":[{"id":"g1","text":"Ship","done":true}]}"#;
+                save(conn, "g1", &w.id, NodeKind::Goals, goals)?;
+                let (kind, payload): (String, String) = conn.query_row(
+                    "SELECT kind, payload_json FROM nodes WHERE id = 'g1'",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )?;
+                assert_eq!(kind, "goals");
+                assert_eq!(payload, goals);
+                assert_eq!(
+                    serde_json::from_str::<NodeKind>(r#""goals""#).unwrap(),
+                    NodeKind::Goals
+                );
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn stores_calendar_nodes() {
+        Db::open_in_memory()
+            .unwrap()
+            .with(|conn| {
+                let w = test_workspace(conn, "A")?;
+                let calendar = r#"{"events":[{"id":"e1","title":"Démo","date":"2026-11-06","allDay":true,"time":"","color":"sage","notes":""}]}"#;
+                save(conn, "c1", &w.id, NodeKind::Calendar, calendar)?;
+                let (kind, payload): (String, String) = conn.query_row(
+                    "SELECT kind, payload_json FROM nodes WHERE id = 'c1'",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )?;
+                assert_eq!(kind, "calendar");
+                assert_eq!(payload, calendar);
+                assert_eq!(
+                    serde_json::from_str::<NodeKind>(r#""calendar""#).unwrap(),
+                    NodeKind::Calendar
+                );
                 Ok(())
             })
             .unwrap();

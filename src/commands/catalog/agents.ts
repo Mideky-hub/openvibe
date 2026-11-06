@@ -5,6 +5,8 @@ import { pauseAll, resumeAll, workspaceTerminalIds } from "@/fleet/broadcast";
 import { AGENTS } from "@/fleet/catalog";
 import { AGENT_INSTALLS } from "@/fleet/installCommands";
 import { launchAt, launchFour, newConsole, placeOrchestrator } from "@/fleet/quickActions";
+import { placeCalendar } from "@/calendar/place";
+import { placeGoals } from "@/goals/place";
 import { placeKanban } from "@/kanban/place";
 import type { AgentId } from "@/ipc/pty";
 import type { Command } from "../command";
@@ -70,6 +72,8 @@ export const AGENT_COMMANDS: readonly Command[] = [
   command("agent.four", { section, available: inProject, run: (ctx) => launchFour(ctx.at) }),
   command("agent.orchestrator", { section, available: inProject, run: (ctx) => placeOrchestrator(ctx.at) }),
   command("studio.kanban", { section, available: inProject, run: (ctx) => placeKanban(ctx.at) }),
+  command("studio.goals", { section, available: inProject, run: (ctx) => placeGoals(ctx.at) }),
+  command("studio.calendar", { section, available: inProject, run: (ctx) => placeCalendar(ctx.at) }),
   command("group.compose", {
     section,
     available: inProject,

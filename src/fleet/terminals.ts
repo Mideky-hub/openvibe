@@ -109,6 +109,16 @@ export async function adoptCopies(workspaceId: string, copies: readonly { id: st
       await nodesStore.getState().create(id, { workspaceId, kind: "kanban", payload: structuredClone(source.payload) });
       continue;
     }
+    if (source.kind === "goals") {
+      // A copied list starts with the same goals, then lives on its own.
+      await nodesStore.getState().create(id, { workspaceId, kind: "goals", payload: structuredClone(source.payload) });
+      continue;
+    }
+    if (source.kind === "calendar") {
+      // A copied calendar starts with the same events, then lives on its own.
+      await nodesStore.getState().create(id, { workspaceId, kind: "calendar", payload: structuredClone(source.payload) });
+      continue;
+    }
     markForAutostart(id);
     const frameId = api.getSceneElementsIncludingDeleted().find((e) => e.id === id)?.frameId;
     const group = canvasStore.getState().frames.find((f) => f.id === frameId);
