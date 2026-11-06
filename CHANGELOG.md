@@ -17,6 +17,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 - A request that makes OpenVibe's local server fail is now written to the log with its address (never its token), so the failure can be traced; the server keeps answering the next ones (#6).
 - **Missions:** an agent wired to two orchestrators can no longer join a second mission while the first one is launching or before its sub-task is typed; the orchestrator is told the agent works for another running mission instead of "not linked" (#64).
 - **Agent activity:** resizing a terminal without hooks (Shell, Codex, Gemini…) no longer lights WORKING while it redraws, and a badge no longer stays stale when two changes arrive out of order or the clock is set back (#14).
+- **Missions:** a mission works the same when its workspace has not been displayed since startup: the orchestrator sees its linked agents and groups, ending the mission closes its group instead of only stopping the agents, and the budget clock checks it. Orchestrators created before the bigger default size open at 640 × 760 (#69).
 
 ## [1.2.0-beta.1] - 2026-11-01
 
