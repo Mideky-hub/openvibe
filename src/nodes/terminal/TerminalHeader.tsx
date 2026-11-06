@@ -31,12 +31,13 @@ import { useMessages } from "@/i18n";
 import { nodesMessages } from "@/nodes/messages";
 
 
-export function HeaderButton(props: { label: string; onClick: () => void; children: ReactNode }) {
+export function HeaderButton(props: { label: string; onClick: () => void; children: ReactNode; close?: boolean }) {
   return (
     <button
       type="button"
       title={props.label}
       aria-label={props.label}
+      data-node-close={props.close ? "" : undefined}
       onClick={props.onClick}
       className="grid size-5 place-items-center rounded text-ov-text-2 hover:bg-ov-card hover:text-ov-text [&_svg]:size-3.5"
     >
