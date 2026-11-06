@@ -202,13 +202,16 @@ pub async fn pty_interrupt(
     Ok(sent.is_some())
 }
 
+/// The program redraws after a resize: that output is not work.
 #[tauri::command]
 pub async fn pty_resize(
+    app: AppHandle,
     pty: State<'_, PtyManager>,
     node_id: String,
     cols: u16,
     rows: u16,
 ) -> AppResult<()> {
+    agents::resized(&app, &node_id);
     pty.resize(&node_id, pty_size(cols, rows))
 }
 

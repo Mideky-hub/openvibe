@@ -69,6 +69,8 @@ pub struct ActivityEvent {
     since: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     message: Option<String>,
+    /// Orders the changes, which `since` cannot (see `Change::seq`).
+    seq: u64,
 }
 
 #[derive(Serialize)]
@@ -99,6 +101,7 @@ fn event(change: &Change) -> ActivityEvent {
         activity: change.activity,
         since: epoch_ms(change.since, Instant::now(), wall_ms()),
         message: change.message.clone(),
+        seq: change.seq,
     }
 }
 
@@ -357,6 +360,11 @@ pub fn input(app: &AppHandle, node_id: &str, data: &[u8]) {
     if let Some(change) = change {
         emit(app, &change);
     }
+}
+
+/// The terminal was resized: the redraw that follows is not work.
+pub fn resized(app: &AppHandle, node_id: &str) {
+    lock(&app.state::<AgentState>().tracker).resize(node_id, Instant::now());
 }
 
 /// The process ended (or failed to start): forget it and its settings file.
