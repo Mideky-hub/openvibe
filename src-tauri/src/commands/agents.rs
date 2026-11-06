@@ -17,7 +17,7 @@ use crate::agents::mcp::{Pending, Tokens};
 use crate::agents::subagents::SubagentCounts;
 use crate::agents::{claude_settings, gemini_settings, mcp_files, prompts};
 use crate::error::AppResult;
-use crate::pty::shell::{Agent, AgentHooks, Permission, Role};
+use crate::pty::shell::{Agent, AgentHooks, ClaudeLaunch};
 use crate::sync::lock;
 
 /// Quiet terminals are checked this often (the 1.5 s rule).
@@ -292,11 +292,13 @@ pub fn hooks_for(
     app: &AppHandle,
     node_id: &str,
     agent: Agent,
-    role: Role,
-    permission: Option<Permission>,
+    claude: Option<&ClaudeLaunch>,
     cwd: &std::path::Path,
     config_dir: Option<&std::path::Path>,
 ) -> AgentHooks {
+    let role = claude.map(|c| c.role).unwrap_or_default();
+    let team = claude.and_then(|c| c.team.as_deref());
+    let permission = claude.and_then(|c| c.permission);
     let state = app.state::<AgentState>();
     let Some(server) = &state.hooks else {
         return AgentHooks::default();
@@ -337,7 +339,7 @@ pub fn hooks_for(
                 node_id,
                 &server.mcp_url(),
                 &token,
-                prompts::for_role(role, crate::i18n::current()),
+                &prompts::with_team(prompts::for_role(role, crate::i18n::current()), team),
             )
             .inspect_err(|err| log::error!("tools of {node_id} not written: {err}"))
             .ok();

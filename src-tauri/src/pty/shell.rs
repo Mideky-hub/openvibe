@@ -109,6 +109,9 @@ pub struct ClaudeLaunch {
     /// The profile's folder, for this terminal's `CLAUDE_CONFIG_DIR` (spec comptes §4).
     #[serde(default)]
     pub config_dir: Option<String>,
+    /// Its group, role and speciality, added to its role's instructions (issue #66).
+    #[serde(default)]
+    pub team: Option<String>,
 }
 
 /// What the frontend asks for when it starts a terminal (spec §9).
@@ -661,6 +664,7 @@ mod tests {
             model: None,
             permission: None,
             config_dir: None,
+            team: None,
         })
     }
 
@@ -843,6 +847,7 @@ mod tests {
             model: None,
             permission: None,
             config_dir: None,
+            team: None,
         });
         let err = agent_command(
             &spec(Agent::Claude, launch),
@@ -872,6 +877,7 @@ mod tests {
             model: None,
             permission: None,
             config_dir: None,
+            team: None,
         })
     }
 
@@ -1404,6 +1410,22 @@ mod tests {
         assert_eq!(
             launch(serde_json::json!({ "mode": "new", "sessionId": SESSION, "title": "t" }))
                 .remote_control,
+            None
+        );
+    }
+
+    #[test]
+    fn reads_the_team_of_a_claude_session_none_by_default() {
+        let launch =
+            |claude: serde_json::Value| -> ClaudeLaunch { serde_json::from_value(claude).unwrap() };
+        assert_eq!(
+            launch(serde_json::json!({ "mode": "new", "sessionId": SESSION, "title": "t", "team": "Back" }))
+                .team
+                .as_deref(),
+            Some("Back")
+        );
+        assert_eq!(
+            launch(serde_json::json!({ "mode": "new", "sessionId": SESSION, "title": "t" })).team,
             None
         );
     }

@@ -67,6 +67,14 @@ describe("buildSpawnSpec", () => {
     });
   });
 
+  it("gives a Claude agent its group's brief, never an orchestrator nor another agent (issue #66)", () => {
+    const payload = newTerminalPayload({ ...base, agent: "claude", title: "Agent" });
+    expect(buildSpawnSpec(payload, "new", "Back").claude?.team).toBe("Back");
+    expect(buildSpawnSpec(payload, "new").claude).not.toHaveProperty("team");
+    expect(buildSpawnSpec({ ...payload, role: "orchestrator" }, "new", "Back").claude).not.toHaveProperty("team");
+    expect(buildSpawnSpec(newTerminalPayload(base), "new", "Back")).not.toHaveProperty("team");
+  });
+
   it("starts Claude with Remote Control, under the agent's name, when it is on (spec maj §2)", () => {
     const payload = { ...newTerminalPayload({ ...base, agent: "claude", title: "Agent" }, "Isis"), remoteControl: true };
     expect(buildSpawnSpec(payload, "new").claude?.remoteControl).toBe("Isis");

@@ -9,6 +9,8 @@ export const fleetMessages = defineMessages(
     noClaude: "Claude Code n'est pas installé : l'orchestrateur en a besoin. Installe-le (voir « Bien démarrer » sur l'accueil), puis réessaie.",
     settingNotSaved: (error: string) => `Réglage non enregistré : ${error}`,
     agentFallback: "Agent",
+    teamBrief: (group: string, role: string, speciality?: string) =>
+      `Ton groupe sur le canvas OpenVibe : « ${group} » (rôle : ${role}${speciality ? ` ; spécialité : ${speciality}` : ""}). Travaille dans ce rôle.`,
     catalog: {
       customLabel: "Personnalisé",
       ollamaVendor: "modèle local",
@@ -248,6 +250,8 @@ export const fleetMessages = defineMessages(
     noClaude: 'Claude Code is not installed: the orchestrator needs it. Install it (see "Getting started" on the home screen), then try again.',
     settingNotSaved: (error: string) => `Setting not saved: ${error}`,
     agentFallback: "Agent",
+    teamBrief: (group: string, role: string, speciality?: string) =>
+      `Your group on the OpenVibe canvas: "${group}" (role: ${role}${speciality ? `; speciality: ${speciality}` : ""}). Work in that role.`,
     catalog: {
       customLabel: "Custom",
       ollamaVendor: "local model",

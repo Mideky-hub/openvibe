@@ -66,13 +66,15 @@ export function switchedAgent(payload: TerminalPayload, agent: AgentId): Partial
   return agent === "claude" && !payload.claudeSessionId ? { ...left, claudeSessionId: crypto.randomUUID() } : left;
 }
 
-export function buildSpawnSpec(payload: TerminalPayload, mode: LaunchMode): SpawnSpec {
+/** `team`: what a Claude agent is told of its group (issue #66); an orchestrator is in none. */
+export function buildSpawnSpec(payload: TerminalPayload, mode: LaunchMode, team?: string): SpawnSpec {
   const spec: SpawnSpec = { cwd: payload.cwd, shell: payload.shell, agent: payload.agent, command: payload.command };
   if (payload.agent === "claude") {
     spec.claude = { mode, sessionId: payload.claudeSessionId ?? crypto.randomUUID(), title: payload.title, role: payload.role ?? "agent" };
     if (payload.remoteControl) spec.claude.remoteControl = payload.name || payload.title;
     if (payload.model) spec.claude.model = payload.model;
     if (payload.permission) spec.claude.permission = payload.permission;
+    if (team && spec.claude.role === "agent") spec.claude.team = team;
     // The profile's folder if it still exists, else the default account (spec comptes §3).
     const profile = profileNamed(payload.accountId);
     if (profile) spec.claude.configDir = profile.configDir;
