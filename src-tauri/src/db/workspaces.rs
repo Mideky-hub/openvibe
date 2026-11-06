@@ -53,6 +53,7 @@ pub fn list(conn: &Connection, project_id: &str) -> AppResult<Vec<Workspace>> {
 /// most one code workspace: asking for another returns the existing one.
 pub fn create(conn: &Connection, project_id: &str, name: &str, kind: &str) -> AppResult<Workspace> {
     let name = valid_name(name)?;
+    free_name(conn, project_id, &name, None)?;
     if kind != CANVAS && kind != CODE {
         return Err(AppError::InvalidInput(tr!(
             "type de workspace inconnu : {kind}",
@@ -103,6 +104,15 @@ pub fn create(conn: &Connection, project_id: &str, name: &str, kind: &str) -> Ap
 
 pub fn rename(conn: &Connection, id: &str, name: &str) -> AppResult<()> {
     let name = valid_name(name)?;
+    let project_id: String = conn
+        .query_row(
+            "SELECT project_id FROM workspaces WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        )
+        .optional()?
+        .ok_or_else(|| not_found(id))?;
+    free_name(conn, &project_id, &name, Some(id))?;
     let changed = conn.execute(
         "UPDATE workspaces SET name = ?2, updated_at = ?3 WHERE id = ?1",
         params![id, name, now_ms()],
@@ -169,6 +179,29 @@ fn valid_name(name: &str) -> AppResult<String> {
     Ok(name.to_string())
 }
 
+/// A project's workspaces have distinct names, whatever the case: two tabs
+/// called alike cannot be told apart. `except` is the workspace being renamed.
+fn free_name(
+    conn: &Connection,
+    project_id: &str,
+    name: &str,
+    except: Option<&str>,
+) -> AppResult<()> {
+    let taken: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM workspaces
+         WHERE project_id = ?1 AND lower(name) = lower(?2) AND id IS NOT ?3)",
+        params![project_id, name, except],
+        |row| row.get(0),
+    )?;
+    if taken {
+        return Err(AppError::InvalidInput(tr!(
+            "un workspace s'appelle déjà « {name} »",
+            "a workspace is already called \"{name}\""
+        )));
+    }
+    Ok(())
+}
+
 fn not_found(id: &str) -> AppError {
     AppError::NotFound(tr!(
         "workspace introuvable : {id}",
@@ -197,6 +230,26 @@ mod tests {
             .into_iter()
             .map(|w| w.name)
             .collect()
+    }
+
+    #[test]
+    fn a_name_is_not_taken_twice_in_a_project() {
+        Db::open_in_memory()
+            .unwrap()
+            .with(|conn| {
+                let p = project(conn, "C:/p");
+                let q = project(conn, "C:/q");
+                let api = create(conn, &p, "API", CANVAS)?;
+                assert!(create(conn, &p, " api ", CANVAS).is_err());
+                let web = create(conn, &p, "Web", CANVAS)?;
+                assert!(rename(conn, &web.id, "API").is_err());
+                // Keeping its own name, or another project's, is fine.
+                rename(conn, &api.id, "api")?;
+                create(conn, &q, "API", CANVAS)?;
+                assert_eq!(names(conn, &p), ["api", "Web"]);
+                Ok(())
+            })
+            .unwrap();
     }
 
     #[test]

@@ -70,9 +70,9 @@ export function inSavedOrder(workspaces: Workspace[], saved: unknown): Workspace
 
 /** "Workspace N" with the smallest N not already taken. */
 export function nextDefaultName(workspaces: Workspace[]): string {
-  const taken = new Set(workspaces.map((w) => w.name));
+  const taken = new Set(workspaces.map((w) => w.name.toLowerCase()));
   let n = 1;
-  while (taken.has(`Workspace ${n}`)) n++;
+  while (taken.has(`workspace ${n}`)) n++;
   return `Workspace ${n}`;
 }
 
