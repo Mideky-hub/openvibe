@@ -88,3 +88,4 @@ export const saveFiles = (workspaceId: string, files: StoredFile[]) =>
 export const saveNode = (id: string, workspaceId: string, kind: NodeKind, payloadJson: string) =>
   write(() => call<void>("save_node", { id, workspaceId, kind, payloadJson }));
 export const setSetting = (key: string, value: unknown) => write(() => call<void>("set_setting", { key, value }));
+export const deleteSetting = (key: string) => write(() => call<void>("delete_setting", { key }));

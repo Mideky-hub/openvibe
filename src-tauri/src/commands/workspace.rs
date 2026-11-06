@@ -162,6 +162,11 @@ mod tests {
 }
 
 #[tauri::command]
+pub async fn delete_setting(db: State<'_, Db>, key: String) -> AppResult<()> {
+    db.with(|conn| settings::delete(conn, &key))
+}
+
+#[tauri::command]
 pub async fn set_setting(
     db: State<'_, Db>,
     key: String,
