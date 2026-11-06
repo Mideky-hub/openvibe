@@ -1,6 +1,6 @@
-//! Tokens consumed by Claude Code, read from the conversation logs it keeps on
-//! disk (spec Tokens). Read-only and bounded: only dates, session ids, models
-//! and counters are kept, never the text of a conversation.
+//! Tokens consumed by Claude Code and Codex, read from the conversation logs
+//! they keep on disk (spec Tokens). Read-only and bounded: only dates, session
+//! ids, models and counters are kept, never the text of a conversation.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
@@ -66,10 +66,19 @@ pub struct DayTokens {
     pub counts: Counts,
 }
 
+/// The agent whose logs a session comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Agent {
+    Claude,
+    Codex,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionTokens {
     pub session_id: String,
+    pub agent: Agent,
     /// The model that wrote most of the session.
     pub model: Option<String>,
     pub counts: Counts,
@@ -115,6 +124,126 @@ struct Usage {
     output_tokens: Option<u64>,
     cache_read_input_tokens: Option<u64>,
     cache_creation_input_tokens: Option<u64>,
+}
+
+/// A line of a Codex log (`sessions/YYYY/MM/DD/rollout-*.jsonl`): only the session's
+/// id, the model of a turn and the token counts are read.
+#[derive(Deserialize)]
+struct CodexLine {
+    timestamp: Option<String>,
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    payload: Option<CodexPayload>,
+}
+
+#[derive(Deserialize)]
+struct CodexPayload {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    id: Option<String>,
+    model: Option<String>,
+    info: Option<CodexInfo>,
+}
+
+#[derive(Deserialize)]
+struct CodexInfo {
+    total_token_usage: Option<CodexUsage>,
+    last_token_usage: Option<CodexUsage>,
+}
+
+/// Codex counts the cached input within the input.
+#[derive(Deserialize, Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct CodexUsage {
+    #[serde(default)]
+    input_tokens: u64,
+    #[serde(default)]
+    cached_input_tokens: u64,
+    #[serde(default)]
+    output_tokens: u64,
+}
+
+impl CodexUsage {
+    fn since(self, before: CodexUsage) -> CodexUsage {
+        CodexUsage {
+            input_tokens: self.input_tokens.saturating_sub(before.input_tokens),
+            cached_input_tokens: self
+                .cached_input_tokens
+                .saturating_sub(before.cached_input_tokens),
+            output_tokens: self.output_tokens.saturating_sub(before.output_tokens),
+        }
+    }
+
+    fn counts(self) -> Counts {
+        Counts {
+            input: self.input_tokens.saturating_sub(self.cached_input_tokens),
+            output: self.output_tokens,
+            cache_read: self.cached_input_tokens,
+            cache_write: 0,
+        }
+    }
+}
+
+/// What a Codex log has said so far: its session, the model of the turn, the last total.
+struct CodexFile {
+    session: String,
+    model: Option<String>,
+    total: Option<CodexUsage>,
+}
+
+impl CodexFile {
+    /// The tokens of one turn. Codex logs the same count again when only its rate
+    /// limits change: counted once. Without the last turn, the totals' difference.
+    fn turn(&mut self, info: CodexInfo) -> Option<CodexUsage> {
+        let Some(total) = info.total_token_usage else {
+            return info.last_token_usage;
+        };
+        let before = self.total.replace(total);
+        if before == Some(total) {
+            return None;
+        }
+        info.last_token_usage
+            .or_else(|| Some(before.map_or(total, |before| total.since(before))))
+    }
+}
+
+/// The sums of the window, by day, session and model.
+struct Tally {
+    oldest: String,
+    newest: String,
+    days: BTreeMap<String, Counts>,
+    sessions: HashMap<(Agent, String), (Counts, HashMap<String, u64>)>,
+    models: HashMap<String, Counts>,
+}
+
+impl Tally {
+    fn covers(&self, date: &str) -> bool {
+        date >= self.oldest.as_str() && date <= self.newest.as_str()
+    }
+
+    fn add(
+        &mut self,
+        date: &str,
+        agent: Agent,
+        session: String,
+        model: Option<String>,
+        counts: Counts,
+    ) {
+        if let Some(day) = self.days.get_mut(date) {
+            day.add(counts);
+        }
+        if let Some(model) = &model {
+            self.models.entry(model.clone()).or_default().add(counts);
+        }
+        let entry = self.sessions.entry((agent, session)).or_default();
+        entry.0.add(counts);
+        if let Some(model) = model {
+            *entry.1.entry(model).or_default() += counts.output + 1;
+        }
+    }
+}
+
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack.windows(needle.len()).any(|w| w == needle)
 }
 
 /// Days since 1970-01-01 to `(year, month, day)` (proleptic Gregorian, Hinnant's algorithm).
@@ -191,32 +320,66 @@ fn next_line(reader: &mut impl BufRead, buffer: &mut Vec<u8>, max: usize) -> Opt
 }
 
 /// The tokens Claude Code logged under `root/projects` for the last `DAYS` days up to `now_secs` (epoch, UTC).
+#[cfg(test)]
 pub fn scan(root: &Path, now_secs: u64) -> Report {
     scan_with(root, now_secs, &Limits::default())
 }
 
 /// `scan` under the given bounds.
+#[cfg(test)]
 pub fn scan_with(root: &Path, now_secs: u64, limits: &Limits) -> Report {
+    scan_all_with(Some(root), None, now_secs, limits)
+}
+
+/// The tokens of Claude Code (`claude/projects`) and of Codex (`codex/sessions`)
+/// together; a folder that is missing or cannot be read counts for nothing.
+pub fn scan_all(claude: Option<&Path>, codex: Option<&Path>, now_secs: u64) -> Report {
+    scan_all_with(claude, codex, now_secs, &Limits::default())
+}
+
+/// `scan_all` under the given bounds, shared by both agents.
+pub fn scan_all_with(
+    claude: Option<&Path>,
+    codex: Option<&Path>,
+    now_secs: u64,
+    limits: &Limits,
+) -> Report {
     let started = Instant::now();
     let today = (now_secs / 86_400) as i64;
     let first = today - (DAYS as i64 - 1);
     let dates: Vec<String> = (first..=today).map(date_of).collect();
-    let oldest = dates[0].clone();
-    let newest = dates[dates.len() - 1].clone();
-    let mut days: BTreeMap<String, Counts> = dates
-        .iter()
-        .map(|d| (d.clone(), Counts::default()))
-        .collect();
-    let mut sessions: HashMap<String, (Counts, HashMap<String, u64>)> = HashMap::new();
-    let mut models: HashMap<String, Counts> = HashMap::new();
+    let mut tally = Tally {
+        oldest: dates[0].clone(),
+        newest: dates[dates.len() - 1].clone(),
+        days: dates
+            .iter()
+            .map(|d| (d.clone(), Counts::default()))
+            .collect(),
+        sessions: HashMap::new(),
+        models: HashMap::new(),
+    };
     let mut seen: HashSet<String> = HashSet::new();
 
     let mut files = Vec::new();
-    collect(&root.join("projects"), 0, &mut files);
+    for (root, logs, agent) in [
+        (claude, "projects", Agent::Claude),
+        (codex, "sessions", Agent::Codex),
+    ] {
+        let Some(root) = root else {
+            continue;
+        };
+        let mut found = Vec::new();
+        collect(&root.join(logs), 0, &mut found);
+        files.extend(
+            found
+                .into_iter()
+                .map(|(modified, path)| (modified, path, agent)),
+        );
+    }
     // A file untouched for longer than the window cannot hold a message of it.
     let cutoff = SystemTime::UNIX_EPOCH
         + std::time::Duration::from_secs(((first - 1).max(0) as u64) * 86_400);
-    files.retain(|(modified, _)| *modified >= cutoff);
+    files.retain(|(modified, _, _)| *modified >= cutoff);
     files.sort_by_key(|file| std::cmp::Reverse(file.0));
     let mut truncated = files.len() > limits.files;
     files.truncate(limits.files);
@@ -224,7 +387,7 @@ pub fn scan_with(root: &Path, now_secs: u64, limits: &Limits) -> Report {
     let mut scanned = 0;
     let mut total_bytes = 0u64;
     let mut buffer = Vec::new();
-    'files: for (_, path) in &files {
+    'files: for (_, path, agent) in &files {
         let Ok(file) = File::open(path) else {
             continue;
         };
@@ -232,6 +395,15 @@ pub fn scan_with(root: &Path, now_secs: u64, limits: &Limits) -> Report {
         if file.metadata().map(|meta| meta.len()).unwrap_or(0) > limits.file_bytes {
             truncated = true;
         }
+        // Until its first line says otherwise, a Codex session is named after its file.
+        let mut codex = CodexFile {
+            session: path
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            model: None,
+            total: None,
+        };
         let mut reader = BufReader::new(file.take(limits.file_bytes));
         while let Some(usable) = next_line(&mut reader, &mut buffer, limits.line_bytes) {
             total_bytes += buffer.len() as u64;
@@ -243,58 +415,20 @@ pub fn scan_with(root: &Path, now_secs: u64, limits: &Limits) -> Report {
                 truncated = true;
                 continue;
             }
-            // Most lines are text: only those with counters are parsed.
-            if !buffer.windows(7).any(|w| w == b"\"usage\"") {
-                continue;
-            }
-            let Ok(line) = serde_json::from_slice::<Line>(&buffer) else {
-                continue;
-            };
-            let (Some(timestamp), Some(message)) = (line.timestamp, line.message) else {
-                continue;
-            };
-            let Some(usage) = message.usage else {
-                continue;
-            };
-            let date = timestamp.get(..10).unwrap_or("");
-            if date < oldest.as_str() || date > newest.as_str() {
-                continue;
-            }
-            // A resumed conversation copies the messages of the first: count each once.
-            if let Some(id) = &message.id
-                && !seen.insert(id.clone())
-            {
-                continue;
-            }
-            let counts = Counts {
-                input: usage.input_tokens.unwrap_or(0),
-                output: usage.output_tokens.unwrap_or(0),
-                cache_read: usage.cache_read_input_tokens.unwrap_or(0),
-                cache_write: usage.cache_creation_input_tokens.unwrap_or(0),
-            };
-            if let Some(day) = days.get_mut(date) {
-                day.add(counts);
-            }
-            // `<synthetic>` is Claude Code's own placeholder, not a model.
-            let model = message.model.filter(|m| !m.starts_with('<'));
-            if let Some(model) = &model {
-                models.entry(model.clone()).or_default().add(counts);
-            }
-            let entry = sessions
-                .entry(line.session_id.unwrap_or_default())
-                .or_default();
-            entry.0.add(counts);
-            if let Some(model) = model {
-                *entry.1.entry(model).or_default() += counts.output + 1;
+            match agent {
+                Agent::Claude => claude_line(&buffer, &mut tally, &mut seen),
+                Agent::Codex => codex_line(&buffer, &mut tally, &mut codex),
             }
         }
     }
 
-    let mut sessions: Vec<SessionTokens> = sessions
+    let mut sessions: Vec<SessionTokens> = tally
+        .sessions
         .into_iter()
-        .filter(|(id, _)| !id.is_empty())
-        .map(|(session_id, (counts, by_model))| SessionTokens {
+        .filter(|((_, id), _)| !id.is_empty())
+        .map(|((agent, session_id), (counts, by_model))| SessionTokens {
             session_id,
+            agent,
             model: by_model
                 .into_iter()
                 .max_by_key(|(_, weight)| *weight)
@@ -309,7 +443,8 @@ pub fn scan_with(root: &Path, now_secs: u64, limits: &Limits) -> Report {
             .then(a.session_id.cmp(&b.session_id))
     });
     sessions.truncate(MAX_SESSIONS);
-    let mut models: Vec<ModelTokens> = models
+    let mut models: Vec<ModelTokens> = tally
+        .models
         .into_iter()
         .map(|(model, counts)| ModelTokens { model, counts })
         .collect();
@@ -321,7 +456,8 @@ pub fn scan_with(root: &Path, now_secs: u64, limits: &Limits) -> Report {
     });
 
     Report {
-        days: days
+        days: tally
+            .days
             .into_iter()
             .map(|(date, counts)| DayTokens { date, counts })
             .collect(),
@@ -329,6 +465,92 @@ pub fn scan_with(root: &Path, now_secs: u64, limits: &Limits) -> Report {
         models,
         files_scanned: scanned,
         truncated,
+    }
+}
+
+/// A line of a Claude Code log: the counters of an assistant's message.
+fn claude_line(buffer: &[u8], tally: &mut Tally, seen: &mut HashSet<String>) {
+    // Most lines are text: only those with counters are parsed.
+    if !contains(buffer, b"\"usage\"") {
+        return;
+    }
+    let Ok(line) = serde_json::from_slice::<Line>(buffer) else {
+        return;
+    };
+    let (Some(timestamp), Some(message)) = (line.timestamp, line.message) else {
+        return;
+    };
+    let Some(usage) = message.usage else {
+        return;
+    };
+    let date = timestamp.get(..10).unwrap_or("");
+    if !tally.covers(date) {
+        return;
+    }
+    // A resumed conversation copies the messages of the first: count each once.
+    if let Some(id) = &message.id
+        && !seen.insert(id.clone())
+    {
+        return;
+    }
+    let counts = Counts {
+        input: usage.input_tokens.unwrap_or(0),
+        output: usage.output_tokens.unwrap_or(0),
+        cache_read: usage.cache_read_input_tokens.unwrap_or(0),
+        cache_write: usage.cache_creation_input_tokens.unwrap_or(0),
+    };
+    // `<synthetic>` is Claude Code's own placeholder, not a model.
+    let model = message.model.filter(|m| !m.starts_with('<'));
+    tally.add(
+        date,
+        Agent::Claude,
+        line.session_id.unwrap_or_default(),
+        model,
+        counts,
+    );
+}
+
+/// A line of a Codex log: its session, the model of a turn, or a turn's tokens.
+fn codex_line(buffer: &[u8], tally: &mut Tally, file: &mut CodexFile) {
+    if !contains(buffer, b"token_count")
+        && !contains(buffer, b"turn_context")
+        && !contains(buffer, b"session_meta")
+    {
+        return;
+    }
+    let Ok(line) = serde_json::from_slice::<CodexLine>(buffer) else {
+        return;
+    };
+    let Some(payload) = line.payload else {
+        return;
+    };
+    match line.kind.as_deref() {
+        Some("session_meta") => {
+            if let Some(id) = payload.id.filter(|id| !id.is_empty()) {
+                file.session = id;
+            }
+        }
+        Some("turn_context") => {
+            if payload.model.is_some() {
+                file.model = payload.model;
+            }
+        }
+        Some("event_msg") if payload.kind.as_deref() == Some("token_count") => {
+            let Some(turn) = payload.info.and_then(|info| file.turn(info)) else {
+                return;
+            };
+            let date = line.timestamp.as_deref().and_then(|t| t.get(..10));
+            if let Some(date) = date.filter(|date| tally.covers(date)) {
+                tally.add(
+                    date,
+                    Agent::Codex,
+                    file.session.clone(),
+                    file.model.clone(),
+                    turn.counts(),
+                );
+            }
+        }
+        _ => {}
     }
 }
 
@@ -616,5 +838,141 @@ mod tests {
         );
         let report = scan(dir.path(), NOW);
         assert_eq!(report.days.iter().map(|d| d.counts.output).sum::<u64>(), 0);
+    }
+
+    /// A Codex `token_count` event: `(input, cached input, output)`, cumulative and last turn.
+    fn codex_tokens(
+        date: &str,
+        total: Option<(u64, u64, u64)>,
+        last: Option<(u64, u64, u64)>,
+    ) -> String {
+        let usage = |(input, cached, output): (u64, u64, u64)| {
+            format!(
+                r#"{{"input_tokens":{input},"cached_input_tokens":{cached},"output_tokens":{output},"reasoning_output_tokens":1,"total_tokens":{}}}"#,
+                input + output
+            )
+        };
+        let mut info = Vec::new();
+        if let Some(total) = total {
+            info.push(format!(r#""total_token_usage":{}"#, usage(total)));
+        }
+        if let Some(last) = last {
+            info.push(format!(r#""last_token_usage":{}"#, usage(last)));
+        }
+        format!(
+            r#"{{"timestamp":"{date}T10:00:00.000Z","type":"event_msg","payload":{{"type":"token_count","info":{{{},"model_context_window":272000}},"rate_limits":null}}}}"#,
+            info.join(",")
+        )
+    }
+
+    fn codex_log(root: &Path, relative: &str, session: &str, lines: &[String]) {
+        let mut all = vec![
+            format!(
+                r#"{{"timestamp":"2026-10-31T09:00:00.000Z","type":"session_meta","payload":{{"id":"{session}","timestamp":"2026-10-31T09:00:00.000Z","cwd":"C:/secret/project","originator":"codex_cli_rs","cli_version":"0.50.0","instructions":"MOT DE PASSE: hunter2"}}}}"#
+            ),
+            r#"{"timestamp":"2026-10-31T09:00:01.000Z","type":"turn_context","payload":{"cwd":"C:/secret/project","approval_policy":"on-request","model":"gpt-5-codex","summary":"auto"}}"#.to_string(),
+            r#"{"timestamp":"2026-10-31T09:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"bonjour token_count"}]}}"#.to_string(),
+        ];
+        all.extend_from_slice(lines);
+        let path = root.join("sessions").join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, all.join("\n")).unwrap();
+    }
+
+    fn codex_fixture() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        codex_log(
+            dir.path(),
+            "2026/10/31/rollout-2026-10-31T09-00-00-c1.jsonl",
+            "c1",
+            &[
+                // Codex logs an empty count before the first answer.
+                r#"{"timestamp":"2026-10-31T09:00:03.000Z","type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":null}}"#.to_string(),
+                codex_tokens("2026-10-31", Some((100, 40, 10)), Some((100, 40, 10))),
+                // The same count again, when only the rate limits changed.
+                codex_tokens("2026-10-31", Some((100, 40, 10)), Some((100, 40, 10))),
+                codex_tokens("2026-10-31", Some((250, 100, 30)), Some((150, 60, 20))),
+                // Without the last turn, the difference of the totals.
+                codex_tokens("2026-10-31", Some((300, 120, 35)), None),
+                // Out of the window.
+                codex_tokens("2026-09-01", Some((9_999, 0, 9_999)), Some((9_999, 0, 9_999))),
+                "{ not json".to_string(),
+            ],
+        );
+        dir
+    }
+
+    #[test]
+    fn reads_the_token_counts_codex_logs_counting_each_turn_once() {
+        let dir = codex_fixture();
+        let report = scan_all(None, Some(dir.path()), NOW);
+        assert_eq!(report.days.len(), 30);
+        // Codex counts the cached input within the input.
+        assert_eq!(
+            report.days.last().unwrap().counts,
+            Counts {
+                input: 60 + 90 + 30,
+                output: 10 + 20 + 5,
+                cache_read: 40 + 60 + 20,
+                cache_write: 0
+            }
+        );
+        assert_eq!(report.files_scanned, 1);
+        assert_eq!(report.sessions.len(), 1);
+        assert_eq!(report.sessions[0].session_id, "c1");
+        assert_eq!(report.sessions[0].agent, Agent::Codex);
+        assert_eq!(report.sessions[0].model.as_deref(), Some("gpt-5-codex"));
+        assert_eq!(report.models[0].model, "gpt-5-codex");
+    }
+
+    #[test]
+    fn adds_codex_to_claude_and_tells_their_sessions_apart() {
+        let claude = fixture();
+        let codex = codex_fixture();
+        let report = scan_all(Some(claude.path()), Some(codex.path()), NOW);
+        assert_eq!(report.files_scanned, 4);
+        // m1 and m3 from Claude, 35 from Codex.
+        assert_eq!(report.days.last().unwrap().counts.output, 60 + 35);
+        let agents: Vec<(&str, Agent)> = report
+            .sessions
+            .iter()
+            .map(|s| (s.session_id.as_str(), s.agent))
+            .collect();
+        assert_eq!(
+            agents,
+            [
+                ("c1", Agent::Codex),
+                ("s1", Agent::Claude),
+                ("s2", Agent::Claude)
+            ]
+        );
+        let json = serde_json::to_string(&report).unwrap();
+        assert!(json.contains(r#""agent":"codex""#));
+        assert!(!json.contains("hunter2"));
+        assert!(!json.contains("secret"));
+        assert!(!json.contains("bonjour"));
+    }
+
+    #[test]
+    fn a_missing_or_unreadable_log_folder_is_an_empty_report() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = scan_all(None, None, NOW);
+        assert_eq!(report.days.len(), 30);
+        assert_eq!(report.files_scanned, 0);
+        let claude = fixture();
+        let report = scan_all(Some(claude.path()), Some(&dir.path().join("nope")), NOW);
+        assert_eq!(report.files_scanned, 3);
+        // A log of another shape gives nothing rather than wrong figures.
+        let odd = tempfile::tempdir().unwrap();
+        let path = odd.path().join("sessions/2026/10/31/rollout-x.jsonl");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            b"\xff\xfe garbage token_count\n{\"type\":\"token_count\"}\n",
+        )
+        .unwrap();
+        let report = scan_all(None, Some(odd.path()), NOW);
+        assert_eq!(report.days.iter().map(|d| d.counts.total()).sum::<u64>(), 0);
+        assert!(report.sessions.is_empty());
     }
 }
