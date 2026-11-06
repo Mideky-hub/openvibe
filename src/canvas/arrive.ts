@@ -1,4 +1,5 @@
 import type { NormalizedZoomValue } from "@excalidraw/excalidraw/types";
+import { onTerminalMounted } from "@/nodes/terminal/mounted";
 import { focusTerminal } from "@/nodes/terminal/registry";
 import { BOTTOM_BAR_HEIGHT, TOP_ROW_HEIGHT } from "@/shell/layout";
 import { signalArrival } from "./arrivalSignal";
@@ -59,18 +60,50 @@ export const FOCUS_FRAMES = 120;
  * Offers the keyboard on each of the next frames until `focus` succeeds:
  * Excalidraw shows a node that was off screen once the view has moved, and
  * after a workspace switch its terminal may only be mounted a frame later.
+ * Past those frames it waits for the mount, once: `mounted` once it came.
  */
-function focusSoon(focus: () => boolean, token: number, frames = FOCUS_FRAMES) {
+function focusSoon(nodeId: string, focus: () => boolean, token: number, mounted = false, frames = FOCUS_FRAMES) {
   requestAnimationFrame(() => {
     // A newer arrival owns the keyboard: its loop replaces this one.
     if (token !== generation) return;
-    if (!focus() && frames > 1) focusSoon(focus, token, frames - 1);
-    else arriving = null;
+    if (focus() || (mounted && frames <= 1)) arriving = null;
+    else if (frames > 1) focusSoon(nodeId, focus, token, mounted, frames - 1);
+    else awaitMount(nodeId, focus, token);
   });
+}
+
+/**
+ * The terminal is still not mounted after those frames (a heavy scene, plan
+ * E1 J8): the keyboard goes to it on its mount, unless the user moved on
+ * meanwhile, by a click or by giving the keyboard elsewhere.
+ */
+function awaitMount(nodeId: string, focus: () => boolean, token: number) {
+  const giveUp = () => {
+    stopWaiting?.();
+    arriving = null;
+  };
+  const onFocus = (event: FocusEvent) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target?.closest(`[data-terminal="${nodeId}"], [data-orchestrator="${nodeId}"]`)) giveUp();
+  };
+  const offMount = onTerminalMounted((id) => {
+    if (id !== nodeId) return;
+    stopWaiting?.();
+    focusSoon(nodeId, focus, token, true);
+  });
+  document.addEventListener("pointerdown", giveUp, true);
+  document.addEventListener("focusin", onFocus, true);
+  stopWaiting = () => {
+    offMount();
+    document.removeEventListener("pointerdown", giveUp, true);
+    document.removeEventListener("focusin", onFocus, true);
+    stopWaiting = null;
+  };
 }
 
 let generation = 0;
 let arriving: string | null = null;
+let stopWaiting: (() => void) | null = null;
 
 /** The node an arrival is still giving the keyboard to: a Ctrl+Tab repeat steps on from it, not from the terminal left (plan E1). */
 export function arrivingNode(): string | null {
@@ -113,8 +146,9 @@ export function arrive(nodeId: string): boolean {
   });
   const kind = nodeKindOf(element);
   generation += 1;
+  stopWaiting?.();
   arriving = nodeId;
-  focusSoon(() => focusNodeInput(nodeId, kind), generation);
+  focusSoon(nodeId, () => focusNodeInput(nodeId, kind), generation);
   if (kind === "terminal") signalArrival(nodeId);
   return true;
 }
