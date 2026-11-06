@@ -6,10 +6,14 @@ import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { accountsStore } from "@/accounts/store";
 import { langStore } from "@/i18n";
 import { nodesStore } from "@/store/nodes";
+import { forgetTokenReport } from "@/usage/tokenReport";
 import { TokensView } from "./TokensView";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-afterEach(() => clearMocks());
+afterEach(() => {
+  clearMocks();
+  forgetTokenReport();
+});
 
 const counts = (input: number, output: number) => ({ input, output, cacheRead: 0, cacheWrite: 0 });
 const report = {
