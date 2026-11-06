@@ -4,7 +4,8 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import { toast } from "sonner";
 import { langStore } from "@/i18n";
 import { nodesStore } from "@/store/nodes";
-import { checkBudgets } from "./clock";
+import { checkBudgets, installMissionClock } from "./clock";
+import { workspacesStore } from "@/store/workspaces";
 import { notify } from "./events";
 import { terminalStatusStore } from "@/store/terminalStatus";
 import { missionOf, setMission, setOrchestratorClosed, updateMember } from "./store";
@@ -17,6 +18,7 @@ const min = 60_000;
 beforeAll(async () => {
   mockIPC(() => undefined);
   terminalStatusStore.getState().set("isis", { state: "running" });
+  terminalStatusStore.getState().set("chef", { state: "running" });
   await nodesStore.getState().create("chef", {
     workspaceId: "w1",
     kind: "orchestrator",
@@ -192,4 +194,80 @@ it("tells a budget once even while the orchestrator cannot hear, and records the
   expect(lines()).toBe(1);
   expect(toast.warning).toHaveBeenCalledTimes(1);
   expect(missionOf(nodesStore.getState().nodes.chef2)?.members[0].overdue).toBe(2);
+});
+
+it("records no overrun while the line of an earlier one still waits: a quit would lose it (issue #67)", async () => {
+  vi.mocked(notify).mockReset();
+  vi.mocked(toast.warning).mockClear();
+  const pending: (() => void)[] = [];
+  vi.mocked(notify).mockImplementation((_orchestrator: string, _line: string, typed?: () => void) => void (typed && pending.push(typed)));
+  await nodesStore.getState().create("chef3", {
+    workspaceId: "w1",
+    kind: "orchestrator",
+    payload: {
+      name: "Chef",
+      mission: {
+        state: "en_cours",
+        name: "Auth",
+        maxAgents: 4,
+        members: [{ nodeId: "isis", name: "Isis", task: "Login", budgetMin: 10, linked: false, branch: "b", worktree: "w", sentAt: 0 }],
+      },
+    },
+  });
+  const overdue = () => missionOf(nodesStore.getState().nodes.chef3)?.members[0].overdue;
+  checkBudgets(11 * min);
+  checkBudgets(21 * min);
+  // The 100 % line has not been typed: what is saved must let the next start tell it again.
+  expect(overdue()).toBeUndefined();
+  expect(toast.warning).toHaveBeenCalledTimes(1);
+  checkBudgets(22 * min);
+  expect(toast.warning).toHaveBeenCalledTimes(1);
+  for (const typed of pending) typed();
+  expect(overdue()).toBe(2);
+  checkBudgets(23 * min);
+  expect(vi.mocked(notify).mock.calls.filter(([to]) => to === "chef3")).toHaveLength(1);
+  expect(toast.warning).toHaveBeenCalledTimes(1);
+});
+
+it("keeps the end of the global budget for the orchestrator's restart: no burst of toasts when OpenVibe starts again (issue #67)", async () => {
+  vi.mocked(notify).mockReset();
+  vi.mocked(notify).mockImplementation((_orchestrator: string, _line: string, typed?: () => void) => typed?.());
+  vi.mocked(toast.warning).mockClear();
+  await nodesStore.getState().create("chef4", {
+    workspaceId: "w1",
+    kind: "orchestrator",
+    payload: { name: "Chef", mission: { state: "en_cours", name: "Front", maxAgents: 4, budgetMin: 30, startedAt: 0, members: [] } },
+  });
+  // OpenVibe was closed for hours: every agent, the orchestrator too, is stopped at start (spec orchestrateur §9).
+  terminalStatusStore.getState().set("chef4", { state: "stopped" });
+  checkBudgets(600 * min);
+  expect(toast.warning).not.toHaveBeenCalled();
+  expect(vi.mocked(notify).mock.calls.filter(([to]) => to === "chef4")).toHaveLength(0);
+  terminalStatusStore.getState().set("chef4", { state: "running" });
+  checkBudgets(601 * min);
+  checkBudgets(602 * min);
+  expect(toast.warning).toHaveBeenCalledTimes(1);
+  expect(toast.warning).toHaveBeenCalledWith("Budget global de la mission Front écoulé (30 min).");
+  expect(vi.mocked(notify).mock.calls.filter(([to]) => to === "chef4")).toHaveLength(1);
+});
+
+it("reads the missions of every workspace of the open project, not only the ones shown since startup (#69)", async () => {
+  vi.mocked(notify).mockClear();
+  const away = { name: "Loin", mission: { state: "en_cours", name: "Docs", maxAgents: 4, budgetMin: 30, startedAt: 0, members: [] } };
+  mockIPC((command, args) =>
+    command === "load_workspace" && (args as { id: string }).id === "w5"
+      ? { nodes: [{ id: "loin", kind: "orchestrator", payloadJson: JSON.stringify(away) }], files: [], elementsJson: null, appStateJson: null }
+      : undefined,
+  );
+  terminalStatusStore.getState().set("loin", { state: "running" });
+  const stop = installMissionClock();
+  try {
+    workspacesStore.setState({ projectId: "p1", status: "ready", workspaces: [{ id: "w1" }, { id: "w5" }] as never });
+    await vi.waitFor(() => expect(nodesStore.getState().nodes.loin).toBeDefined());
+    checkBudgets(31 * min);
+    expect(vi.mocked(notify).mock.calls.filter(([to]) => to === "loin")).toHaveLength(1);
+  } finally {
+    stop();
+    mockIPC(() => undefined);
+  }
 });

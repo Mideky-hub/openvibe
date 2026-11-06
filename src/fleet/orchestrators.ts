@@ -8,6 +8,8 @@ import { orchestratorSession } from "@/nodes/terminal/launch";
 import { markForAutostart } from "@/nodes/terminal/registry";
 import { messages } from "@/i18n";
 import { nodesMessages } from "@/nodes/messages";
+import { restartIn } from "@/mission/launch";
+import { missionOf } from "@/mission/store";
 import { nodesStore } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
 import { uiStore } from "@/store/ui";
@@ -92,6 +94,9 @@ function orchestratorWires(elements: readonly Bound[], orchestratorId: string): 
 export function removeOrchestrator(orchestratorId: string) {
   const api = canvasStore.getState().api;
   if (!api) return;
+  // Its linked agents keep running without it: back to the project and to Claude's own model, as `endMission` does.
+  const mission = missionOf(nodesStore.getState().nodes[orchestratorId]);
+  if (mission?.state === "en_cours" && mission.project) for (const member of mission.members) if (member.linked) void restartIn(member.nodeId, mission.project);
   allowRemoval([orchestratorId]);
   const going = new Set([orchestratorId, ...orchestratorWires(api.getSceneElementsIncludingDeleted(), orchestratorId)]);
   api.updateScene({

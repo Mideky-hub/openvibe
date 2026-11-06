@@ -51,6 +51,26 @@ describe("agent activity store", () => {
     expect(state().activities.w.activity).toBe("waiting");
   });
 
+  it("orders Rust's changes by their number, not by a wall clock that can go back", () => {
+    state().apply({ nodeId: "c", activity: "working", since: 100, seq: 1 });
+    state().apply({ nodeId: "c", activity: "idle", since: 50, seq: 2 });
+    expect(state().activities.c.activity).toBe("idle");
+    state().apply({ nodeId: "c", activity: "working", since: 200, seq: 1 });
+    expect(state().activities.c.activity).toBe("idle");
+    state().load([{ nodeId: "c", activity: "working", since: 300, seq: 1 }]);
+    expect(state().activities.c.activity).toBe("idle");
+    state().load([{ nodeId: "c", activity: "waiting", since: 10, seq: 3 }]);
+    expect(state().activities.c.activity).toBe("waiting");
+  });
+
+  it("keeps the latest question of a wait even when an older one arrives after it", () => {
+    state().apply({ nodeId: "r", activity: "waiting", since: 20, seq: 4, message: "Second?" });
+    state().apply({ nodeId: "r", activity: "waiting", since: 20, seq: 3, message: "First?" });
+    expect(state().activities.r.message).toBe("Second?");
+    state().apply({ nodeId: "r", activity: "waiting", since: 19, seq: 5, message: "Third?" });
+    expect(state().activities.r).toEqual({ activity: "waiting", since: 20, seq: 5, message: "Third?" });
+  });
+
   it("forgets a terminal whose process exited", () => {
     state().apply({ nodeId: "a", activity: "idle", since: 1 });
     state().remove("a");

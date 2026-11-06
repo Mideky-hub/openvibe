@@ -4,7 +4,7 @@ import { nodesStore, type NodeRecord } from "@/store/nodes";
 import { NEW_MISSION } from "./mission";
 import { rememberScene, forgetScene } from "@/canvas/sceneCache";
 import { workspacesStore } from "@/store/workspaces";
-import { agentGroup, canvasKnown, linkedClaudeAgents, linkedGroups, memberBudgets, memberOf, orchestratorShown, setOrchestratorClosed, workspaceCanvas } from "./store";
+import { agentGroup, busyLinkedAgents, canvasKnown, linkedClaudeAgents, linkedGroups, memberBudgets, memberOf, orchestratorShown, releaseAgents, reserveAgents, setOrchestratorClosed, workspaceCanvas } from "./store";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
 
@@ -118,17 +118,41 @@ describe("a workspace not on screen (spec mission de nuit §6.1)", () => {
   });
 });
 
-it("does not offer an agent already in another running mission (backlog H2)", () => {
+describe("an agent wired to two orchestrators (backlog H2)", () => {
   const member = { name: "Isis", task: "Login", budgetMin: 10, linked: true, branch: "b", worktree: "w", sentAt: 0 };
   const terminal = { title: "", name: "Isis", agent: "claude" as const, cwd: "C:/", shell: "default" as const, command: "" };
-  nodesStore.setState({
-    nodes: {
-      isis: { workspaceId: "w1", kind: "terminal", payload: terminal },
-      busy: { workspaceId: "w1", kind: "orchestrator", payload: { name: "Busy", mission: { ...NEW_MISSION, state: "en_cours", members: [{ ...member, nodeId: "isis" }] } } },
-      free: { workspaceId: "w1", kind: "orchestrator", payload: { name: "Free" } },
-    },
+  const busyWith = (extra: object) => ({ workspaceId: "w1", kind: "orchestrator" as const, payload: { name: "Busy", mission: { ...NEW_MISSION, state: "en_cours" as const, members: [{ ...member, nodeId: "isis", ...extra }] } } });
+
+  beforeEach(() => {
+    nodesStore.setState({
+      nodes: {
+        isis: { workspaceId: "w1", kind: "terminal", payload: terminal },
+        busy: busyWith({}),
+        free: { workspaceId: "w1", kind: "orchestrator", payload: { name: "Free" } },
+      },
+    });
+    canvasStore.setState({ api: {} as never, links: { busy: { nodeIds: ["isis"], groupIds: [] }, free: { nodeIds: ["isis"], groupIds: [] } }, frames: [] });
   });
-  canvasStore.setState({ api: {} as never, links: { busy: { nodeIds: ["isis"], groupIds: [] }, free: { nodeIds: ["isis"], groupIds: [] } }, frames: [] });
-  expect(linkedClaudeAgents("free")).toEqual([]);
-  expect(linkedClaudeAgents("busy").map((a) => a.nodeId)).toEqual(["isis"]);
+
+  it("is not offered to one while it works for the other's running mission", () => {
+    expect(linkedClaudeAgents("free")).toEqual([]);
+    expect(busyLinkedAgents("free")).toEqual(["Isis"]);
+    expect(linkedClaudeAgents("busy").map((a) => a.nodeId)).toEqual(["isis"]);
+    expect(busyLinkedAgents("busy")).toEqual([]);
+  });
+
+  it("is not offered either before its sub-task was typed: it is already moving to the other's worktree (#64)", () => {
+    nodesStore.setState({ nodes: { ...nodesStore.getState().nodes, busy: busyWith({ sentAt: undefined }) } });
+    expect(linkedClaudeAgents("free")).toEqual([]);
+    expect(busyLinkedAgents("free")).toEqual(["Isis"]);
+  });
+
+  it("is not offered while the other's launch enrolls it, and is free again once released (#64)", () => {
+    nodesStore.setState({ nodes: { ...nodesStore.getState().nodes, busy: { workspaceId: "w1", kind: "orchestrator", payload: { name: "Busy" } } } });
+    reserveAgents("busy", ["isis"]);
+    expect(linkedClaudeAgents("free")).toEqual([]);
+    expect(linkedClaudeAgents("busy").map((a) => a.nodeId)).toEqual(["isis"]);
+    releaseAgents("busy");
+    expect(linkedClaudeAgents("free").map((a) => a.nodeId)).toEqual(["isis"]);
+  });
 });

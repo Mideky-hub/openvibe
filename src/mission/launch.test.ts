@@ -21,7 +21,7 @@ import { notify } from "./events";
 import { whenReady } from "./ready";
 import { cleanMission, endMission, handoverText, launchMission, mergeMission, reassignTask, subTaskText, withTicketNote } from "./launch";
 import { NEW_MISSION, type Member, type Mission } from "./mission";
-import { missionOf, updateMember } from "./store";
+import { busyLinkedAgents, inOtherMission, linkedClaudeAgents, missionOf, updateMember } from "./store";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
 vi.mock("@/ipc/mission", () => ({ missionPrepare: vi.fn(), missionAddAgent: vi.fn(), missionMerge: vi.fn(), missionCleanup: vi.fn(), missionDiscard: vi.fn(() => Promise.resolve({ removed: [], kept: [] })) }));
@@ -41,6 +41,7 @@ vi.mock("./events", () => ({ notify: vi.fn() }));
 vi.mock("./store", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./store")>()),
   linkedClaudeAgents: vi.fn(() => [{ nodeId: "isis", name: "Isis" }]),
+  busyLinkedAgents: vi.fn(() => []),
 }));
 
 const session: TerminalPayload = { title: "Chef", name: "Chef", agent: "claude", cwd: "C:/code/proj", shell: "default", command: "", claudeSessionId: "s0", role: "orchestrator" };
@@ -224,6 +225,27 @@ describe("launchMission (spec §7.3)", () => {
     expect(launchGroup).not.toHaveBeenCalled();
   });
 
+  it("holds its linked agents while it launches, so no other mission enrolls them, and frees them if it fails (#64)", async () => {
+    await setup();
+    let fail!: (error: Error) => void;
+    vi.mocked(missionPrepare).mockReturnValueOnce(new Promise((_resolve, reject) => (fail = reject)));
+    const launching = launchMission("chef");
+    expect(inOtherMission("isis", "autre")).toBe(true);
+    expect(inOtherMission("isis", "chef")).toBe(false);
+    fail(new Error("git"));
+    await launching;
+    expect(inOtherMission("isis", "autre")).toBe(false);
+  });
+
+  it("says why it does not start when a linked agent went to another mission meanwhile (#64)", async () => {
+    await setup();
+    vi.mocked(linkedClaudeAgents).mockReturnValueOnce([]);
+    vi.mocked(busyLinkedAgents).mockReturnValueOnce(["Isis"]);
+    await launchMission("chef");
+    expect(missionNow()).toMatchObject({ state: "plan", error: "Isis travaille déjà pour une autre mission en cours." });
+    expect(missionPrepare).not.toHaveBeenCalled();
+  });
+
   it("forms one team for two go-aheads in a row", async () => {
     await setup();
     let release!: (tree: Worktree) => void;
@@ -357,8 +379,9 @@ describe("a new agent in a chosen group (spec groupes spécialisés §4)", () =>
     await setup({ state: "en_cours", project: "C:/code/proj", members: [member("n9", "Thor", false, { group: "g1" })] });
     workspacesStore.setState({ activeId: "w2" });
     endMission("chef", "Fini.");
+    // Its scene is read first: unreadable here.
+    await vi.waitFor(() => expect(stopTerminal).toHaveBeenCalledWith("n9"));
     expect(removeNodes).not.toHaveBeenCalled();
-    expect(stopTerminal).toHaveBeenCalledWith("n9");
   });
 
   it("does not give a new agent the name of a member gone from the canvas: its branch is still there (review)", async () => {
@@ -443,12 +466,22 @@ describe("a mission whose workspace is not on screen (spec mission de nuit §6.1
     expect(closeStoredGroup).toHaveBeenCalledWith("w1", "f1");
   });
 
-  it("still stops the agents when the scene was never read", async () => {
+  it("reads the saved scene when it was never read, and closes the team there (#69)", async () => {
+    forgetScene("w1");
+    mockIPC((command) => (command === "load_workspace" ? { nodes: [], files: [], elementsJson: JSON.stringify(wired), appStateJson: null } : undefined));
+    await setup({ state: "en_cours", project: "C:/code/proj", frameId: "f1", members: [member("n1", "Horus", false)] });
+    endMission("chef", "Fini.");
+    await vi.waitFor(() => expect(closeStoredGroup).toHaveBeenCalledWith("w1", "f1"));
+    expect(stopTerminal).not.toHaveBeenCalled();
+    mockIPC(() => undefined);
+  });
+
+  it("still stops the agents when the scene cannot be read", async () => {
     forgetScene("w1");
     await setup({ state: "en_cours", project: "C:/code/proj", frameId: "f1", members: [member("n1", "Horus", false)] });
     endMission("chef", "Fini.");
+    await vi.waitFor(() => expect(stopTerminal).toHaveBeenCalledWith("n1"));
     expect(closeStoredGroup).not.toHaveBeenCalled();
-    expect(stopTerminal).toHaveBeenCalledWith("n1");
   });
 });
 
@@ -576,8 +609,9 @@ describe("what the final review of H2 found", () => {
     await setup({ state: "en_cours", project: "C:/code/proj", frameId: "f1", members: [member("isis", "Isis", true), member("n1", "Horus", false)] });
     workspacesStore.setState({ activeId: "w2" });
     endMission("chef", "Fini.");
+    // Its scene is read first: unreadable here.
+    await vi.waitFor(() => expect(stopTerminal).toHaveBeenCalledWith("n1"));
     expect(closeGroup).not.toHaveBeenCalled();
-    expect(stopTerminal).toHaveBeenCalledWith("n1");
     expect(relaunchTerminal).toHaveBeenCalledWith("isis", expect.objectContaining({ cwd: "C:/code/proj" }), "new");
   });
 

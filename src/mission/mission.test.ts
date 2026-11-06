@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { langStore } from "@/i18n";
-import { budgetBar, budgetOf, clockText, memberTime, NEW_MISSION, oneLine, overruns, proposedPlan, proposedTasks, readMission, remainingGlobal, sameName, spentMin, windingDown, type Member, type Mission } from "./mission";
+import { budgetBar, budgetOf, clockText, memberTime, NEW_MISSION, noNewWork, oneLine, overruns, proposedPlan, proposedTasks, readMission, remainingGlobal, sameName, spentMin, windingDown, type Member, type Mission } from "./mission";
 
 const task = (agent: string, budget = 20) => ({ titre: "Login", consigne: "Fais le login", agent, budget_min: budget });
 const args = (...sous_taches: object[]) => ({ nom: "Auth", tache: "Ajoute l'authentification", sous_taches });
@@ -29,6 +29,18 @@ describe("proposedPlan (spec orchestrateur §7.2)", () => {
     expect(proposedPlan(args(task("nouveau", 0)), NEW_MISSION, [])).toContain("budget");
     expect(proposedPlan({ tache: "x", sous_taches: [task("nouveau")] }, NEW_MISSION, [])).toContain("nom");
     expect(proposedPlan(args(), NEW_MISSION, [])).toContain("au moins une");
+  });
+
+  it("says when a named agent is linked but works for another running mission (#64)", () => {
+    expect(proposedPlan(args(task("isis")), NEW_MISSION, ["Athéna"], [], [], ["Isis"])).toBe(
+      "Sous-tâche 1 : Isis travaille déjà pour une autre mission en cours ; choisis un autre agent, ou « new ».",
+    );
+    langStore.setState({ lang: "en" });
+    try {
+      expect(proposedPlan(args(task("isis")), NEW_MISSION, [], [], [], ["Isis"])).toBe('Sub-task 1: Isis already works for another running mission; choose another agent, or "new".');
+    } finally {
+      langStore.setState({ lang: "fr" });
+    }
   });
 
   it("keeps the Kanban card of a sub-task, when its boards have it", () => {
@@ -246,6 +258,22 @@ describe("the time of a mission (spec orchestrateur §8)", () => {
     expect(remainingGlobal(running(team, { budgetMin: 30 }), 12 * min)).toBe(30);
     expect(remainingGlobal(running(team, { budgetMin: 30, startedAt: 0 }), 40 * min)).toBe(0);
     expect(remainingGlobal(running(team, { state: "terminee", budgetMin: 30, startedAt: 0, endedAt: 10 * min }), 25 * min)).toBe(20);
+  });
+
+  it("plans and measures the global budget the same way: real time, agents in parallel share it (issue #67)", () => {
+    const four = ["A", "B", "C", "D"].map((titre) => ({ ...task("nouveau", 30), titre }));
+    const planned = proposedPlan(args(...four), { ...NEW_MISSION, budgetMin: 30, maxAgents: 4 }, []);
+    expect(planned).toMatchObject({ name: "Auth" });
+    const team = typeof planned === "string" ? [] : planned.plan.map((s, i) => member({ nodeId: `n${i}`, budgetMin: s.budgetMin }));
+    const mission = running(team, { budgetMin: 30, startedAt: 0 });
+    for (const now of [29.9 * min, 30 * min, 31 * min]) {
+      const spent = overruns(mission, now).global;
+      expect(spent).toBe(remainingGlobal(mission, now) === 0);
+      expect(spent).toBe(noNewWork(mission, now));
+      // Four agents of 30 min each fit: none is over its own budget before the global one ends.
+      expect(overruns(mission, now).members.length > 0).toBe(spent);
+    }
+    expect(clockText(mission, 30 * min)).toBe("30 / 30 min");
   });
 
   it("winds an overnight mission down near its end, at 10 % or 10 min, and half of a short one", () => {

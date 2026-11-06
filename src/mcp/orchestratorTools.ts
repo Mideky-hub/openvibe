@@ -1,5 +1,5 @@
 import { pauseAgents } from "@/fleet/broadcast";
-import { setRemoteControl } from "@/fleet/remoteControl";
+import { remoteBusy, setRemoteControl } from "@/fleet/remoteControl";
 import { messages } from "@/i18n";
 import { ptySendText } from "@/ipc/pty";
 import { endMission, launchMission, mergeMission, reassignTask } from "@/mission/launch";
@@ -9,7 +9,7 @@ import { boardView } from "@/kanban/missionLink";
 import { LEVELS, modelLabel } from "@/mission/router";
 import { readTickets } from "@/mission/tickets";
 import { linkedBoards } from "@/kanban/orchestrate";
-import { agentGroup, agentState, linkedClaudeAgents, linkedGroups, missionOf, canvasKnown, setMission, updateMember } from "@/mission/store";
+import { agentGroup, agentState, busyLinkedAgents, linkedClaudeAgents, linkedGroups, missionOf, canvasKnown, readCanvas, setMission, updateMember } from "@/mission/store";
 import { terminalText } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore, sessionOf, terminalOf } from "@/store/nodes";
@@ -188,7 +188,7 @@ function proposePlan(orchestratorId: string, mission: Mission, args: Record<stri
   const named = Array.isArray(args.sous_taches) && args.sous_taches.some((s) => onCanvas(s as Record<string, unknown> | null));
   if (named && !canvasKnown(orchestratorId)) return refused(t().orchestrator.hiddenWorkspace);
   const cards = linkedBoards(orchestratorId).flatMap(({ board }) => Object.keys(board.cards));
-  const result = proposedPlan(args, mission, linkedClaudeAgents(orchestratorId).map((a) => a.name), linkedGroups(orchestratorId), cards);
+  const result = proposedPlan(args, mission, linkedClaudeAgents(orchestratorId).map((a) => a.name), linkedGroups(orchestratorId), cards, busyLinkedAgents(orchestratorId));
   if (typeof result === "string") return refused(result);
   setMission(orchestratorId, { state: "plan", ...result, error: undefined });
   // The dialog was the go-ahead: the user has left (spec mission de nuit §5.1).
@@ -287,6 +287,8 @@ async function write(mission: Mission, args: Record<string, unknown>): Promise<T
   if (!text) return refused(t().orchestrator.nothingToWrite);
   if (!isRunning(member.nodeId)) return refused(t().orchestrator.stopped(member.name));
   if (agentActivityStore.getState().activities[member.nodeId]?.activity === "waiting") return refused(t().orchestrator.waiting(member.name));
+  // A line typed while the Remote Control menu is open would land in the menu.
+  if (remoteBusy(member.nodeId)) return refused(t().orchestrator.remoteBusy(member.name));
   await ptySendText(member.nodeId, text);
   return said(t().orchestrator.written(member.name));
 }
@@ -359,7 +361,11 @@ async function remote(orchestratorId: string, mission: Mission, args: Record<str
   const ambiguous: string[] = [];
   for (const name of names) {
     if (sameName(name, "moi")) chosen.push({ nodeId: orchestratorId, name: o.you });
-    else if (sameName(name, "tous")) chosen.push(...team);
+    else if (sameName(name, "tous")) {
+      // Without its canvas the team lacks the linked agents: "all" would leave them out unsaid.
+      if (!canvasKnown(orchestratorId)) return refused(o.hiddenWorkspace);
+      chosen.push(...team);
+    }
     else {
       const found = team.filter((t) => sameName(t.name, name));
       // Two agents of the same name: the first would be picked silently.
@@ -393,6 +399,8 @@ async function remote(orchestratorId: string, mission: Mission, args: Record<str
 export async function orchestratorTool(orchestratorId: string, name: string, args: Record<string, unknown>): Promise<ToolResult> {
   const mission = missionOf(nodesStore.getState().nodes[orchestratorId]);
   if (!mission) return refused(t().orchestrator.gone);
+  // Off screen, its wires and groups come from its saved scene: read once, if it never was (#69).
+  await readCanvas(orchestratorId);
   switch (name) {
     case "mission":
       return describeMission(orchestratorId, mission);
