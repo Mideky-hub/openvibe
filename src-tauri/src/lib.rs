@@ -185,6 +185,7 @@ pub fn run() {
             commands::notes::notes_agent_list,
             commands::notes::notes_agent_read,
             commands::agents::agent_activity_snapshot,
+            commands::agents::set_activity_threshold,
             commands::agents::mcp_reply,
         ])
         .build(tauri::generate_context!())

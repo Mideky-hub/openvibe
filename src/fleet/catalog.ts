@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { messages } from "@/i18n";
 import { AGENT_IDS, type AgentId, type AgentInfo } from "@/ipc/pty";
+import { defaultAgentStore, type DefaultAgentChoice } from "./defaultAgentChoice";
 import { fleetMessages } from "./messages";
 
 export interface AgentMeta {
@@ -82,8 +83,13 @@ export const INDIGO = "#707de3";
 /** Agents that start without options: Ollama needs a model, Personnalisé a command. */
 export const AGENTS_WITHOUT_OPTIONS = AGENT_ORDER.filter((id) => id !== "ollama" && id !== "custom");
 
-/** The agent of "Nouvelle console": the first available of Claude, Codex, Shell. */
-export function defaultAgent(agents: readonly AgentInfo[]): AgentId {
+/**
+ * The agent of "Nouvelle console": the one chosen in the settings while it is
+ * on this computer (Shell always is), else the first available of Claude, Codex, Shell.
+ */
+export function defaultAgent(agents: readonly AgentInfo[], chosen: DefaultAgentChoice = defaultAgentStore.getState().choice): AgentId {
+  if (chosen === "shell") return "shell";
+  if (chosen !== "auto" && agents.some((agent) => agent.id === chosen && agent.available)) return chosen;
   for (const id of ["claude", "codex"] as const) {
     if (agents.some((agent) => agent.id === id && agent.available)) return id;
   }
