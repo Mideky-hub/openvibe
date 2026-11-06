@@ -39,7 +39,7 @@ function Stat({ id, label, children }: { id: string; label: string; children: Re
 
 /**
  * The activity map and the statistics across sessions (issue #74), from the
- * logs Claude Code keeps on the disk: what a restart of OpenVibe never loses.
+ * logs Claude Code and Codex keep on the disk: what a restart of OpenVibe never loses.
  */
 export function ActivityMap({ report }: { report: TokenReport }) {
   const u = useMessages(shellMessages).usage;

@@ -17,9 +17,10 @@ const report = (sessions: TokenReport["sessions"]): TokenReport => ({
   filesScanned: 2,
   truncated: false,
 });
-const two = [
-  { sessionId: "a", model: null, counts: counts(20_000) },
-  { sessionId: "b", model: null, counts: counts(10_035) },
+// One Claude session and one Codex session: the statistics count both (#76).
+const two: TokenReport["sessions"] = [
+  { sessionId: "a", agent: "claude", model: null, counts: counts(20_000) },
+  { sessionId: "c1", agent: "codex", model: "gpt-5-codex", counts: counts(10_035) },
 ];
 
 async function show(r: TokenReport) {
@@ -51,7 +52,7 @@ it("maps each day of the window by its tokens, and sums up the sessions", async 
 });
 
 it("says « at least » when the logs hold more sessions than listed, without an average", async () => {
-  const many = Array.from({ length: SESSIONS_CAP }, (_, i) => ({ sessionId: `s${i}`, model: null, counts: counts(1) }));
+  const many = Array.from({ length: SESSIONS_CAP }, (_, i) => ({ sessionId: `s${i}`, agent: "claude" as const, model: null, counts: counts(1) }));
   const { stat, done } = await show(report(many));
   expect(stat("sessions")).toContain(`${SESSIONS_CAP} et plus`);
   expect(stat("perSession")).toBe("");
