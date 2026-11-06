@@ -9,7 +9,7 @@ import { boardView } from "@/kanban/missionLink";
 import { LEVELS, modelLabel } from "@/mission/router";
 import { readTickets } from "@/mission/tickets";
 import { linkedBoards } from "@/kanban/orchestrate";
-import { agentGroup, agentState, linkedClaudeAgents, linkedGroups, missionOf, canvasKnown, setMission, updateMember } from "@/mission/store";
+import { agentGroup, agentState, busyLinkedAgents, linkedClaudeAgents, linkedGroups, missionOf, canvasKnown, setMission, updateMember } from "@/mission/store";
 import { terminalText } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore, sessionOf, terminalOf } from "@/store/nodes";
@@ -188,7 +188,7 @@ function proposePlan(orchestratorId: string, mission: Mission, args: Record<stri
   const named = Array.isArray(args.sous_taches) && args.sous_taches.some((s) => onCanvas(s as Record<string, unknown> | null));
   if (named && !canvasKnown(orchestratorId)) return refused(t().orchestrator.hiddenWorkspace);
   const cards = linkedBoards(orchestratorId).flatMap(({ board }) => Object.keys(board.cards));
-  const result = proposedPlan(args, mission, linkedClaudeAgents(orchestratorId).map((a) => a.name), linkedGroups(orchestratorId), cards);
+  const result = proposedPlan(args, mission, linkedClaudeAgents(orchestratorId).map((a) => a.name), linkedGroups(orchestratorId), cards, busyLinkedAgents(orchestratorId));
   if (typeof result === "string") return refused(result);
   setMission(orchestratorId, { state: "plan", ...result, error: undefined });
   // The dialog was the go-ahead: the user has left (spec mission de nuit §5.1).

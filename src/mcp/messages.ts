@@ -75,6 +75,7 @@ export const agentMessages = defineMessages(
       brief: (n: number) => `Sous-tâche ${n} : une consigne (brief).`,
       budget: (n: number) => `Sous-tâche ${n} : un budget en minutes (entier, 1 au moins).`,
       notLinked: (n: number, agent: string) => `Sous-tâche ${n} : « ${agent} » n'est pas un agent Claude relié (prénom, ou « new »).`,
+      otherMission: (n: number, agent: string) => `Sous-tâche ${n} : ${agent} travaille déjà pour une autre mission en cours ; choisis un autre agent, ou « new ».`,
       alreadyHas: (name: string) => `${name} a déjà une sous-tâche : une sous-tâche par agent.`,
       groupForNew: (n: number) => `Sous-tâche ${n} : group ne s'emploie qu'avec agent « new ».`,
       notLinkedGroup: (n: number, group: string) => `Sous-tâche ${n} : « ${group} » n'est pas un groupe relié.`,
@@ -198,6 +199,7 @@ export const agentMessages = defineMessages(
     },
     launch: {
       unlinked: (agent: string) => `${agent} n'est plus relié à l'orchestrateur.`,
+      otherMission: (agent: string) => `${agent} travaille déjà pour une autre mission en cours.`,
       groupLost: (group: string) => `Le groupe ${group} n'est plus relié à l'orchestrateur.`,
       leftWorkspace: "L'espace de l'orchestrateur n'est plus affiché : reviens-y et relance la mission.",
       groupFailed: "Le groupe des nouveaux agents n'a pas pu être créé.",
@@ -278,6 +280,7 @@ export const agentMessages = defineMessages(
       brief: (n: number) => `Sub-task ${n}: a brief.`,
       budget: (n: number) => `Sub-task ${n}: a budget in minutes (a whole number, 1 at least).`,
       notLinked: (n: number, agent: string) => `Sub-task ${n}: "${agent}" is not a linked Claude agent (a first name, or "new").`,
+      otherMission: (n: number, agent: string) => `Sub-task ${n}: ${agent} already works for another running mission; choose another agent, or "new".`,
       alreadyHas: (name: string) => `${name} already has a sub-task: one sub-task per agent.`,
       groupForNew: (n: number) => `Sub-task ${n}: group only goes with agent "new".`,
       notLinkedGroup: (n: number, group: string) => `Sub-task ${n}: "${group}" is not a linked group.`,
@@ -401,6 +404,7 @@ export const agentMessages = defineMessages(
     },
     launch: {
       unlinked: (agent: string) => `${agent} is no longer linked to the orchestrator.`,
+      otherMission: (agent: string) => `${agent} already works for another running mission.`,
       groupLost: (group: string) => `The group ${group} is no longer linked to the orchestrator.`,
       leftWorkspace: "The orchestrator's workspace is no longer on screen: go back to it and launch the mission again.",
       groupFailed: "The new agents' group could not be created.",

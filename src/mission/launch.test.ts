@@ -21,7 +21,7 @@ import { notify } from "./events";
 import { whenReady } from "./ready";
 import { cleanMission, endMission, handoverText, launchMission, mergeMission, reassignTask, subTaskText, withTicketNote } from "./launch";
 import { NEW_MISSION, type Member, type Mission } from "./mission";
-import { missionOf, updateMember } from "./store";
+import { busyLinkedAgents, inOtherMission, linkedClaudeAgents, missionOf, updateMember } from "./store";
 
 vi.mock("@excalidraw/excalidraw", () => ({}));
 vi.mock("@/ipc/mission", () => ({ missionPrepare: vi.fn(), missionAddAgent: vi.fn(), missionMerge: vi.fn(), missionCleanup: vi.fn(), missionDiscard: vi.fn(() => Promise.resolve({ removed: [], kept: [] })) }));
@@ -41,6 +41,7 @@ vi.mock("./events", () => ({ notify: vi.fn() }));
 vi.mock("./store", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./store")>()),
   linkedClaudeAgents: vi.fn(() => [{ nodeId: "isis", name: "Isis" }]),
+  busyLinkedAgents: vi.fn(() => []),
 }));
 
 const session: TerminalPayload = { title: "Chef", name: "Chef", agent: "claude", cwd: "C:/code/proj", shell: "default", command: "", claudeSessionId: "s0", role: "orchestrator" };
@@ -222,6 +223,27 @@ describe("launchMission (spec §7.3)", () => {
     expect(missionNow()).toMatchObject({ state: "plan", error: "La branche openvibe/auth-x existe déjà." });
     expect(relaunchTerminal).not.toHaveBeenCalled();
     expect(launchGroup).not.toHaveBeenCalled();
+  });
+
+  it("holds its linked agents while it launches, so no other mission enrolls them, and frees them if it fails (#64)", async () => {
+    await setup();
+    let fail!: (error: Error) => void;
+    vi.mocked(missionPrepare).mockReturnValueOnce(new Promise((_resolve, reject) => (fail = reject)));
+    const launching = launchMission("chef");
+    expect(inOtherMission("isis", "autre")).toBe(true);
+    expect(inOtherMission("isis", "chef")).toBe(false);
+    fail(new Error("git"));
+    await launching;
+    expect(inOtherMission("isis", "autre")).toBe(false);
+  });
+
+  it("says why it does not start when a linked agent went to another mission meanwhile (#64)", async () => {
+    await setup();
+    vi.mocked(linkedClaudeAgents).mockReturnValueOnce([]);
+    vi.mocked(busyLinkedAgents).mockReturnValueOnce(["Isis"]);
+    await launchMission("chef");
+    expect(missionNow()).toMatchObject({ state: "plan", error: "Isis travaille déjà pour une autre mission en cours." });
+    expect(missionPrepare).not.toHaveBeenCalled();
   });
 
   it("forms one team for two go-aheads in a row", async () => {
