@@ -16,6 +16,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 - OpenVibe's MCP server is stricter with what agents send: a malformed request gets a proper JSON-RPC error instead of a silent answer, a flood of calls is turned away (503) instead of holding a thread each, and a terminal relaunched as its previous process exits keeps its access to OpenVibe's tools.
 - Pinching on a laptop trackpad now zooms the canvas, also when the fingers are over a terminal, a board or an orchestrator (#89).
 - A shortcut pressed with a menu open no longer ends placement or link mode, and a click outside the palette closes it without moving the keyboard to what lies underneath.
+- A copied terminal no longer reads *Terminal not found* while it is being set up, and the agents of a new group no longer show *Stopped* before they start.
 - **Mission clock:** an overrun warning that was still waiting for a busy orchestrator is no longer lost if OpenVibe closes, and restarting OpenVibe after a long pause no longer fires a burst of "global budget used up" toasts: each one waits for its orchestrator to be restarted.
 - A request that makes OpenVibe's local server fail is now written to the log with its address (never its token), so the failure can be traced; the server keeps answering the next ones (#6).
 - **Missions:** an agent wired to two orchestrators can no longer join a second mission while the first one is launching or before its sub-task is typed; the orchestrator is told the agent works for another running mission instead of "not linked" (#64).
