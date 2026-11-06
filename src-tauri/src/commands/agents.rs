@@ -433,6 +433,14 @@ pub async fn agent_activity_snapshot(state: State<'_, AgentState>) -> AppResult<
     })
 }
 
+/// The activity threshold of the settings: how long a terminal without hooks
+/// stays working after its output stops. The interface saves it; Rust applies it.
+#[tauri::command]
+pub async fn set_activity_threshold(state: State<'_, AgentState>, ms: u64) -> AppResult<()> {
+    lock(&state.tracker).set_quiet_after(Duration::from_millis(ms));
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::{Duration, Instant};

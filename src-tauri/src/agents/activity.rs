@@ -15,8 +15,12 @@ pub enum Activity {
     Waiting,
 }
 
-/// Without hooks, output in the last 1.5 s means the agent works.
+/// Without hooks, output in the last 1.5 s means the agent works, unless the
+/// activity threshold of the settings says otherwise.
 pub const QUIET_AFTER: Duration = Duration::from_millis(1500);
+/// The bounds of that threshold: the ticker checks every 250 ms.
+pub const MIN_QUIET_AFTER: Duration = Duration::from_millis(500);
+pub const MAX_QUIET_AFTER: Duration = Duration::from_secs(30);
 /// A hooked agent left working this long without output lost its `Stop` hook.
 pub const HOOK_SAFETY_NET: Duration = Duration::from_secs(30);
 
@@ -64,14 +68,34 @@ struct Node {
 pub const ECHO_WINDOW: Duration = Duration::from_millis(200);
 
 /// The activity of every running terminal.
-#[derive(Default)]
 pub struct Tracker {
     nodes: HashMap<String, Node>,
     /// The number of the last change, of any terminal.
     seq: u64,
+    /// How long output must stop before a terminal without hooks is idle.
+    quiet_after: Duration,
+}
+
+impl Default for Tracker {
+    fn default() -> Self {
+        Tracker {
+            nodes: HashMap::new(),
+            seq: 0,
+            quiet_after: QUIET_AFTER,
+        }
+    }
 }
 
 impl Tracker {
+    pub fn quiet_after(&self) -> Duration {
+        self.quiet_after
+    }
+
+    /// The activity threshold of the settings, kept within its bounds.
+    pub fn set_quiet_after(&mut self, quiet: Duration) {
+        self.quiet_after = quiet.clamp(MIN_QUIET_AFTER, MAX_QUIET_AFTER);
+    }
+
     /// A process just started: idle until it shows otherwise.
     pub fn start(&mut self, node_id: &str, now: Instant) -> Change {
         self.seq += 1;
@@ -178,9 +202,11 @@ impl Tracker {
         set(&mut self.seq, node_id, node, activity, now)
     }
 
-    /// Working terminals that went quiet become idle: after 1.5 s without
-    /// hooks or since an answer, after 30 s with them (safety net for a lost `Stop`).
+    /// Working terminals that went quiet become idle: after the threshold
+    /// (1.5 s by default) without hooks or since an answer, after 30 s with
+    /// them (safety net for a lost `Stop`).
     pub fn tick(&mut self, now: Instant) -> Vec<Change> {
+        let quiet_after = self.quiet_after;
         let mut changes = Vec::new();
         for (node_id, node) in &mut self.nodes {
             if node.activity != Activity::Working {
@@ -193,7 +219,7 @@ impl Tracker {
             let limit = if node.hooked && node.answered.is_none() {
                 HOOK_SAFETY_NET
             } else {
-                QUIET_AFTER
+                quiet_after
             };
             if now.saturating_duration_since(last) >= limit {
                 node.answered = None;
@@ -746,6 +772,26 @@ mod tests {
             (idle[0].node_id.as_str(), idle[0].activity),
             ("a", Activity::Idle)
         );
+    }
+
+    #[test]
+    fn the_quiet_time_follows_the_activity_threshold_setting() {
+        let t0 = Instant::now();
+        let mut tracker = started(t0);
+        tracker.set_quiet_after(ms(3000));
+        tracker.output("a", t0 + ms(10));
+        assert!(tracker.tick(t0 + ms(2000)).is_empty());
+        assert_eq!(tracker.tick(t0 + ms(3010)).len(), 1);
+    }
+
+    #[test]
+    fn the_activity_threshold_stays_within_its_bounds() {
+        let mut tracker = Tracker::default();
+        assert_eq!(tracker.quiet_after(), QUIET_AFTER);
+        tracker.set_quiet_after(ms(10));
+        assert_eq!(tracker.quiet_after(), MIN_QUIET_AFTER);
+        tracker.set_quiet_after(Duration::from_secs(3600));
+        assert_eq!(tracker.quiet_after(), MAX_QUIET_AFTER);
     }
 
     #[test]
