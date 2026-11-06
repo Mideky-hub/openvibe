@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Command } from "cmdk";
 import { FileText } from "lucide-react";
 import { useMessages } from "@/i18n";
@@ -13,7 +13,7 @@ import { goToSections } from "./goTo";
 import { GoToRow } from "./GoToRow";
 import { goTo } from "./goToRun";
 import { commandsMessages } from "./messages";
-import { closePalette, modeOf, setPaletteQuery, stripPrefix, usePalette } from "./paletteState";
+import { chosenKey, closePalette, modeOf, setPaletteQuery, stripPrefix, usePalette } from "./paletteState";
 import { agentsStore, useAgents } from "@/fleet/agentsStore";
 import { loopCommands } from "@/loops/commands";
 import { presetCommands } from "@/presets/commands";
@@ -68,13 +68,25 @@ function PaletteBody() {
     mode === "goTo"
       ? (filesFirst ? [...files.map(fileKey), ...goToList.flatMap((s) => s.items.map((i) => i.key))] : [...goToList.flatMap((s) => s.items.map((i) => i.key)), ...files.map(fileKey)])
       : functionList.flatMap((s) => s.items.filter((l) => l.disabled === null).map((l) => l.command.id));
-  const [chosen, setChosen] = useState("");
-  // The first line is chosen when it opens and after each keystroke (spec fenêtre §7.1).
-  useEffect(() => setChosen(""), [query]);
-  const value = keys.includes(chosen) ? chosen : (keys[0] ?? "");
+  // The first line is chosen when it opens and after each keystroke (spec fenêtre §7.1): a choice
+  // made for another query is ignored at once, not after an effect, so no stale line shows for a frame.
+  const [chosen, setChosen] = useState({ query: "", key: "" });
+  const value = chosenKey(chosen, query, keys);
+  const pressedOutside = useRef(false);
 
   return (
-    <div data-palette-backdrop className="fixed inset-0 z-50" onPointerDown={(e) => e.target === e.currentTarget && closePalette()}>
+    <div
+      data-palette-backdrop
+      className="fixed inset-0 z-50"
+      // Closed on the click, not the pointerdown: the mousedown that follows would
+      // land on what lies under the palette and move the keyboard there (plan F1).
+      // A selection dragged out of the field ends with a click on the backdrop: that one stays.
+      onMouseDown={(e) => {
+        pressedOutside.current = e.target === e.currentTarget;
+        if (pressedOutside.current) e.preventDefault();
+      }}
+      onClick={(e) => e.target === e.currentTarget && pressedOutside.current && closePalette()}
+    >
       <div
         className="ov-glass-strong absolute left-1/2 -translate-x-1/2 overflow-hidden rounded-[14px]"
         style={{ top: TITLE_BAR_HEIGHT + 6, width: "min(560px, calc(100vw - 32px))", boxShadow: "var(--ov-glass-hi), var(--ov-glass-edge), var(--ov-shadow)" }}
@@ -84,7 +96,7 @@ function PaletteBody() {
           shouldFilter={false}
           loop
           value={value}
-          onValueChange={setChosen}
+          onValueChange={(key) => setChosen({ query, key })}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.preventDefault();

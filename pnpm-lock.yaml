@@ -10,6 +10,11 @@ overrides:
   lodash-es@<4.18.0: 4.18.1
   katex@<0.18.2: 0.18.11
 
+patchedDependencies:
+  '@excalidraw/excalidraw@0.18.1':
+    hash: 191d5eac8d45ba61e0277946f4d0a1550d5ba1ffdeb4fc887a3bd5df4614d91b
+    path: patches/@excalidraw__excalidraw@0.18.1.patch
+
 importers:
 
   .:
@@ -61,7 +66,7 @@ importers:
         version: 6.43.15
       '@excalidraw/excalidraw':
         specifier: 0.18.1
-        version: 0.18.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        version: 0.18.1(patch_hash=191d5eac8d45ba61e0277946f4d0a1550d5ba1ffdeb4fc887a3bd5df4614d91b)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@fontsource-variable/inter':
         specifier: 5.3.0
         version: 5.3.0
@@ -4488,7 +4493,7 @@ snapshots:
 
   '@dotenvx/primitives@0.8.0': {}
 
-  '@excalidraw/excalidraw@0.18.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+  '@excalidraw/excalidraw@0.18.1(patch_hash=191d5eac8d45ba61e0277946f4d0a1550d5ba1ffdeb4fc887a3bd5df4614d91b)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
       '@braintree/sanitize-url': 6.0.2
       '@excalidraw/laser-pointer': 1.3.1

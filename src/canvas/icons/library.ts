@@ -80,14 +80,25 @@ export function readLibrary(raw: unknown, library: IconLibrary): IconItem[] {
     : Array.isArray(r.library)
       ? r.library.map((elements: unknown) => ({ elements }))
       : [];
-  return entries.flatMap((entry, i) => {
+  const dropped = new Map<string, number>();
+  const items = entries.flatMap((entry, i) => {
     if (!Array.isArray(entry.elements)) return [];
     const elements = (entry.elements as RawElement[])
-      .filter((e) => typeof e === "object" && e !== null && !e.isDeleted && !FOREIGN.has(e.type))
+      .filter((e) => {
+        if (typeof e !== "object" || e === null || e.isDeleted) return false;
+        if (!FOREIGN.has(e.type)) return true;
+        dropped.set(e.type, (dropped.get(e.type) ?? 0) + 1);
+        return false;
+      })
       .map(clean);
     if (elements.length === 0) return [];
     return [{ id: `${library.source}#${i}`, name: nameOf(entry.name, elements, `${library.name} ${i + 1}`), library: library.name, elements }];
   });
+  if (dropped.size > 0) {
+    const kinds = [...dropped].map(([type, count]) => `${type} ×${count}`).join(", ");
+    console.warn(`Icon library ${library.source}: dropped ${kinds}`);
+  }
+  return items;
 }
 
 /** The items whose name or library holds every word of the query, case and accents aside. */

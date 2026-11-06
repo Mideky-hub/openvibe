@@ -8,7 +8,7 @@ import { terminalStatusStore } from "@/store/terminalStatus";
 import { workspacesStore } from "@/store/workspaces";
 import { toast } from "sonner";
 import { cachedElements, forgetScene, rememberScene } from "@/canvas/sceneCache";
-import { relaunchTerminal } from "@/nodes/terminal/registry";
+import { disposeTerminal, markForAutostart, relaunchTerminal } from "@/nodes/terminal/registry";
 import { addAgentToGroup, closeGroup, closeStoredGroup, launchGroup, setGroupFolded, setGroupSpeciality, showGroups } from "./groups";
 import { removeFromStoredScene } from "./terminals";
 
@@ -58,6 +58,27 @@ it("staffs a mission's group with the names, folders and pantheon it is given, a
     ["Horus", "C:/w/auth-horus"],
   ]);
   expect(frame?.customData?.openvibe).toMatchObject({ kind: "group", pantheon: "egyptian" });
+});
+
+it("marks each agent of a new group as starting before its node appears: never ARRÊTÉ before it mounts (issue #3)", async () => {
+  const marked = new Set<string>();
+  vi.mocked(markForAutostart).mockImplementation((id) => void marked.add(id));
+  const unmarkedOnArrival: string[] = [];
+  const known = new Set(Object.keys(nodesStore.getState().nodes));
+  const unsubscribe = nodesStore.subscribe(({ nodes }) => {
+    for (const id of Object.keys(nodes)) {
+      if (known.has(id)) continue;
+      known.add(id);
+      if (!marked.has(id)) unmarkedOnArrival.push(id);
+    }
+  });
+  try {
+    await launchGroup({ name: "Duo", role: "general", agents: ["shell", "shell"] }, { cwd: "C:/code", shell: "default", title: "", command: "" }, { x: 0, y: 0 });
+  } finally {
+    unsubscribe();
+    vi.mocked(markForAutostart).mockReset();
+  }
+  expect(unmarkedOnArrival).toEqual([]);
 });
 
 it("sets a group's speciality as one undoable step, and leaves other frames alone (spec groupes spécialisés §2)", () => {
@@ -210,6 +231,27 @@ it("folds and unfolds a group as one undoable step, keeping everything else (spe
   setGroupFolded("f1", false);
   expect(scene[0].customData?.openvibe).toEqual(data);
   expect((scene[2] as { locked?: boolean }).locked).toBe(false);
+});
+
+it("folds and unfolds a group of working agents without stopping, relaunching or moving any of them (#83)", () => {
+  const sent: string[] = [];
+  mockIPC((cmd) => {
+    sent.push(cmd);
+  });
+  const data = { kind: "group", role: "general", pantheon: "egyptian" };
+  const agent = { id: "t1", type: "embeddable", x: 40, y: 60, customData: { kind: "terminal" }, frameId: "f1" };
+  scene = [{ id: "f1", type: "frame", customData: { openvibe: data } }, agent as never];
+  canvasStore.setState({ frames: [{ id: "f1", name: "G", x: 0, y: 0, width: 800, height: 500, group: { role: "general", pantheon: "egyptian" }, memberIds: ["t1"] }] as never });
+  terminalStatusStore.getState().set("t1", { state: "running" });
+  vi.mocked(relaunchTerminal).mockClear();
+  vi.mocked(disposeTerminal).mockClear();
+  setGroupFolded("f1", true);
+  setGroupFolded("f1", false);
+  expect(sent).toEqual([]);
+  expect(relaunchTerminal).not.toHaveBeenCalled();
+  expect(disposeTerminal).not.toHaveBeenCalled();
+  expect(terminalStatusStore.getState().statuses.t1?.state).toBe("running");
+  expect(scene[1]).toMatchObject({ x: 40, y: 60, frameId: "f1" });
 });
 
 it("unfolds a folded group before adding an agent to it, so the agent shows and starts", async () => {

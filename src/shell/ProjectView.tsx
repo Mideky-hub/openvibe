@@ -119,6 +119,7 @@ export function ProjectView() {
           {status === "error" ? t.projectView.loadFailed(String(error)) : t.loading}
         </div>
       )}
+      {/* No stacking context on this view (no isolate, transform, opacity): the bars (z-30) must stay above the canvas drag strip (z-20). */}
       <div className="absolute inset-x-0 top-0 z-30">
         <TitleBar
           leading={<ProjectPicker />}

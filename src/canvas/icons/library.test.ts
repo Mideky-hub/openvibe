@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { instantiate, libraryFile, matchIcons, readLibrary } from "./library";
 
 const meta = { source: "rohanp/system-design", name: "System Design Components", authors: ["Rohan Pithadiya"] };
@@ -112,5 +112,20 @@ describe("instantiate, rotation and seeds (backlog 27 oct)", () => {
     const [b] = instantiate([rect("a", { seed: 7 })], { x: 0, y: 0 }, ids);
     expect(a.seed).not.toBe(7);
     expect(a.seed).not.toBe(b.seed);
+  });
+});
+
+describe("what readLibrary reports (issue #13)", () => {
+  it("logs which kinds of element it dropped, and says nothing when it dropped none", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    readLibrary({ libraryItems: [{ name: "X", elements: [rect("a"), { ...rect("b"), type: "iframe" }, { ...rect("c"), type: "image" }, { ...rect("d"), type: "image" }] }] }, meta);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain(meta.source);
+    expect(String(warn.mock.calls[0][0])).toContain("image ×2");
+    expect(String(warn.mock.calls[0][0])).toContain("iframe ×1");
+    warn.mockClear();
+    readLibrary({ libraryItems: [{ name: "X", elements: [rect("a")] }] }, meta);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

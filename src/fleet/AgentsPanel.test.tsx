@@ -12,9 +12,14 @@ import { requestUi } from "@/commands/uiRequests";
 import { agentsPanelStore } from "./agentsPanelState";
 import { AgentsPanel } from "./AgentsPanel";
 import { newConsole } from "./quickActions";
+import { focusNode } from "@/canvas/focusNode";
+import { launchMission } from "@/mission/launch";
+import { NEW_MISSION, type Mission } from "@/mission/mission";
 
 // Excalidraw does not load under Vitest (roughjs); the panel only reaches it through menu actions.
 vi.mock("@excalidraw/excalidraw", () => ({}));
+vi.mock("@/canvas/focusNode", () => ({ focusNode: vi.fn() }));
+vi.mock("@/mission/launch", () => ({ launchMission: vi.fn(() => Promise.resolve()) }));
 vi.mock("./quickActions", () => ({ newConsole: vi.fn(), launchFour: vi.fn(), placeOrchestrator: vi.fn() }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -131,4 +136,37 @@ it("gives each agent row Centrer and Fermer on hover and on keyboard focus (spec
   expect(labels.some((l) => /^Centrer/.test(l!))).toBe(true);
   expect(labels.some((l) => /^Fermer/.test(l!))).toBe(true);
   expect(row.querySelector('[class*="group-hover:flex"]')!.className).toContain("group-focus-within:flex");
+});
+
+const plannedMission = { ...NEW_MISSION, state: "plan" as const, plan: [{ title: "Login", brief: "Fais le login", agent: "Isis", budgetMin: 20 }] };
+async function addOrchestrator(mission?: Mission) {
+  await nodesStore.getState().create("chef", {
+    workspaceId: "w1",
+    kind: "orchestrator",
+    payload: mission ? { name: "Chef", mission } : { name: "Chef" },
+  });
+  canvasStore.getState().setNodeIds(["ada", "chef"]);
+}
+
+it("launches the planned mission of an orchestrator in one click, without moving the view", async () => {
+  await addOrchestrator(plannedMission);
+  await act(async () => root.render(<AgentsPanel />));
+  await act(async () => byLabel("Lancer la mission de Chef")!.click());
+  expect(launchMission).toHaveBeenCalledWith("chef");
+  expect(focusNode).not.toHaveBeenCalled();
+});
+
+it("offers no mission launch for an orchestrator without a plan", async () => {
+  await addOrchestrator();
+  await act(async () => root.render(<AgentsPanel />));
+  expect(host.textContent).toContain("Chef");
+  expect(byLabel("Lancer la mission de Chef")).toBeNull();
+});
+
+it("does not move the view when an orchestrator is clicked", async () => {
+  await addOrchestrator(plannedMission);
+  await act(async () => root.render(<AgentsPanel />));
+  const row = [...host.querySelectorAll("[data-orchestrator]")].find((r) => r.textContent?.includes("Chef"))!;
+  await act(async () => (row as HTMLElement).click());
+  expect(focusNode).not.toHaveBeenCalled();
 });

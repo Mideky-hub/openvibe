@@ -21,11 +21,9 @@ it("moves the window from its empty space only, with the logo, its content and t
   await act(async () => root.render(<TitleBar leading={<button type="button">mk-webapp</button>} trailing={<span>3</span>} />));
   const bar = host.firstElementChild as HTMLElement;
   expect(bar.style.height).toBe(`${TITLE_BAR_HEIGHT}px`);
-  // Bare attributes: Tauri drags only on clicks aimed at the bar or its spacers.
-  const regions = [...host.querySelectorAll("[data-tauri-drag-region]")];
-  expect(regions.map((r) => r.getAttribute("data-tauri-drag-region"))).toEqual(["", "", "", ""]);
-  expect(regions[0]).toBe(bar);
-  for (const spacer of regions.slice(1)) expect(spacer.querySelector("button")).toBeNull();
+  // "deep" on the bar: the logo, the app's name and every gap drag the window, the buttons inside still block it.
+  expect(bar.getAttribute("data-tauri-drag-region")).toBe("deep");
+  expect(bar.querySelectorAll("[data-tauri-drag-region]")).toHaveLength(0);
   expect(bar.querySelector("svg path")!.getAttribute("stroke")).toBe("#D97757");
   for (const label of ["Réduire", "Agrandir", "Fermer OpenVibe"]) expect(host.querySelector(`[aria-label="${label}"]`)).not.toBeNull();
   await act(async () => root.unmount());

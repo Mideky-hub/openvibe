@@ -4,21 +4,42 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Added
+- The Agents panel shows a "Launch a mission" button on each orchestrator whose mission is planned, so a mission starts in one click without opening its node; clicking an orchestrator in the panel no longer moves the view (#2).
+
 ### Fixed
 - The README model-router tables now use the effort IDs accepted by the orchestrator (`low`, `medium`, `high`, `extreme`), with French labels alongside them in the French README.
 - **Status line:** a change to your own `statusLine` in Claude's settings is now picked up during the session instead of only at launch; the usage bar slowness, newline, reset date, resumed-session and cache points of the card were already in (#20).
+- The Agents button announces how many agents wait for your reply, for screen readers too, and the mention chips of the prompt input have the same square corners as the rest of the interface.
+- **Icon panel card:** each category already had its own loading and error state, the thumbnail cache was bounded and dropped failed drawings, rotated icons centred by their turned bounds, the panel stayed without a canvas, copies got fresh seeds and an icon dropped on a group joined its frame; the per-category failure and the search-while-loading messages are now covered by tests (#16).
+- The palette no longer shows the previous line as selected for a frame after each keystroke or arrow key: the line chosen by the arrows only holds for the search it was made for.
+- **Theme & UI polish card:** the git chip's branch truncation (now covered by a test), the Agents panel stopping above the resume offer, its filter reset on reopen from the rail, the toast shadow out-ranking sonner's injected style and the first-paint theme script were already in; the agent rows' hover actions (Center, Review, Pause/Resume, Close) are complete (#60).
+- **Theme & UI:** the canvas selection color now shows the accent token in the dark theme (Excalidraw draws it through its dark filter, so it is given pre-inverted). The zen/reading exit pill, the Shapes button keeping the last shape and the Pen menu leaving the shared color and width alone were already in and tested (#27).
+- The palette no longer fails with an error when a terminal closes between opening it and pressing Enter, and a command's pending request to open a menu or editor is dropped when you switch tab, project or the home screen, instead of firing at a later mount (#44).
 - **Remote Control:** the `remote_control` tool refuses "all" when the orchestrator's workspace is not shown (instead of silently leaving linked agents out), and `ecrire` refuses while a Remote Control flow is typing in that agent. The other points of the card were already in: no-link start is an error, Turn off and Retry offered after an error, links of removed nodes cleared, "next start" toast for stopped sessions, no command typed over a draft, orchestrator lines held during a flow, duplicate names refused (#79).
 - **Missions:** "Claude is ready" detection also reads an input box drawn with `>` or inside a rounded frame, and a trust menu with a `>` cursor, instead of waiting for the 60 s timeout. The rest of the mission polish card was already in: events held 4 s after a keystroke, cleanup naming a locked folder instead of "uncommitted changes", and finished sub-tasks shown in the panel (#70).
 - **MCP answers:** `step` now reads the state back with the words the agent sent (`in_progress`, `done`, `failed`) in French too, instead of "en cours", "fait" or "échec". `mission` already returns `linked_agents: null` with a `linked_agents_note` when the orchestrator's workspace is not shown (#30).
+- **Title bar:** the whole bar now drags the window (logo, app name and gaps included, buttons still click), and the stacking rule keeping it above the canvas is documented (#57).
+- **Language switch:** the "diff truncated" marker of the review now follows the interface language (#33).
 - **Model router:** removing an orchestrator in the middle of a mission now sends its linked agents back to the project and to Claude's default model, instead of leaving them on the router's. "Clean the mission" keeping the router and the mission description showing each agent's real model were already in (#62).
 - **Workspaces:** two workspaces of a project can no longer share a name (case aside), by creation or rename, with an error saying so. The rest of the project-list robustness card was already in: folders checked outside the database lock, no "Rename" on a missing project, agent names in the delete confirmation, the agent list awaited before "New console", save failures toasted (#31).
+- **Step timeline:** a declared step list with duplicate titles (case aside) is refused, the sub-agent "×N" stays visible next to a truncated title, an in-progress step no longer pulses under a stopped terminal, and sub-agent counts survive a page reload (#75).
+- **Renaming a group** from the palette now waits for the view to reach it before opening the name field, so the labels no longer drift when the group was off screen (#7).
 - A token left in `curl.cfg` by a previous run is deleted at startup, and a Codex terminal launched under `cmd` from a profile path holding `%`, `!` or `^` is covered by tests (it starts without the hook, with a warning in the log, rather than with a wrong path).
+- A node's × now closes it at the first click, instead of selecting it first (#47).
+- **Icon libraries:** what a library drops (embeddable content, frames, images) is now logged, and Excalidraw no longer tries its `esm.sh` font fallback, which flooded the console with ~460 blocked requests on each load (#13).
 - OpenVibe's MCP server is stricter with what agents send: a malformed request gets a proper JSON-RPC error instead of a silent answer, a flood of calls is turned away (503) instead of holding a thread each, and a terminal relaunched as its previous process exits keeps its access to OpenVibe's tools.
+- Pinching on a laptop trackpad now zooms the canvas, also when the fingers are over a terminal, a board or an orchestrator (#89).
+- A shortcut pressed with a menu open no longer ends placement or link mode, and a click outside the palette closes it without moving the keyboard to what lies underneath.
+- A copied terminal no longer reads *Terminal not found* while it is being set up, and the agents of a new group no longer show *Stopped* before they start.
+- Going to an agent of another workspace gives its terminal the keyboard even when it mounts late, and a "go to" still waiting for its workspace no longer fires later if you moved to another tab, the home screen or another project in the meantime (#38).
 - **Mission clock:** an overrun warning that was still waiting for a busy orchestrator is no longer lost if OpenVibe closes, and restarting OpenVibe after a long pause no longer fires a burst of "global budget used up" toasts: each one waits for its orchestrator to be restarted.
 - A request that makes OpenVibe's local server fail is now written to the log with its address (never its token), so the failure can be traced; the server keeps answering the next ones (#6).
 - **Missions:** an agent wired to two orchestrators can no longer join a second mission while the first one is launching or before its sub-task is typed; the orchestrator is told the agent works for another running mission instead of "not linked" (#64).
 - **Agent activity:** resizing a terminal without hooks (Shell, Codex, Gemini…) no longer lights WORKING while it redraws, and a badge no longer stays stale when two changes arrive out of order or the clock is set back (#14).
 - **Missions:** a mission works the same when its workspace has not been displayed since startup: the orchestrator sees its linked agents and groups, ending the mission closes its group instead of only stopping the agents, and the budget clock checks it. Orchestrators created before the bigger default size open at 640 × 760 (#69).
+- **Resume all:** a terminal that fails to restart from the "Resume all" offer now shows the usual "could not resume" message instead of an unhandled error.
+- **Folding groups card:** folding a group to its label was already in; tests now pin that a folded group stays folded after a restart and that folding or unfolding never stops, relaunches or moves its agents (#83).
 
 ## [1.2.0-beta.1] - 2026-11-01
 

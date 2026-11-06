@@ -254,7 +254,8 @@ export function CommandInput(props: {
           {chips.map((target) => (
             <span
               key={targetKey(target)}
-              className="flex h-6 items-center gap-1 rounded-full bg-ov-accent-soft pl-2 pr-1 font-mono text-[11px] text-ov-text"
+              data-mention
+              className="flex h-6 items-center gap-1 rounded-md bg-ov-accent-soft pl-2 pr-1 font-mono text-[11px] text-ov-text"
             >
               {labels.get(targetKey(target))}
               <button
