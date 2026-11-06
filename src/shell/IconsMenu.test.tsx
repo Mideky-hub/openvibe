@@ -44,6 +44,35 @@ afterEach(async () => {
 const tiles = () => [...host.querySelectorAll<HTMLButtonElement>("[data-icon]")].map((b) => b.getAttribute("aria-label"));
 const tab = (label: string) => [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((b) => b.textContent === label)!;
 
+const text = () => host.textContent ?? "";
+
+// These two run first: a category loaded once stays in the library's cache.
+it("tells a failed category apart: the others keep their icons", async () => {
+  const base = vi.mocked(fetch).getMockImplementation()!;
+  vi.stubGlobal("fetch", vi.fn((url: string) => (url.includes("childishgirl") ? Promise.reject(new Error("offline")) : base(url))));
+  await act(async () => tab("AWS").click());
+  await vi.waitFor(() => expect(text()).toContain("Icônes introuvables"));
+  await act(async () => tab("Conception système").click());
+  await vi.waitFor(() => expect(tiles()).toEqual(["Load Balancer", "Cache"]));
+  expect(text()).not.toContain("Icônes introuvables");
+});
+
+it("keeps saying « loading » for a search while a big file is still loading, not « no icon »", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const base = vi.mocked(fetch).getMockImplementation()!;
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => (url.includes("childishgirl") ? (await gate, base(url)) : base(url))));
+  const field = host.querySelector<HTMLInputElement>('[aria-label="Chercher une icône"]')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, "lambda");
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await vi.waitFor(() => expect(text()).toContain("Chargement"));
+  expect(text()).not.toContain("Aucune icône");
+  await act(async () => release());
+  await vi.waitFor(() => expect(tiles()).toEqual(["AWS Lambda"]));
+});
+
 it("shows the system design icons first, then each cloud's (spec maj §4)", async () => {
   expect([...host.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(["Conception système", "AWS", "Azure", "GCP"]);
   await vi.waitFor(() => expect(tiles()).toEqual(["Load Balancer", "Cache"]));
