@@ -52,3 +52,12 @@ it("shows nothing outside a repository", async () => {
   await act(async () => root.render(<GitChip />));
   expect(host.querySelector("button")).toBeNull();
 });
+
+it("truncates a long branch name, the full name in the tooltip, so it never slides under the prompt bar", async () => {
+  status = { branch: "feature/a-very-long-branch-name-for-a-small-window", changed: 0 };
+  await act(async () => root.render(<GitChip />));
+  const name = host.querySelector("button span[title]")!;
+  expect(name.className).toContain("max-w-[150px]");
+  expect(name.className).toContain("truncate");
+  expect(name.getAttribute("title")).toBe(status.branch);
+});
