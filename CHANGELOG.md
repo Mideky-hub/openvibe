@@ -5,6 +5,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 ## [Unreleased]
 
 ### Fixed
+- OpenVibe's MCP server is stricter with what agents send: a malformed request gets a proper JSON-RPC error instead of a silent answer, a flood of calls is turned away (503) instead of holding a thread each, and a terminal relaunched as its previous process exits keeps its access to OpenVibe's tools.
 - Pinching on a laptop trackpad now zooms the canvas, also when the fingers are over a terminal, a board or an orchestrator (#89).
 - A shortcut pressed with a menu open no longer ends placement or link mode, and a click outside the palette closes it without moving the keyboard to what lies underneath.
 - **Mission clock:** an overrun warning that was still waiting for a busy orchestrator is no longer lost if OpenVibe closes, and restarting OpenVibe after a long pause no longer fires a burst of "global budget used up" toasts: each one waits for its orchestrator to be restarted.

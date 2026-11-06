@@ -119,11 +119,11 @@ pub async fn pty_spawn(
         Box::new(ChannelSink(on_data)),
         Box::new(move || agents::output(&output_app, &output_id)),
         move |info| {
-            // A relaunch may already run under this id: its tracking, settings
-            // and token are not this exit's to clear.
-            if !exit_app.state::<PtyManager>().is_running(&exited_id) {
-                agents::ended(&exit_app, &exited_id);
-            }
+            // A relaunch may already run, or be starting, under this id: its
+            // tracking, settings and token are not this exit's to clear.
+            exit_app
+                .state::<PtyManager>()
+                .if_idle(&exited_id, || agents::ended(&exit_app, &exited_id));
             // Saved before the event so a restore right after the exit finds it.
             let saved = exit_app.state::<Db>().with(|conn| {
                 scrollback::save_logged(conn, &exited_id, &info.scrollback.data, info.scrollback.at)
