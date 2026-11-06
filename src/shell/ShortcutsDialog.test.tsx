@@ -68,7 +68,7 @@ it("gives a function the keys pressed, and saves them", async () => {
 it("refuses keys another function has, and says which", async () => {
   await act(async () => keysOf("Ctrl+P").click());
   await press(keysOf("Ctrl+P"), { key: "g", ctrlKey: true });
-  expect(document.querySelector('[role="alert"]')?.textContent).toBe("Ctrl+G est déjà le raccourci de Aller à la ligne….");
+  expect(document.querySelector('[role="alert"]')?.textContent).toBe("Ctrl+G est déjà le raccourci de « Aller à la ligne… ».");
   expect(shortcutBindingsStore.getState().bindings).toEqual({});
   expect(saved).toEqual([]);
 });
