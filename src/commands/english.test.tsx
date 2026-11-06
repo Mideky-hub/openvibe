@@ -88,6 +88,20 @@ describe("the palette's catalogs in English", () => {
     await vi.waitFor(() => expect(error).toHaveBeenCalledWith("Close the project failed: Error: boom"));
   });
 
+  it("a failed command says what its button says in English", async () => {
+    const error = vi.spyOn(toast, "error").mockReturnValue("");
+    for (const id of ["terminal.duplicate", "workspace.new", "workspace.delete", "group.orchestrate"]) {
+      runCommand({ ...find(id), run: () => Promise.reject(new Error("boom")) }, busy);
+    }
+    await vi.waitFor(() => expect(error).toHaveBeenCalledTimes(4));
+    expect(error.mock.calls.map(([text]) => text)).toEqual([
+      "Could not duplicate: Error: boom",
+      "Could not create: Error: boom",
+      "Could not delete: Error: boom",
+      "Could not create the orchestrator: Error: boom",
+    ]);
+  });
+
   it("go-to sections, keywords and labels follow the language", () => {
     const items = goToItems({
       home: true,
