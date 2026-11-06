@@ -6,6 +6,8 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ### Fixed
 - **Workspaces:** two workspaces of a project can no longer share a name (case aside), by creation or rename, with an error saying so. The rest of the project-list robustness card was already in: folders checked outside the database lock, no "Rename" on a missing project, agent names in the delete confirmation, the agent list awaited before "New console", save failures toasted (#31).
+- **Step timeline:** a declared step list with duplicate titles (case aside) is refused, the sub-agent "×N" stays visible next to a truncated title, an in-progress step no longer pulses under a stopped terminal, and sub-agent counts survive a page reload (#75).
+- **Renaming a group** from the palette now waits for the view to reach it before opening the name field, so the labels no longer drift when the group was off screen (#7).
 - A token left in `curl.cfg` by a previous run is deleted at startup, and a Codex terminal launched under `cmd` from a profile path holding `%`, `!` or `^` is covered by tests (it starts without the hook, with a warning in the log, rather than with a wrong path).
 - A node's × now closes it at the first click, instead of selecting it first (#47).
 - **Icon libraries:** what a library drops (embeddable content, frames, images) is now logged, and Excalidraw no longer tries its `esm.sh` font fallback, which flooded the console with ~460 blocked requests on each load (#13).
