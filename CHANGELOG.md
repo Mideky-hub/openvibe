@@ -5,6 +5,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 ## [Unreleased]
 
 ### Fixed
+- **Missions:** "Claude is ready" detection also reads an input box drawn with `>` or inside a rounded frame, and a trust menu with a `>` cursor, instead of waiting for the 60 s timeout. The rest of the mission polish card was already in: events held 4 s after a keystroke, cleanup naming a locked folder instead of "uncommitted changes", and finished sub-tasks shown in the panel (#70).
 - **MCP answers:** `step` now reads the state back with the words the agent sent (`in_progress`, `done`, `failed`) in French too, instead of "en cours", "fait" or "échec". `mission` already returns `linked_agents: null` with a `linked_agents_note` when the orchestrator's workspace is not shown (#30).
 - **Model router:** removing an orchestrator in the middle of a mission now sends its linked agents back to the project and to Claude's default model, instead of leaving them on the router's. "Clean the mission" keeping the router and the mission description showing each agent's real model were already in (#62).
 - **Workspaces:** two workspaces of a project can no longer share a name (case aside), by creation or rename, with an error saying so. The rest of the project-list robustness card was already in: folders checked outside the database lock, no "Rename" on a missing project, agent names in the delete confirmation, the agent list awaited before "New console", save failures toasted (#31).
