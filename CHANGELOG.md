@@ -46,7 +46,6 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 - **Agent activity:** resizing a terminal without hooks (Shell, Codex, Gemini…) no longer lights WORKING while it redraws, and a badge no longer stays stale when two changes arrive out of order or the clock is set back (#14).
 - **Missions:** a mission works the same when its workspace has not been displayed since startup: the orchestrator sees its linked agents and groups, ending the mission closes its group instead of only stopping the agents, and the budget clock checks it. Orchestrators created before the bigger default size open at 640 × 760 (#69).
 - **Resume all:** a terminal that fails to restart from the "Resume all" offer now shows the usual "could not resume" message instead of an unhandled error.
-- **Folding groups card:** folding a group to its label was already in; tests now pin that a folded group stays folded after a restart and that folding or unfolding never stops, relaunches or moves its agents (#83).
 
 ## [1.2.0-beta.1] - 2026-11-01
 
