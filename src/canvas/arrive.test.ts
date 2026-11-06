@@ -2,6 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { focusTerminal } from "@/nodes/terminal/registry";
+import { notifyTerminalMounted } from "@/nodes/terminal/mounted";
+import { readSource } from "@/theme/cssBlocks";
 import { arrivalStore } from "./arrivalSignal";
 import { arrivalView, arrive, FOCUS_FRAMES, arrivingNode, needsMove, revealNode, showNode } from "./arrive";
 import { canvasStore } from "./canvasStore";
@@ -117,6 +119,52 @@ describe("arrive", () => {
     // Then it stops trying.
     while (frames.length > 0) frames.shift()!(0);
     expect(vi.mocked(focusTerminal).mock.calls.length).toBe(FOCUS_FRAMES);
+    document.dispatchEvent(new Event("pointerdown"));
+  });
+
+  it("past those frames, waits for the terminal's mount, then gives it the keyboard (plan E1, J8)", () => {
+    withScene(at100);
+    arrive("isis");
+    while (frames.length > 0) frames.shift()!(0);
+    expect(arrivingNode()).toBe("isis");
+    notifyTerminalMounted("thot");
+    expect(frames).toHaveLength(0);
+    notifyTerminalMounted("isis");
+    frames.shift()!(0);
+    expect(vi.mocked(focusTerminal).mock.calls.length).toBe(FOCUS_FRAMES + 1);
+    while (frames.length > 0) frames.shift()!(0);
+    // It waits once only.
+    notifyTerminalMounted("isis");
+    expect(frames).toHaveLength(0);
+  });
+
+  it("hears of each mount from the terminals' registry", () => {
+    expect(readSource("nodes/terminal/registry.ts")).toContain("notifyTerminalMounted(nodeId)");
+  });
+
+  it("stops waiting once the user clicks, gives the keyboard elsewhere or arrives elsewhere", () => {
+    withScene(at100);
+    const mountAfter = (moveOn: () => void) => {
+      arrive("isis");
+      while (frames.length > 0) frames.shift()!(0);
+      moveOn();
+      notifyTerminalMounted("isis");
+      return frames.length;
+    };
+    expect(mountAfter(() => document.dispatchEvent(new Event("pointerdown")))).toBe(0);
+    expect(arrivingNode()).toBeNull();
+    document.body.innerHTML = "<input />";
+    expect(mountAfter(() => document.querySelector("input")!.focus())).toBe(0);
+    expect(arrivingNode()).toBeNull();
+    document.body.replaceChildren();
+    expect(
+      mountAfter(() => {
+        arrive("chef");
+        while (frames.length > 0) frames.shift()!(0);
+      }),
+    ).toBe(0);
+    expect(arrivingNode()).toBe("chef");
+    document.dispatchEvent(new Event("pointerdown"));
   });
 
   it("stops trying once the terminal has the keyboard", () => {
@@ -148,6 +196,9 @@ describe("arrive", () => {
     // The first loop stopped at its first frame; the second ran its ten.
     expect(vi.mocked(focusTerminal).mock.calls.filter(([id]) => id === "isis")).toHaveLength(0);
     expect(vi.mocked(focusTerminal).mock.calls.filter(([id]) => id === "chef")).toHaveLength(FOCUS_FRAMES);
+    // Chef is not mounted: the arrival waits for it, and a click ends the wait.
+    expect(arrivingNode()).toBe("chef");
+    document.dispatchEvent(new Event("pointerdown"));
     expect(arrivingNode()).toBeNull();
   });
 
