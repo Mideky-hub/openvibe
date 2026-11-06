@@ -9,6 +9,7 @@ import type { TerminalPayload } from "@/nodes/types";
 import { nodesStore, sessionOf, updateSession } from "@/store/nodes";
 import { isRunning, statusOf, terminalStatusStore } from "@/store/terminalStatus";
 import { createAutostart } from "./autostart";
+import { notifyTerminalMounted } from "./mounted";
 import { TERMINAL_THEME } from "./terminalTheme";
 import { watchDevicePixelRatio } from "./dprWatch";
 import { BASE_FONT_SIZE, canvasMeasure, fontFor, gridFor, renderZoom, type FontMeasure } from "./crisp";
@@ -177,6 +178,7 @@ export function mountTerminal(nodeId: string, host: HTMLElement, payload: Termin
     loadWebgl(entry.term);
   }
   layoutTerminal(nodeId, host, zoom);
+  notifyTerminalMounted(nodeId);
   if (existing) return;
   const started = autostart.run(nodeId, () => {
     // Started by hand meanwhile ("Relancer"): it must not be spawned twice.
