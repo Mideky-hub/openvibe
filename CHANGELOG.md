@@ -6,6 +6,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ### Fixed
 - **Language switch:** the "diff truncated" marker of the review now follows the interface language (#33).
+- **Workspaces:** two workspaces of a project can no longer share a name (case aside), by creation or rename, with an error saying so. The rest of the project-list robustness card was already in: folders checked outside the database lock, no "Rename" on a missing project, agent names in the delete confirmation, the agent list awaited before "New console", save failures toasted (#31).
 - **Step timeline:** a declared step list with duplicate titles (case aside) is refused, the sub-agent "×N" stays visible next to a truncated title, an in-progress step no longer pulses under a stopped terminal, and sub-agent counts survive a page reload (#75).
 - **Renaming a group** from the palette now waits for the view to reach it before opening the name field, so the labels no longer drift when the group was off screen (#7).
 - A token left in `curl.cfg` by a previous run is deleted at startup, and a Codex terminal launched under `cmd` from a profile path holding `%`, `!` or `^` is covered by tests (it starts without the hook, with a warning in the log, rather than with a wrong path).
@@ -20,6 +21,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 - A request that makes OpenVibe's local server fail is now written to the log with its address (never its token), so the failure can be traced; the server keeps answering the next ones (#6).
 - **Missions:** an agent wired to two orchestrators can no longer join a second mission while the first one is launching or before its sub-task is typed; the orchestrator is told the agent works for another running mission instead of "not linked" (#64).
 - **Agent activity:** resizing a terminal without hooks (Shell, Codex, Gemini…) no longer lights WORKING while it redraws, and a badge no longer stays stale when two changes arrive out of order or the clock is set back (#14).
+- **Missions:** a mission works the same when its workspace has not been displayed since startup: the orchestrator sees its linked agents and groups, ending the mission closes its group instead of only stopping the agents, and the budget clock checks it. Orchestrators created before the bigger default size open at 640 × 760 (#69).
 
 ## [1.2.0-beta.1] - 2026-11-01
 

@@ -23,6 +23,18 @@ it("reads a scene once while the first read is still pending (plan F1)", async (
   expect(reads).toHaveBeenCalledTimes(1);
 });
 
+it("grows an orchestrator saved at its old 320 × 420 to today's size, from the same corner (#69)", async () => {
+  const node = (id: string, kind: string, width: number, height: number) => ({ id, type: "embeddable", isDeleted: false, x: 10, y: 20, width, height, customData: { kind } });
+  const elements = [node("old", "orchestrator", 320, 420), node("resized", "orchestrator", 500, 600), node("note", "note", 320, 420)];
+  mockIPC((cmd) => (cmd === "load_workspace" ? { nodes: [], files: [], elementsJson: JSON.stringify(elements), appStateJson: null } : undefined));
+  const scene = await loadScene("w1");
+  expect(scene.initialData.elements?.map(({ id, x, y, width, height }) => ({ id, x, y, width, height }))).toEqual([
+    { id: "old", x: 10, y: 20, width: 640, height: 760 },
+    { id: "resized", x: 10, y: 20, width: 500, height: 600 },
+    { id: "note", x: 10, y: 20, width: 320, height: 420 },
+  ]);
+});
+
 describe("a stored scene being edited (review)", () => {
   const terminal = (id: string, isDeleted = false) => ({ id, type: "embeddable", isDeleted, frameId: null, customData: { kind: "terminal" } });
   const payload = { title: "", name: "", agent: "shell" as const, cwd: "C:/", shell: "default" as const, command: "" };
