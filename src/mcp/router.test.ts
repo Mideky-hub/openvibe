@@ -76,7 +76,7 @@ describe("the agent's tools (spec orchestrateur §4.4)", () => {
 
   it("declares and marks the terminal's steps, saved in its payload", async () => {
     expect(textOf(await call("isis", "declare_steps", { steps: ["Plan", "Code"] }))).toBe("2 étapes déclarées.");
-    expect(textOf(await call("isis", "step", { title: "Plan", state: "done" }))).toBe("Plan : fait.");
+    expect(textOf(await call("isis", "step", { title: "Plan", state: "done" }))).toBe("Plan : done.");
     expect(terminalOf(nodesStore.getState().nodes.isis)?.steps).toEqual([
       { title: "Plan", state: "fait" },
       { title: "Code", state: "a_venir" },
@@ -415,13 +415,14 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
   });
 });
 
-it("answers a failed step with its accent in French (backlog R5c)", async () => {
-  expect(textOf(await call("isis", "step", { title: "Plan", state: "failed" }))).toBe("Plan : échec.");
+it("reads a step back with the vocabulary it sent, in French too (#30)", async () => {
+  expect(textOf(await call("isis", "step", { title: "Plan", state: "failed" }))).toBe("Plan : failed.");
+  expect(textOf(await call("isis", "step", { title: "Plan", state: "done" }))).toBe("Plan : done.");
 });
 
 describe("the English protocol (spec première version §7.1)", () => {
   it("still takes French values, and tells a former name what it became", async () => {
-    expect(textOf(await call("isis", "step", { title: "Plan", state: "en_cours" }))).toBe("Plan : en cours.");
+    expect(textOf(await call("isis", "step", { title: "Plan", state: "en_cours" }))).toBe("Plan : in_progress.");
     const old = await call("isis", "rendre_compte", { resume: "x", statut: "termine" });
     expect(old).toMatchObject({ isError: true });
     expect(textOf(old)).toBe("Outil renommé : utilise report.");
