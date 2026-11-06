@@ -1,7 +1,7 @@
 import type { TokenReport } from "@/ipc/tokens";
 import { total } from "./tokens";
 
-/** The sessions Rust lists at most, the biggest first: mirrors `tokens::MAX_SESSIONS`. */
+/** The sessions Rust lists at most, Claude's and Codex's together, the biggest first: mirrors `tokens::MAX_SESSIONS`. */
 export const SESSIONS_CAP = 200;
 
 export interface ActivityCell {

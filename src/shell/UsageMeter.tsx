@@ -115,7 +115,7 @@ function LimitRow({ label, limit, now }: { label: string; limit: Limit; now: num
   );
 }
 
-/** The 30 days of activity, read from Claude's logs like the Tokens view, which reuses the same scan. */
+/** The 30 days of activity, read from Claude's and Codex's logs like the Tokens view, which reuses the same scan. */
 function Activity() {
   const u = useMessages(shellMessages).usage;
   const { report, error } = useTokenReport();
