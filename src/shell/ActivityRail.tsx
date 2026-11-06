@@ -21,7 +21,7 @@ export function ActivityRail() {
   const codeOnScreen = useWorkspaces((s) => isCode(s.workspaces.find((w) => w.id === s.activeId)));
   return (
     <nav className="ov-glass absolute right-3 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-0.5 rounded-[14px] p-[5px]">
-      <ToolButton label={t.agents} active={open} onClick={() => setAgentsPanel(!open)}>
+      <ToolButton label={waiting > 0 ? t.agentsWaiting(waiting) : t.agents} active={open} onClick={() => setAgentsPanel(!open)}>
         <Users />
         {waiting > 0 && (
           <span
