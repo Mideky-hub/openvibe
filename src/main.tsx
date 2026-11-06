@@ -10,6 +10,7 @@ import { langStore } from "./i18n";
 import { startTheme } from "./app/theme";
 import { trackTerminalFocus } from "./canvas/keyboardFocus";
 import { installShortcuts } from "./commands/dispatch";
+import { installPinchZoom } from "./canvas/pinchZoom";
 import { installRadial } from "./radial/install";
 import "./index.css";
 
@@ -22,6 +23,7 @@ startTheme(matchMedia("(prefers-color-scheme: dark)"));
 installShortcuts(window);
 trackTerminalFocus(document);
 installRadial(window);
+installPinchZoom(window);
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
