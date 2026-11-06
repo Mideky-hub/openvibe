@@ -2,6 +2,7 @@
 //! hook server, the tracker, the `agent-activity` event and the snapshot.
 
 use crate::tr;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -35,6 +36,8 @@ pub struct AgentState {
     mcp_tokens: Tokens,
     mcp_calls: Pending,
     subagents: Mutex<SubagentCounts>,
+    /// Where each Claude terminal's own status line is looked up again at each refresh: its folder, and the user settings file.
+    status_watch: Mutex<HashMap<String, (PathBuf, Option<PathBuf>)>>,
 }
 
 #[derive(Clone, Serialize)]
@@ -140,6 +143,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
         mcp_tokens: Tokens::default(),
         mcp_calls: Pending::default(),
         subagents: Mutex::new(SubagentCounts::default()),
+        status_watch: Mutex::new(HashMap::new()),
     });
     let ticker = app.clone();
     std::thread::spawn(move || {
@@ -181,6 +185,16 @@ impl HookSink for AppSink {
     }
 
     fn status(&self, node_id: &str, status: Value) {
+        // The user may have changed their status line since the launch: follow it.
+        if let Some(state) = self.0.try_state::<AgentState>() {
+            let watched = lock(&state.status_watch).get(node_id).cloned();
+            if let Some((cwd, user)) = watched {
+                let file = claude_settings::user_command_file(&state.hooks_dir, node_id);
+                if let Err(err) = claude_settings::sync_user_command(&file, &cwd, user.as_deref()) {
+                    log::warn!("user status line of {node_id} not followed: {err}");
+                }
+            }
+        }
         let _ = self.0.emit(
             "claude-status",
             StatusEvent {
@@ -289,6 +303,7 @@ pub fn hooks_for(
         Agent::Claude => {
             // The user's own status line goes on showing, after OpenVibe has read the usage (spec maj §6).
             // Without the curl config, no status line: its token would go on a command line.
+            let user_settings = claude_settings::settings_file_in(config_dir);
             let status = state
                 .curl_config
                 .clone()
@@ -296,11 +311,10 @@ pub fn hooks_for(
                     script: state.hooks_dir.join("statusline.sh"),
                     url: urls.status,
                     config,
-                    user: claude_settings::status_line_for(
-                        cwd,
-                        claude_settings::settings_file_in(config_dir).as_deref(),
-                    ),
+                    user: claude_settings::status_line_for(cwd, user_settings.as_deref()),
+                    own: claude_settings::user_command_file(&state.hooks_dir, node_id),
                 });
+            lock(&state.status_watch).insert(node_id.into(), (cwd.to_path_buf(), user_settings));
             let settings = claude_settings::write(
                 &state.hooks_dir,
                 node_id,
@@ -372,6 +386,7 @@ pub fn ended(app: &AppHandle, node_id: &str) {
     let state = app.state::<AgentState>();
     lock(&state.tracker).remove(node_id);
     claude_settings::remove(&state.hooks_dir, node_id);
+    lock(&state.status_watch).remove(node_id);
     state.mcp_tokens.revoke(node_id);
     mcp_files::remove(&state.mcp_dir, node_id);
     clear_subagents(app, &state, node_id);
@@ -433,6 +448,7 @@ mod tests {
             url: urls.status.clone(),
             config: config.clone(),
             user: None,
+            own: PathBuf::from(r"C:\data\hooks\n1.status-cmd"),
         });
         let codex = AgentHooks {
             codex_notify: Some(urls.codex.clone()),
