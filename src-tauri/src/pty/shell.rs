@@ -403,7 +403,9 @@ fn ollama_command(launch: Option<&OllamaLaunch>, syntax: ShellSyntax) -> AppResu
         AppError::InvalidInput(tr!("options Ollama manquantes", "Ollama options missing"))
     })?;
     let model = launch.model.trim();
-    let valid = !model.is_empty()
+    // The first character is alphanumeric so the name can never read as a flag.
+    let valid = model.len() <= MAX_MODEL_LEN
+        && model.starts_with(|c: char| c.is_ascii_alphanumeric())
         && model
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || "._:/-".contains(c));
@@ -1415,6 +1417,20 @@ mod tests {
                 .kind(),
             "invalidInput"
         );
+        // A name that would read as a flag for `ollama run`, nor an endless one.
+        for bad in ["-x", "--dangerous", &"a".repeat(65)] {
+            s.ollama = Some(OllamaLaunch {
+                model: bad.into(),
+                mode: OllamaMode::Chat,
+            });
+            assert_eq!(
+                agent_command(&s, ShellSyntax::PowerShell, &AgentHooks::default())
+                    .unwrap_err()
+                    .kind(),
+                "invalidInput",
+                "{bad}"
+            );
+        }
     }
 
     #[test]
