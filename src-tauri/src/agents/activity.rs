@@ -87,10 +87,6 @@ impl Default for Tracker {
 }
 
 impl Tracker {
-    pub fn quiet_after(&self) -> Duration {
-        self.quiet_after
-    }
-
     /// The activity threshold of the settings, kept within its bounds.
     pub fn set_quiet_after(&mut self, quiet: Duration) {
         self.quiet_after = quiet.clamp(MIN_QUIET_AFTER, MAX_QUIET_AFTER);
@@ -787,11 +783,11 @@ mod tests {
     #[test]
     fn the_activity_threshold_stays_within_its_bounds() {
         let mut tracker = Tracker::default();
-        assert_eq!(tracker.quiet_after(), QUIET_AFTER);
+        assert_eq!(tracker.quiet_after, QUIET_AFTER);
         tracker.set_quiet_after(ms(10));
-        assert_eq!(tracker.quiet_after(), MIN_QUIET_AFTER);
+        assert_eq!(tracker.quiet_after, MIN_QUIET_AFTER);
         tracker.set_quiet_after(Duration::from_secs(3600));
-        assert_eq!(tracker.quiet_after(), MAX_QUIET_AFTER);
+        assert_eq!(tracker.quiet_after, MAX_QUIET_AFTER);
     }
 
     #[test]
