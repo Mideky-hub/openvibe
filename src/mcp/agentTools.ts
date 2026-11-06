@@ -1,4 +1,4 @@
-import { langStore, messages } from "@/i18n";
+import { messages } from "@/i18n";
 import { declaredSteps, markedSteps, MAX_STEPS } from "@/nodes/steps";
 import { notify } from "@/mission/events";
 import { oneLine } from "@/mission/mission";
@@ -65,18 +65,14 @@ export function declareSteps(nodeId: string, args: Record<string, unknown>): Too
   return said(t().agent.declared(steps.length));
 }
 
-/** The internal identifiers, said with their accents. */
-const FRENCH_STEP: Record<string, string> = { a_venir: "à venir", en_cours: "en cours", fait: "fait", echec: "échec" };
-
 export function markStep(nodeId: string, args: Record<string, unknown>): ToolResult {
   const current = terminalOf(nodesStore.getState().nodes[nodeId])?.steps ?? [];
   const steps = markedSteps(current, args.titre, args.etat);
   if (typeof steps === "string") return refused(steps);
   nodesStore.getState().update(nodeId, { steps });
   const step = steps.find((s) => s.title.toLowerCase() === String(args.titre).trim().toLowerCase())!;
-  // French reads « en cours », English the protocol's "in_progress".
-  const state = langStore.getState().lang === "fr" ? FRENCH_STEP[step.state] : outStep(step.state);
-  return said(t().agent.marked(step.title, state));
+  // The state is read back as the agent sent it (the protocol's words), in both languages.
+  return said(t().agent.marked(step.title, outStep(step.state)));
 }
 
 /** `report`: outside a mission there is no one to tell; inside, its orchestrator hears it (spec §7.5). */
