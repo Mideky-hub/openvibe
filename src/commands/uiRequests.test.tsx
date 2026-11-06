@@ -54,3 +54,18 @@ it("lets an unanswered request expire: it must not fire at a later mount (plan F
   expect(pendingUiRequest()).toBeNull();
   vi.useRealTimers();
 });
+
+it("drops a pending request when the user moves to another workspace or project", async () => {
+  const { workspacesStore } = await import("@/store/workspaces");
+  const { projectsStore } = await import("@/store/projects");
+  requestUi({ kind: "composeGroup" });
+  workspacesStore.setState({ activeId: "w-other" });
+  expect(pendingUiRequest()).toBeNull();
+  requestUi({ kind: "composeGroup" });
+  workspacesStore.setState({ projectId: "p-other" });
+  expect(pendingUiRequest()).toBeNull();
+  requestUi({ kind: "composeGroup" });
+  projectsStore.setState({ view: "home" } as never);
+  expect(pendingUiRequest()).toBeNull();
+  projectsStore.setState({ view: "project" } as never);
+});
