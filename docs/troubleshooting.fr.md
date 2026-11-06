@@ -32,7 +32,7 @@ Le compteur de la barre du haut lit l'usage de Claude Code par un petit script l
 
 ## La vue Tokens est vide, ou dit que sa lecture a été coupée
 
-La vue lit les journaux `.jsonl` que Claude Code garde sous `~/.claude/projects` (ou sous le dossier de `CLAUDE_CONFIG_DIR`), sur les 30 derniers jours, en jours UTC. Elle reste vide si Claude Code n'a jamais tourné sur ce PC, si son dossier est ailleurs, ou si son historique a été vidé. Pour un historique très volumineux, OpenVibe s'arrête à des limites fixes (nombre de fichiers, octets lus, durée) et dit que les chiffres sont un minimum. Seul Claude Code est lu ; Codex n'est pas encore pris en charge. La vue n'affiche jamais le texte d'une conversation.
+La vue lit les journaux `.jsonl` que Claude Code garde sous `~/.claude/projects` (ou sous le dossier de `CLAUDE_CONFIG_DIR`) et ceux que Codex garde sous `~/.codex/sessions` (ou sous le dossier de `CODEX_HOME`), sur les 30 derniers jours, en jours UTC. Un dossier absent ou illisible compte pour rien, sans message d'erreur. Elle reste vide si ni Claude Code ni Codex n'ont tourné sur ce PC, si son dossier est ailleurs, ou si son historique a été vidé. Pour un historique très volumineux, OpenVibe s'arrête à des limites fixes (nombre de fichiers, octets lus, durée) et dit que les chiffres sont un minimum. Pour Codex, seuls les journaux au format actuel (lignes `session_meta`, `turn_context` et `token_count`) sont comptés. La vue n'affiche jamais le texte d'une conversation.
 
 ## Code Studio refuse d'enregistrer
 
