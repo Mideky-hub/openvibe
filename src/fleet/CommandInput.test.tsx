@@ -37,7 +37,7 @@ afterEach(async () => {
 
 const field = () => host.querySelector("textarea")!;
 const options = () => [...host.querySelectorAll('[role="option"]')].map((o) => o.textContent);
-const chips = () => [...host.querySelectorAll("span.rounded-full")].map((c) => c.textContent);
+const chips = () => [...host.querySelectorAll("[data-mention]")].map((c) => c.textContent);
 
 async function type(value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
