@@ -53,6 +53,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 - **Notes:** per-project Markdown notes (plain files in the project's `.openvibe/notes/`), a graph of the links between them, notes per group, and a note list agents are told about. Open them from the rail, the palette or a group's menu.
 - **Install agents from the interface:** from the home screen or the palette, in a visible terminal, with a prerequisites check first, and Ollama models pulled the same way. Nothing is ever installed without being asked.
 - **Question notice:** when an agent waits on a question, OpenVibe previews the question, and raises a Windows notification if you are not looking. A setting turns the notification off. Gemini CLI's hooks are heard too.
+- **Gemini CLI states:** a Gemini terminal now shows exactly when it works, waits for a permission or is idle, through Gemini's own hooks (BeforeAgent, AfterAgent, Notification), instead of guessing from its output. Your `~/.gemini` and project settings and hooks keep applying: OpenVibe adds its hooks at Gemini's lowest settings level, for that terminal only (#86).
 - **Specialised groups:** give a group a speciality from its menu; the orchestrator is told each agent's group and speciality and matches sub-tasks to them.
 - **Folding groups:** fold a group into its label from the chevron or the palette; going to an agent inside it unfolds it.
 - **Tab reordering:** drag project tabs, or use Alt+arrows or the tab menu; the order is saved per project.
