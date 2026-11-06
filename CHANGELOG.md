@@ -4,8 +4,12 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Added
+- The Agents panel shows a "Launch a mission" button on each orchestrator whose mission is planned, so a mission starts in one click without opening its node; clicking an orchestrator in the panel no longer moves the view (#2).
+
 ### Fixed
 - **Status line:** a change to your own `statusLine` in Claude's settings is now picked up during the session instead of only at launch; the usage bar slowness, newline, reset date, resumed-session and cache points of the card were already in (#20).
+- The Agents button announces how many agents wait for your reply, for screen readers too, and the mention chips of the prompt input have the same square corners as the rest of the interface.
 - **Icon panel card:** each category already had its own loading and error state, the thumbnail cache was bounded and dropped failed drawings, rotated icons centred by their turned bounds, the panel stayed without a canvas, copies got fresh seeds and an icon dropped on a group joined its frame; the per-category failure and the search-while-loading messages are now covered by tests (#16).
 - The palette no longer shows the previous line as selected for a frame after each keystroke or arrow key: the line chosen by the arrows only holds for the search it was made for.
 - **Theme & UI polish card:** the git chip's branch truncation (now covered by a test), the Agents panel stopping above the resume offer, its filter reset on reopen from the rail, the toast shadow out-ranking sonner's injected style and the first-paint theme script were already in; the agent rows' hover actions (Center, Review, Pause/Resume, Close) are complete (#60).
