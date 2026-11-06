@@ -35,19 +35,38 @@ pub enum Action {
 pub const SUPPORTED_VERSIONS: [&str; 3] = [PROTOCOL_VERSION, "2025-03-26", "2024-11-05"];
 
 pub fn action(message: &Value) -> Action {
-    if !message.is_object() {
-        return Action::Reply(failure(
-            &Value::Null,
+    let invalid = |id: &Value| {
+        Action::Reply(failure(
+            id,
             -32600,
             &tr!("requête invalide", "invalid request"),
-        ));
+        ))
+    };
+    if !message.is_object() {
+        return invalid(&Value::Null);
     }
+    // A notification: nothing may be answered, even when it is malformed.
     let Some(id) = message.get("id").cloned() else {
         return Action::Accept;
     };
-    let Some(method) = message["method"].as_str() else {
-        return Action::Accept;
+    // An id is a string, a number or null; another one is not echoed back.
+    if !(id.is_string() || id.is_number() || id.is_null()) {
+        return invalid(&Value::Null);
+    }
+    let Some(method) = message.get("method") else {
+        // A response to nothing we asked is accepted; anything else is broken.
+        return if message.get("result").is_some() || message.get("error").is_some() {
+            Action::Accept
+        } else {
+            invalid(&id)
+        };
     };
+    let Some(method) = method.as_str() else {
+        return invalid(&id);
+    };
+    if message["jsonrpc"] != "2.0" {
+        return invalid(&id);
+    }
     // `params` is an object when present; `null` or anything else is refused.
     let params = match message.get("params") {
         None => json!({}),
@@ -250,6 +269,39 @@ mod tests {
         assert_eq!(body.unwrap()["error"]["code"], -32600);
         let (_, body) = run("42");
         assert_eq!(body.unwrap()["error"]["code"], -32600);
+    }
+
+    #[test]
+    fn a_malformed_request_is_an_invalid_request_with_its_id() {
+        let code = |body: &str| {
+            let (status, body) = run(body);
+            let body = body.expect("an error, with a body");
+            (status, body["error"]["code"].clone(), body["id"].clone())
+        };
+        // No method, and no result or error either: not a response, a broken request.
+        assert_eq!(
+            code(r#"{"jsonrpc":"2.0","id":4}"#),
+            (200, json!(-32600), json!(4))
+        );
+        assert_eq!(
+            code(r#"{"jsonrpc":"2.0","id":5,"method":42}"#),
+            (200, json!(-32600), json!(5))
+        );
+        assert_eq!(
+            code(r#"{"id":6,"method":"ping"}"#),
+            (200, json!(-32600), json!(6))
+        );
+        // An id that may not be one is not echoed back.
+        assert_eq!(
+            code(r#"{"jsonrpc":"2.0","id":{"x":1},"method":"ping"}"#),
+            (200, json!(-32600), Value::Null)
+        );
+        // A response to nothing we asked is still accepted, without a body.
+        assert_eq!(run(r#"{"jsonrpc":"2.0","id":9,"result":{}}"#), (202, None));
+        assert_eq!(
+            run(r#"{"jsonrpc":"2.0","id":9,"error":{"code":1,"message":"x"}}"#),
+            (202, None)
+        );
     }
 
     #[test]
