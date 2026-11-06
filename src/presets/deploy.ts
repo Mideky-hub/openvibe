@@ -16,7 +16,6 @@ export interface DeployDeps {
   isAvailable: (agent: AgentId) => boolean;
   /** Poses a group centered on `at`; null when it could not. */
   launchGroup: (plan: GroupPlan, at: Point) => Promise<{ frameId: string; nodeIds: string[] } | null>;
-  setSpeciality: (frameId: string, speciality: string) => void;
   /** A new orchestrator linked to a group; its id, or null (without Claude Code, nothing is posed). */
   orchestrate: (groupId: string) => Promise<string | null>;
   link: (orchestratorId: string, groupId: string) => void;
@@ -54,13 +53,13 @@ export async function deployPreset(preset: TeamPreset, deps: DeployDeps): Promis
       return deps.fallback;
     });
     const at = { x: origin.x + group.x + grids[i].width / 2, y: origin.y + group.y + grids[i].height / 2 };
-    const made = await deps.launchGroup({ name: group.name, role: group.role, agents }, at);
+    const plan = { name: group.name, role: group.role, ...(group.speciality ? { speciality: group.speciality } : {}), agents };
+    const made = await deps.launchGroup(plan, at);
     frames.push(made?.frameId ?? null);
     if (!made) continue;
     result.groups += 1;
     posed.push(made.frameId);
     result.agents += made.nodeIds.length;
-    if (group.speciality) deps.setSpeciality(made.frameId, group.speciality);
   }
   for (const orchestrator of preset.orchestrators) {
     const targets = orchestrator.groups.flatMap((i) => frames[i] ?? []);
