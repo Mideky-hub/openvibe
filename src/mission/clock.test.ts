@@ -228,3 +228,24 @@ it("records no overrun while the line of an earlier one still waits: a quit woul
   expect(toast.warning).toHaveBeenCalledTimes(1);
 });
 
+it("keeps the end of the global budget for the orchestrator's restart: no burst of toasts when OpenVibe starts again (issue #67)", async () => {
+  vi.mocked(notify).mockReset();
+  vi.mocked(notify).mockImplementation((_orchestrator: string, _line: string, typed?: () => void) => typed?.());
+  vi.mocked(toast.warning).mockClear();
+  await nodesStore.getState().create("chef4", {
+    workspaceId: "w1",
+    kind: "orchestrator",
+    payload: { name: "Chef", mission: { state: "en_cours", name: "Front", maxAgents: 4, budgetMin: 30, startedAt: 0, members: [] } },
+  });
+  // OpenVibe was closed for hours: every agent, the orchestrator too, is stopped at start (spec orchestrateur §9).
+  terminalStatusStore.getState().set("chef4", { state: "stopped" });
+  checkBudgets(600 * min);
+  expect(toast.warning).not.toHaveBeenCalled();
+  expect(vi.mocked(notify).mock.calls.filter(([to]) => to === "chef4")).toHaveLength(0);
+  terminalStatusStore.getState().set("chef4", { state: "running" });
+  checkBudgets(601 * min);
+  checkBudgets(602 * min);
+  expect(toast.warning).toHaveBeenCalledTimes(1);
+  expect(toast.warning).toHaveBeenCalledWith("Budget global de la mission Front écoulé (30 min).");
+  expect(vi.mocked(notify).mock.calls.filter(([to]) => to === "chef4")).toHaveLength(1);
+});
