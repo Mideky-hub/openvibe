@@ -1,8 +1,10 @@
 import { toast } from "sonner";
+import { loadScene } from "@/canvas/sceneCache";
 import { messages } from "@/i18n";
 import { agentMessages } from "@/mcp/messages";
 import { nodesStore } from "@/store/nodes";
 import { isRunning } from "@/store/terminalStatus";
+import { workspacesStore, type WorkspacesState } from "@/store/workspaces";
 import { notify } from "./events";
 import { overruns, remainingGlobal, windingDown } from "./mission";
 import { missionMessages } from "./messages";
@@ -71,8 +73,21 @@ export function checkBudgets(now = Date.now()) {
   }
 }
 
+/** Reads every workspace of a project once listed: a mission off screen has its clock too (#69). */
+function readWorkspaces({ status, workspaces }: WorkspacesState) {
+  if (status !== "ready") return;
+  for (const workspace of workspaces) void loadScene(workspace.id).catch((error: unknown) => console.warn("workspace not read for its missions", error));
+}
+
 /** For the app's whole life. */
 export function installMissionClock(): () => void {
   const timer = setInterval(() => checkBudgets(), CLOCK_MS);
-  return () => clearInterval(timer);
+  readWorkspaces(workspacesStore.getState());
+  const unsubscribe = workspacesStore.subscribe((state, before) => {
+    if (state.status !== before.status || state.projectId !== before.projectId) readWorkspaces(state);
+  });
+  return () => {
+    clearInterval(timer);
+    unsubscribe();
+  };
 }

@@ -4,7 +4,8 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import { toast } from "sonner";
 import { langStore } from "@/i18n";
 import { nodesStore } from "@/store/nodes";
-import { checkBudgets } from "./clock";
+import { checkBudgets, installMissionClock } from "./clock";
+import { workspacesStore } from "@/store/workspaces";
 import { notify } from "./events";
 import { terminalStatusStore } from "@/store/terminalStatus";
 import { missionOf, setMission, setOrchestratorClosed, updateMember } from "./store";
@@ -248,4 +249,25 @@ it("keeps the end of the global budget for the orchestrator's restart: no burst 
   expect(toast.warning).toHaveBeenCalledTimes(1);
   expect(toast.warning).toHaveBeenCalledWith("Budget global de la mission Front écoulé (30 min).");
   expect(vi.mocked(notify).mock.calls.filter(([to]) => to === "chef4")).toHaveLength(1);
+});
+
+it("reads the missions of every workspace of the open project, not only the ones shown since startup (#69)", async () => {
+  vi.mocked(notify).mockClear();
+  const away = { name: "Loin", mission: { state: "en_cours", name: "Docs", maxAgents: 4, budgetMin: 30, startedAt: 0, members: [] } };
+  mockIPC((command, args) =>
+    command === "load_workspace" && (args as { id: string }).id === "w5"
+      ? { nodes: [{ id: "loin", kind: "orchestrator", payloadJson: JSON.stringify(away) }], files: [], elementsJson: null, appStateJson: null }
+      : undefined,
+  );
+  terminalStatusStore.getState().set("loin", { state: "running" });
+  const stop = installMissionClock();
+  try {
+    workspacesStore.setState({ projectId: "p1", status: "ready", workspaces: [{ id: "w1" }, { id: "w5" }] as never });
+    await vi.waitFor(() => expect(nodesStore.getState().nodes.loin).toBeDefined());
+    checkBudgets(31 * min);
+    expect(vi.mocked(notify).mock.calls.filter(([to]) => to === "loin")).toHaveLength(1);
+  } finally {
+    stop();
+    mockIPC(() => undefined);
+  }
 });
