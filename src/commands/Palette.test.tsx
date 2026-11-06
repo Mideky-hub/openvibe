@@ -92,8 +92,38 @@ describe("the palette (spec fenêtre §7.1, §7.2)", () => {
     await act(async () => openPalette("goTo", home));
     const backdrop = document.querySelector<HTMLElement>("[data-palette-backdrop]")!;
     expect(backdrop.className).not.toMatch(/bg-/);
-    await act(async () => backdrop.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })));
+    await act(async () => void backdrop.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true })));
+    await act(async () => void backdrop.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(paletteStore.getState().open).toBe(false);
+  });
+
+  it("stays open when a selection dragged out of the field ends on the backdrop", async () => {
+    await act(async () => openPalette("goTo", home));
+    const backdrop = document.querySelector<HTMLElement>("[data-palette-backdrop]")!;
+    await act(async () => void input().dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true })));
+    await act(async () => void backdrop.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(paletteStore.getState().open).toBe(true);
+  });
+
+  it("stays open until the click: the mousedown after the pointerdown would land on what lies under it (plan F1)", async () => {
+    await act(async () => openPalette("goTo", home));
+    const backdrop = document.querySelector<HTMLElement>("[data-palette-backdrop]")!;
+    await act(async () => void backdrop.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })));
+    const mousedown = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    await act(async () => void backdrop.dispatchEvent(mousedown));
+    expect(paletteStore.getState().open).toBe(true);
+    // The keyboard stays in the field until the palette closes.
+    expect(mousedown.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(input());
+  });
+
+  it("keeps the mousedown of a click inside the palette", async () => {
+    await act(async () => openPalette("goTo", home));
+    const mousedown = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    await act(async () => void input().dispatchEvent(mousedown));
+    await act(async () => void input().dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(mousedown.defaultPrevented).toBe(false);
+    expect(paletteStore.getState().open).toBe(true);
   });
 
   it("lists the functions available at that moment, with their shortcut, under > ", async () => {

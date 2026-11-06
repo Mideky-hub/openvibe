@@ -97,8 +97,22 @@ it("closes an open dropdown menu before the command runs: the menu would take th
   menu.dataset.state = "open";
   document.body.append(menu);
   const escapes: string[] = [];
-  document.addEventListener("keydown", (e) => e.key === "Escape" && escapes.push(e.key), { once: true });
+  // Radix listens to Escape on the document, in the capture phase.
+  document.addEventListener("keydown", (e) => e.key === "Escape" && escapes.push(e.key), { capture: true, once: true });
   press({ key: "Tab", ctrlKey: true });
   expect(escapes).toEqual(["Escape"]);
   expect(run).toHaveBeenCalled();
+});
+
+it("closes the menu with an Escape that does not reach the window listeners of placement and link modes", () => {
+  const menu = document.createElement("div");
+  menu.setAttribute("role", "menu");
+  menu.dataset.state = "open";
+  document.body.append(menu);
+  const heard = vi.fn();
+  window.addEventListener("keydown", heard);
+  press({ key: "Tab", ctrlKey: true });
+  window.removeEventListener("keydown", heard);
+  expect(run).toHaveBeenCalled();
+  expect(heard).not.toHaveBeenCalled();
 });

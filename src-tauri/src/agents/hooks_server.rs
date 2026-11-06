@@ -183,7 +183,7 @@ pub fn start(sink: impl HookSink) -> std::io::Result<HookServer> {
 }
 
 /// A hook or a status line. A panic in the sink is answered 500 rather than
-/// lost (backlog R1).
+/// lost, and logged (backlog R1).
 fn answer_hook(mut request: Request, token: &str, sink: &dyn HookSink) {
     let status = catch_unwind(AssertUnwindSafe(|| {
         if request.url().starts_with("/status/") {
@@ -192,8 +192,18 @@ fn answer_hook(mut request: Request, token: &str, sink: &dyn HookSink) {
             status_of(&mut request, token, sink)
         }
     }))
-    .unwrap_or(500);
+    .unwrap_or_else(|_| {
+        log::error!("{}", panic_note(request.method(), request.url()));
+        500
+    });
     let _ = request.respond(Response::empty(status));
+}
+
+/// The log line of a request that panicked: its method and path, never its
+/// query, where the token travels.
+fn panic_note(method: &Method, url: &str) -> String {
+    let path = url.split('?').next().unwrap_or(url);
+    format!("request {method} {path} panicked: answered 500")
 }
 
 /// One thread per request, while a slot is free. When none is, or the system
@@ -410,8 +420,11 @@ fn status_of(request: &mut Request, token: &str, sink: &dyn HookSink) -> u16 {
 }
 
 fn answer_mcp(mut request: Request, sink: &dyn HookSink) {
-    let (status, body) =
-        catch_unwind(AssertUnwindSafe(|| mcp_response(&mut request, sink))).unwrap_or((500, None));
+    let (status, body) = catch_unwind(AssertUnwindSafe(|| mcp_response(&mut request, sink)))
+        .unwrap_or_else(|_| {
+            log::error!("{}", panic_note(request.method(), request.url()));
+            (500, None)
+        });
     let mut response = Response::from_data(
         body.map(|json| json.to_string().into_bytes())
             .unwrap_or_default(),
@@ -1113,6 +1126,18 @@ mod tests {
         );
         let ok = [("Authorization", "Bearer tok-n1")];
         assert_eq!(exchange(server.port, "POST", "/mcp", &ok, call).0, 200);
+        let hook = br#"{"hook_event_name":"UserPromptSubmit"}"#;
+        assert_eq!(
+            send_headed(server.port, "POST", "/hook/claude/n1", &header, hook),
+            204
+        );
+    }
+
+    #[test]
+    fn a_panicking_request_is_logged_by_its_path_without_its_token() {
+        let line = panic_note(&Method::Post, &format!("/status/boom?t={TOKEN}"));
+        assert_eq!(line, "request POST /status/boom panicked: answered 500");
+        assert!(!line.contains(TOKEN), "{line}");
     }
 
     /// A request received on a listener of our own, and the client that sent it.
