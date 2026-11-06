@@ -103,13 +103,11 @@ Ce qui est reporté. La spec en cours est `docs/superpowers/specs/2026-10-24-ope
 
 ## Constats du plan E1 (navigation au clavier, relecture finale)
 
-- J8 : l'arrivée différée sur un autre workspace ne partira pas d'une touche ; le focus « à l'image suivante » peut y précéder le montage du terminal. Rendre le focus robuste (réessayer, ou focus au montage du terminal attendu).
 - À vérifier à la main : WebView2 transmet-il Ctrl+Tab et Ctrl+Maj+Tab à la page (risque §12.1 de la spec fenêtre).
 
 ## Constats du plan F1 (palette et recherche, relecture finale)
 
 - Clic hors de la palette : la fermeture se fait au `pointerdown` ; le `mousedown` qui suit peut encore déplacer le clavier dans WebView2. Empêcher le `mousedown` sur le fond et fermer au clic, puis vérifier dans la build.
-- Les boucles de focus de deux arrivées peuvent se chevaucher (Ctrl+Tab maintenu) : un jeton de génération arrêterait l'ancienne.
 - `focusGroup` cadre sur toute la vue : l'étiquette d'un grand groupe peut passer sous les onglets ; `canvasOffsets` le corrigerait.
 - Affichage : après une flèche, l'ancien choix se voit une image à chaque frappe ; « Aucun résultat » côtoie « Chargement… » pendant la lecture des scènes.
 
