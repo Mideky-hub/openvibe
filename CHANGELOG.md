@@ -7,6 +7,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 ### Fixed
 - The README model-router tables now use the effort IDs accepted by the orchestrator (`low`, `medium`, `high`, `extreme`), with French labels alongside them in the French README.
 - **Mission clock:** an overrun warning that was still waiting for a busy orchestrator is no longer lost if OpenVibe closes, and restarting OpenVibe after a long pause no longer fires a burst of "global budget used up" toasts: each one waits for its orchestrator to be restarted.
+- A request that makes OpenVibe's local server fail is now written to the log with its address (never its token), so the failure can be traced; the server keeps answering the next ones (#6).
 
 ## [1.2.0-beta.1] - 2026-11-01
 
