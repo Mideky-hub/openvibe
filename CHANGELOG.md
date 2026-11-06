@@ -4,6 +4,9 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Added
+- **Workspace tabs:** the order you give them by dragging (or Alt+←/→) is now saved with the workspaces through a `reorder_workspaces` command, and survives a restart (#85).
+
 ### Fixed
 - **Icon panel card:** each category already had its own loading and error state, the thumbnail cache was bounded and dropped failed drawings, rotated icons centred by their turned bounds, the panel stayed without a canvas, copies got fresh seeds and an icon dropped on a group joined its frame; the per-category failure and the search-while-loading messages are now covered by tests (#16).
 - The palette no longer shows the previous line as selected for a frame after each keystroke or arrow key: the line chosen by the arrows only holds for the search it was made for.
