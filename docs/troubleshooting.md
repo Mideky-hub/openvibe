@@ -90,6 +90,13 @@ OpenVibe runs once, on purpose: two copies would fight over the database and the
 - Logs: `%LOCALAPPDATA%\dev.openvibe.app\logs\openvibe.log`. They never hold a token, a terminal's text or an instruction. **Open the logs folder** in the Troubleshooting dialog or the settings menu.
 - Data (projects, canvases, terminals' history): `%APPDATA%\dev.openvibe.app\openvibe.db`. Before upgrading its database, OpenVibe keeps a copy next to it (`openvibe.v<N>-backup.db`). **Open the data folder** in the Troubleshooting dialog.
 
+## An agent shows the wrong state
+
+OpenVibe reads a Claude Code agent's state from its hooks, which post to a server on `127.0.0.1`. Two cases are not covered:
+
+- **An HTTP proxy intercepts `127.0.0.1`.** The hooks fail, and the agent's state falls back to its terminal activity. Exclude the local server from the proxy, for example by adding `127.0.0.1,localhost` to the `NO_PROXY` environment variable, then restart the agent.
+- **A permission dialog is answered outside the terminal** (in an IDE or remotely). The agent stays *waiting* until its next hook. Answer the next prompt in the terminal, or send any message to the agent, to bring its state back.
+
 ## Report a bug
 
 In the Troubleshooting dialog, click **Copy the diagnostics**, then **Report a problem**: it opens a new GitHub issue with your version filled in. Paste the diagnostics and, if you can, attach `openvibe.log`. The diagnostics hold no token, no project path, and your home folder shows as `~`.
