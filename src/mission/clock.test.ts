@@ -17,6 +17,7 @@ const min = 60_000;
 beforeAll(async () => {
   mockIPC(() => undefined);
   terminalStatusStore.getState().set("isis", { state: "running" });
+  terminalStatusStore.getState().set("chef", { state: "running" });
   await nodesStore.getState().create("chef", {
     workspaceId: "w1",
     kind: "orchestrator",
@@ -193,3 +194,37 @@ it("tells a budget once even while the orchestrator cannot hear, and records the
   expect(toast.warning).toHaveBeenCalledTimes(1);
   expect(missionOf(nodesStore.getState().nodes.chef2)?.members[0].overdue).toBe(2);
 });
+
+it("records no overrun while the line of an earlier one still waits: a quit would lose it (issue #67)", async () => {
+  vi.mocked(notify).mockReset();
+  vi.mocked(toast.warning).mockClear();
+  const pending: (() => void)[] = [];
+  vi.mocked(notify).mockImplementation((_orchestrator: string, _line: string, typed?: () => void) => void (typed && pending.push(typed)));
+  await nodesStore.getState().create("chef3", {
+    workspaceId: "w1",
+    kind: "orchestrator",
+    payload: {
+      name: "Chef",
+      mission: {
+        state: "en_cours",
+        name: "Auth",
+        maxAgents: 4,
+        members: [{ nodeId: "isis", name: "Isis", task: "Login", budgetMin: 10, linked: false, branch: "b", worktree: "w", sentAt: 0 }],
+      },
+    },
+  });
+  const overdue = () => missionOf(nodesStore.getState().nodes.chef3)?.members[0].overdue;
+  checkBudgets(11 * min);
+  checkBudgets(21 * min);
+  // The 100 % line has not been typed: what is saved must let the next start tell it again.
+  expect(overdue()).toBeUndefined();
+  expect(toast.warning).toHaveBeenCalledTimes(1);
+  checkBudgets(22 * min);
+  expect(toast.warning).toHaveBeenCalledTimes(1);
+  for (const typed of pending) typed();
+  expect(overdue()).toBe(2);
+  checkBudgets(23 * min);
+  expect(vi.mocked(notify).mock.calls.filter(([to]) => to === "chef3")).toHaveLength(1);
+  expect(toast.warning).toHaveBeenCalledTimes(1);
+});
+
