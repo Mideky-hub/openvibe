@@ -1,4 +1,12 @@
+import { formatDecimal } from "@/i18n/format";
 import type { TokenAgent, TokenCounts, TokenReport } from "@/ipc/tokens";
+
+/** « 67,8 k », « 1,2 M » tokens. */
+export function formatTokens(count: number): string {
+  if (count >= 1_000_000) return `${formatDecimal(count / 1_000_000, 1)} M`;
+  if (count >= 1_000) return `${formatDecimal(count / 1_000, 1)} k`;
+  return String(Math.round(count));
+}
 
 /** Agents listed before the rest is summed up (spec Tokens §4). */
 export const MAX_AGENT_ROWS = 10;
