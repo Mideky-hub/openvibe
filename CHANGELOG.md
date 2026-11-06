@@ -6,6 +6,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ### Fixed
 - The README model-router tables now use the effort IDs accepted by the orchestrator (`low`, `medium`, `high`, `extreme`), with French labels alongside them in the French README.
+- **Workspaces:** two workspaces of a project can no longer share a name (case aside), by creation or rename, with an error saying so. The rest of the project-list robustness card was already in: folders checked outside the database lock, no "Rename" on a missing project, agent names in the delete confirmation, the agent list awaited before "New console", save failures toasted (#31).
 - A token left in `curl.cfg` by a previous run is deleted at startup, and a Codex terminal launched under `cmd` from a profile path holding `%`, `!` or `^` is covered by tests (it starts without the hook, with a warning in the log, rather than with a wrong path).
 - OpenVibe's MCP server is stricter with what agents send: a malformed request gets a proper JSON-RPC error instead of a silent answer, a flood of calls is turned away (503) instead of holding a thread each, and a terminal relaunched as its previous process exits keeps its access to OpenVibe's tools.
 - **Mission clock:** an overrun warning that was still waiting for a busy orchestrator is no longer lost if OpenVibe closes, and restarting OpenVibe after a long pause no longer fires a burst of "global budget used up" toasts: each one waits for its orchestrator to be restarted.
