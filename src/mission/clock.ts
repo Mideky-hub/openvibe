@@ -59,7 +59,8 @@ export function checkBudgets(now = Date.now()) {
         setMission(orchestratorId, { windDownTold: true });
       });
     }
-    if (found.global && !waiting.has(`${orchestratorId}:global`)) {
+    // Its end is for the orchestrator's restart: after a long pause every agent starts stopped (spec orchestrateur §9).
+    if (found.global && isRunning(orchestratorId) && !waiting.has(`${orchestratorId}:global`)) {
       waiting.add(`${orchestratorId}:global`);
       if (!mission.overnight) toast.warning(said.globalOver(mission.name ?? "", mission.budgetMin ?? 0));
       notify(orchestratorId, lines.globalOver(mission.budgetMin ?? 0), () => {
