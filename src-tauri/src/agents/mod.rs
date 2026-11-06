@@ -1,5 +1,6 @@
 pub mod activity;
 pub mod claude_settings;
+pub mod gemini_settings;
 pub mod hooks_server;
 pub mod mcp;
 pub mod mcp_files;

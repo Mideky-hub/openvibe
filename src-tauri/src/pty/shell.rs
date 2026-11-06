@@ -109,6 +109,9 @@ pub struct ClaudeLaunch {
     /// The profile's folder, for this terminal's `CLAUDE_CONFIG_DIR` (spec comptes §4).
     #[serde(default)]
     pub config_dir: Option<String>,
+    /// Its group, role and speciality, added to its role's instructions (issue #66).
+    #[serde(default)]
+    pub team: Option<String>,
 }
 
 /// What the frontend asks for when it starts a terminal (spec §9).
@@ -170,6 +173,8 @@ pub struct AgentHooks {
     pub mcp_config: Option<PathBuf>,
     /// Claude: `--append-system-prompt-file <file>`, its role.
     pub system_prompt: Option<PathBuf>,
+    /// Gemini: its system defaults file, OpenVibe's hooks added (issue #86).
+    pub gemini_defaults: Option<PathBuf>,
 }
 
 /// What keeps an orchestrator a manager (spec première version §4.1): its
@@ -615,6 +620,12 @@ pub fn build_plan(
                 .map(|(key, value)| (key.to_string(), value.to_string())),
         )
         .chain(profile_dir)
+        .chain(hooks.gemini_defaults.as_ref().map(|file| {
+            (
+                crate::agents::gemini_settings::DEFAULTS_ENV.to_string(),
+                file.to_string_lossy().into_owned(),
+            )
+        }))
         .collect(),
         env_remove: removed_env(std::env::var_os("CLAUDECODE").is_some()),
         initial_input,
@@ -653,6 +664,7 @@ mod tests {
             model: None,
             permission: None,
             config_dir: None,
+            team: None,
         })
     }
 
@@ -835,6 +847,7 @@ mod tests {
             model: None,
             permission: None,
             config_dir: None,
+            team: None,
         });
         let err = agent_command(
             &spec(Agent::Claude, launch),
@@ -864,6 +877,7 @@ mod tests {
             model: None,
             permission: None,
             config_dir: None,
+            team: None,
         })
     }
 
@@ -914,6 +928,34 @@ mod tests {
                 .contains(&("OPENVIBE_NODE_ID".into(), "node-1".into()))
         );
         assert!(plan.env.contains(&("TERM".into(), "xterm-256color".into())));
+    }
+
+    #[test]
+    fn a_gemini_terminal_reads_openvibe_s_hooks_as_its_system_defaults() {
+        let file = PathBuf::from(r"C:\data\hooks\n1.gemini.json");
+        let hooks = AgentHooks {
+            gemini_defaults: Some(file.clone()),
+            ..Default::default()
+        };
+        let plan = build_plan("n1", &spec(Agent::Gemini, None), &nothing_on_path, &hooks).unwrap();
+        assert!(plan.env.contains(&(
+            "GEMINI_CLI_SYSTEM_DEFAULTS_PATH".into(),
+            file.to_string_lossy().into_owned()
+        )));
+        assert_eq!(plan.initial_input.as_deref(), Some("gemini\r"));
+        let plain = build_plan(
+            "n1",
+            &spec(Agent::Gemini, None),
+            &nothing_on_path,
+            &AgentHooks::default(),
+        )
+        .unwrap();
+        assert!(
+            !plain
+                .env
+                .iter()
+                .any(|(key, _)| key == "GEMINI_CLI_SYSTEM_DEFAULTS_PATH")
+        );
     }
 
     #[test]
@@ -1368,6 +1410,22 @@ mod tests {
         assert_eq!(
             launch(serde_json::json!({ "mode": "new", "sessionId": SESSION, "title": "t" }))
                 .remote_control,
+            None
+        );
+    }
+
+    #[test]
+    fn reads_the_team_of_a_claude_session_none_by_default() {
+        let launch =
+            |claude: serde_json::Value| -> ClaudeLaunch { serde_json::from_value(claude).unwrap() };
+        assert_eq!(
+            launch(serde_json::json!({ "mode": "new", "sessionId": SESSION, "title": "t", "team": "Back" }))
+                .team
+                .as_deref(),
+            Some("Back")
+        );
+        assert_eq!(
+            launch(serde_json::json!({ "mode": "new", "sessionId": SESSION, "title": "t" })).team,
             None
         );
     }

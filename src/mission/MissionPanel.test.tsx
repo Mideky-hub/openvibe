@@ -4,8 +4,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { toast } from "sonner";
+import { focusNode, frameNodes } from "@/canvas/focusNode";
+import { pauseAgents } from "@/fleet/broadcast";
+import { requestCloseOrchestrator } from "@/fleet/orchestrators";
 import { langStore } from "@/i18n";
+import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore } from "@/store/nodes";
+import { terminalStatusStore } from "@/store/terminalStatus";
+import { uiStore } from "@/store/ui";
 import { cleanMission, launchMission } from "./launch";
 import { NEW_MISSION, type Mission } from "./mission";
 import { MissionPanel } from "./MissionPanel";
@@ -17,6 +23,9 @@ vi.mock("./launch", () => ({
   cleanMission: vi.fn(() => Promise.resolve({ removed: ["auth-isis", "auth"], kept: [] })),
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("@/canvas/focusNode", () => ({ focusNode: vi.fn(), frameNodes: vi.fn(() => true) }));
+vi.mock("@/fleet/broadcast", async (original) => ({ ...(await original<typeof import("@/fleet/broadcast")>()), pauseAgents: vi.fn(() => Promise.resolve(1)) }));
+vi.mock("@/fleet/orchestrators", async (original) => ({ ...(await original<typeof import("@/fleet/orchestrators")>()), requestCloseOrchestrator: vi.fn() }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -208,4 +217,94 @@ it("keeps the cleanup button outside the scrolling body once the mission is over
   const body = host.querySelector("[data-mission-body]")!;
   expect(body.textContent).toContain("Fini.");
   expect(body.contains(button("Nettoyer la mission"))).toBe(false);
+});
+
+const isis = { nodeId: "isis", name: "Isis", task: "Login", budgetMin: 20, linked: true, branch: "b", worktree: "C:/w", sentAt: 0 };
+const horus = { nodeId: "horus", name: "Horus", task: "API", budgetMin: 20, linked: true, branch: "b", worktree: "C:/w", sentAt: 0 };
+
+/** A running mission whose two agents run, Isis at work and Horus waiting. */
+async function showTeam() {
+  agentActivityStore.setState({ activities: {} });
+  for (const { nodeId, name } of [isis, horus]) {
+    await nodesStore.getState().create(nodeId, {
+      workspaceId: "w1",
+      kind: "terminal",
+      payload: { title: name, name, agent: "claude", cwd: "C:/w", shell: "default", command: "" },
+    });
+    terminalStatusStore.getState().set(nodeId, { state: "running" });
+  }
+  agentActivityStore.getState().apply({ nodeId: "isis", activity: "working", since: 1 });
+  agentActivityStore.getState().apply({ nodeId: "horus", activity: "waiting", since: 1 });
+  await show({ state: "en_cours", name: "Auth", members: [isis, horus] });
+}
+
+const map = () => host.querySelector("[data-map]")!;
+const inspector = () => host.querySelector("[data-inspector]")!;
+const inInspector = (label: string) => [...inspector().querySelectorAll("button")].find((b) => b.textContent === label)!;
+
+it("maps the mission as a tree: the orchestrator, then its team's consoles (#63)", async () => {
+  await showTeam();
+  const root = map().querySelector("[data-map-root]")!;
+  expect(root.textContent).toContain("Chef");
+  expect([...root.querySelectorAll("[data-member]")].map((m) => m.getAttribute("data-member"))).toEqual(["Isis", "Horus"]);
+});
+
+it("follows the agents' states live", async () => {
+  await showTeam();
+  expect(host.querySelector('[data-member="Horus"]')?.textContent).toContain("attend");
+  await act(async () => agentActivityStore.getState().apply({ nodeId: "horus", activity: "working", since: 2 }));
+  expect(host.querySelector('[data-member="Horus"]')?.textContent).toContain("travaille");
+  await act(async () => terminalStatusStore.getState().set("horus", { state: "exited", code: 0 }));
+  expect(host.querySelector('[data-member="Horus"]')?.textContent).toContain("arrêté");
+});
+
+it("filters the consoles by state, and searches them", async () => {
+  await showTeam();
+  await act(async () => [...map().querySelectorAll("button")].find((b) => b.textContent?.startsWith("attend"))!.click());
+  expect(host.querySelector('[data-member="Isis"]')).toBeNull();
+  expect(host.querySelector('[data-member="Horus"]')).not.toBeNull();
+  await act(async () => [...map().querySelectorAll("button")].find((b) => b.textContent?.startsWith("tous"))!.click());
+  await act(async () => type(host.querySelector('[aria-label="Chercher dans l\'équipe"]')!, "login"));
+  expect(host.querySelector('[data-member="Isis"]')).not.toBeNull();
+  expect(host.querySelector('[data-member="Horus"]')).toBeNull();
+});
+
+it("inspects a console: goes to it, pauses it, closes it through the confirmation", async () => {
+  await showTeam();
+  await act(async () => (host.querySelector('[data-member="Isis"] [aria-label="Inspecter Isis"]') as HTMLButtonElement).click());
+  expect(inspector().textContent).toContain("Isis");
+  await act(async () => inInspector("Aller à la console").click());
+  expect(focusNode).toHaveBeenCalledWith("isis");
+  await act(async () => inInspector("Pause").click());
+  expect(pauseAgents).toHaveBeenCalledWith(["isis"]);
+  await act(async () => inInspector("Fermer").click());
+  expect(uiStore.getState().closing).toEqual({ agents: ["isis"], remove: ["isis"] });
+  uiStore.getState().setClosing(null);
+});
+
+it("pauses no console that is not at work", async () => {
+  await showTeam();
+  await act(async () => (host.querySelector('[data-member="Horus"] [aria-label="Inspecter Horus"]') as HTMLButtonElement).click());
+  expect(inInspector("Pause").disabled).toBe(true);
+});
+
+it("inspects the orchestrator: frames the team, pauses it, closes the orchestrator", async () => {
+  await showTeam();
+  expect(inspector().textContent).toContain("Chef");
+  await act(async () => inInspector("Cadrer l'équipe").click());
+  expect(frameNodes).toHaveBeenCalledWith(["chef", "isis", "horus"]);
+  await act(async () => inInspector("Mettre l'équipe en pause").click());
+  expect(pauseAgents).toHaveBeenCalledWith(["isis", "horus"]);
+  await act(async () => inInspector("Fermer").click());
+  expect(requestCloseOrchestrator).toHaveBeenCalledWith("chef");
+});
+
+it("shows the mission map in English", async () => {
+  langStore.setState({ lang: "en" });
+  await showTeam();
+  expect(host.querySelector('[aria-label="Search the team"]')).not.toBeNull();
+  expect(inInspector("Frame the team")).toBeDefined();
+  expect(inInspector("Go to the console")).toBeDefined();
+  expect(inInspector("Pause the team")).toBeDefined();
+  expect(inInspector("Close")).toBeDefined();
 });

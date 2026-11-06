@@ -1,7 +1,5 @@
-import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
 import { ZONE_OFFSETS } from "@/canvas/canvasFocus";
 import { canvasStore } from "@/canvas/canvasStore";
-import { withGroupSpeciality } from "@/canvas/groups";
 import { nodeKindOf } from "@/canvas/nodeElement";
 import { agentsStore } from "@/fleet/agentsStore";
 import { defaultAgent } from "@/fleet/catalog";
@@ -58,15 +56,6 @@ export async function liveDeployDeps(): Promise<DeployDeps> {
       const made = await launchGroup(plan, defaultLaunchOptions(), at);
       if (made) await frameKnown(made.frameId);
       return made;
-    },
-    setSpeciality: (frameId, speciality) => {
-      const scene = canvasStore.getState().api;
-      scene?.updateScene({
-        elements: scene
-          .getSceneElementsIncludingDeleted()
-          .map((e) => (e.id === frameId ? newElementWith(e, { customData: withGroupSpeciality(e.customData, speciality) }) : e)),
-        captureUpdate: CaptureUpdateAction.NEVER,
-      });
     },
     orchestrate: orchestrateGroup,
     link: linkOrchestrator,
