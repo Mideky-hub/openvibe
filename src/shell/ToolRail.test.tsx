@@ -15,6 +15,7 @@ import { ToolRail } from "./ToolRail";
 vi.mock("@excalidraw/excalidraw", () => ({}));
 vi.mock("@/kanban/place", () => ({ placeKanban: vi.fn() }));
 vi.mock("@/goals/place", () => ({ placeGoals: vi.fn() }));
+vi.mock("@/calendar/place", () => ({ placeCalendar: vi.fn() }));
 vi.mock("@/fleet/quickActions", () => ({ newConsole: vi.fn(), launchFour: vi.fn(), placeOrchestrator: vi.fn() }));
 vi.mock("@/fleet/launchAgent", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/fleet/launchAgent")>()),
@@ -60,18 +61,19 @@ it("offers the canvas tools in the spec's order, each setting its Excalidraw too
   }
 });
 
-it("holds the catalog, Nouvelle console, Lancer 4 agents, Orchestrateur, Kanban and Objectifs in its ＋ (spec identité §5.4, §11)", async () => {
+it("holds the catalog, Nouvelle console, Lancer 4 agents, Orchestrateur, Kanban, Objectifs and Calendrier in its ＋ (spec identité §5.4, §11)", async () => {
   const menuEntries = () =>
     [...document.querySelectorAll<HTMLButtonElement>('[data-slot="popover-content"] button')].map((b) => b.textContent ?? "");
   await act(async () => byLabel("Lancer un agent").click());
   const entries = menuEntries();
   expect(entries[0]).toContain("Claude");
-  expect(entries.slice(-6, -1)).toEqual([
+  expect(entries.slice(-7, -1)).toEqual([
     "Nouvelle console",
     "Lancer 4 agents",
     expect.stringContaining("Orchestrateur"),
     expect.stringContaining("Kanban"),
     expect.stringContaining("Objectifs"),
+    expect.stringContaining("Calendrier"),
   ]);
   const click = (text: string) =>
     [...document.querySelectorAll<HTMLButtonElement>('[data-slot="popover-content"] button')].find((b) => b.textContent === text)!.click();

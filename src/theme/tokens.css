@@ -54,6 +54,13 @@
   --ov-draw: #E8E5DD;
   --ov-card: #30302D;
   --ov-terminal-head: #232220;
+  /* The calendar's six event colors (issue #32): bars and swatches, never ink. */
+  --ov-event-terracotta: #D97757;
+  --ov-event-ochre: #C9A06E;
+  --ov-event-sage: #8FA876;
+  --ov-event-slate: #6A9BCC;
+  --ov-event-lilac: #B49BD6;
+  --ov-event-rose: #D58BA0;
 }
 
 :root[data-theme="light"] {
@@ -92,6 +99,12 @@
   --ov-draw: #29261B;
   --ov-card: #F5F3EC;
   --ov-terminal-head: #F0EEE6;
+  --ov-event-terracotta: #C2603F;
+  --ov-event-ochre: #A87B3E;
+  --ov-event-sage: #5E7A43;
+  --ov-event-slate: #3F74A8;
+  --ov-event-lilac: #8467B3;
+  --ov-event-rose: #B65A77;
 }
 
 /* Without transparency (spec identité §4.2): Windows' setting… */
