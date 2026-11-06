@@ -55,17 +55,26 @@ describe("activityStats", () => {
 
   it("averages the sessions, and only says « at least » once the logs list too many", () => {
     const two = activityStats(report(days(60), [
-      { sessionId: "a", model: null, counts: c(30, 10) },
-      { sessionId: "b", model: null, counts: c(20) },
+      { sessionId: "a", agent: "claude", model: null, counts: c(30, 10) },
+      { sessionId: "b", agent: "claude", model: null, counts: c(20) },
     ]));
     expect(two.sessions).toBe(2);
     expect(two.sessionsCapped).toBe(false);
     expect(two.perSession).toBe(30);
-    const many = Array.from({ length: SESSIONS_CAP }, (_, i) => ({ sessionId: `s${i}`, model: null, counts: c(1) }));
+    const many = Array.from({ length: SESSIONS_CAP }, (_, i) => ({ sessionId: `s${i}`, agent: "claude" as const, model: null, counts: c(1) }));
     const capped = activityStats(report(days(60), many));
     expect(capped.sessionsCapped).toBe(true);
     // The biggest sessions only: their average would be too high.
     expect(capped.perSession).toBeNull();
+  });
+
+  it("counts Codex's sessions with Claude's (#76)", () => {
+    const stats = activityStats(report(days(90), [
+      { sessionId: "a", agent: "claude", model: "claude-opus-5-5", counts: c(40) },
+      { sessionId: "c1", agent: "codex", model: "gpt-5-codex", counts: c(30, 20) },
+    ]));
+    expect(stats.sessions).toBe(2);
+    expect(stats.perSession).toBe(45);
   });
 
   it("says nothing of an empty window", () => {

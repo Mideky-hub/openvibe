@@ -22,8 +22,9 @@ const report = {
     { date: "2026-10-31", counts: counts(500, 500) },
   ],
   sessions: [
-    { sessionId: "s-isis", model: "claude-opus-5-5", counts: counts(400, 400) },
-    { sessionId: "s-ext", model: "claude-haiku-5-5", counts: counts(100, 100) },
+    { sessionId: "s-isis", agent: "claude", model: "claude-opus-5-5", counts: counts(400, 400) },
+    { sessionId: "s-ext", agent: "claude", model: "claude-haiku-5-5", counts: counts(100, 100) },
+    { sessionId: "c1", agent: "codex", model: "gpt-5-codex", counts: counts(30, 20) },
   ],
   models: [{ model: "claude-opus-5-5", counts: counts(400, 400) }],
   filesScanned: 3,
@@ -52,9 +53,23 @@ it("shows a column per day and the part of each agent, named by OpenVibe's own a
   expect(rows[0]).toContain("Isis");
   expect(rows[0]).toContain("800");
   expect(rows[1]).toContain("Autres sessions Claude");
+  expect(rows[2]).toContain("Sessions Codex");
+  expect(rows[2]).toContain("gpt-5-codex");
   expect(host.textContent).toContain("3 fichiers lus");
   expect(host.textContent).toContain("lecture tronquée");
   expect(host.textContent).toContain("rien n'est envoyé");
+  expect(host.textContent).not.toContain("pas pris en charge");
+  await done();
+});
+
+it("says plainly that no log was found, Claude's or Codex's (missing logs are not an error)", async () => {
+  const empty = { ...report, days: [{ date: "2026-10-31", counts: counts(0, 0) }], sessions: [], models: [], filesScanned: 0, truncated: false };
+  const { host, done } = await show(() => empty);
+  expect(host.textContent).toContain("Aucun token trouvé dans les journaux de Claude ni de Codex sur 30 jours.");
+  expect(host.textContent).not.toContain("Lecture impossible");
+  await act(async () => langStore.setState({ lang: "en" }));
+  expect(host.textContent).toContain("No tokens found in Claude's or Codex's logs over 30 days.");
+  await act(async () => langStore.setState({ lang: "fr" }));
   await done();
 });
 

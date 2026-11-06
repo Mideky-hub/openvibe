@@ -9,9 +9,9 @@ import { bars, byAgent, formatTokens, total } from "@/usage/tokens";
 import { shellMessages } from "./messages";
 
 /**
- * The tokens Claude Code logged over 30 days (spec Tokens): a column per day
- * and the part of each agent. Read from the logs on the disk when opened;
- * nothing leaves the machine.
+ * The tokens Claude Code and Codex logged over 30 days (spec Tokens): a column
+ * per day and the part of each agent. Read from the logs on the disk when
+ * opened; nothing leaves the machine.
  */
 export function TokensView({ onBack }: { onBack: () => void }) {
   const u = useMessages(shellMessages).usage;
@@ -86,7 +86,7 @@ export function TokensView({ onBack }: { onBack: () => void }) {
           </section>
           <section className="flex flex-col gap-1.5">
             <p className="ov-label">{u.tokensByAgent}</p>
-            {byAgent(report.sessions, names, u.tokensOtherSessions).map((row) => (
+            {byAgent(report.sessions, names, { claude: u.tokensOtherSessions, codex: u.tokensCodexSessions }).map((row) => (
               <div key={row.label} data-agent-row className="flex flex-col text-[12px]">
                 <div className="flex items-center gap-2">
                   <span className={row.other ? "text-ov-text-2" : "text-ov-text"}>{row.label}</span>
