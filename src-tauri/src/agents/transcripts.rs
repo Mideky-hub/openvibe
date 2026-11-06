@@ -1,8 +1,25 @@
-//! Claude's saved conversations, checked before resuming one (spec première version §3.1).
+//! Claude's saved conversations, checked before resuming one (spec première version §3.1),
+//! and where Codex keeps its own.
 
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use crate::pty::shell::ClaudeMode;
+
+/// Codex's folder (its conversations under `sessions/`): `$CODEX_HOME`, else `~/.codex`.
+pub fn codex_home() -> Option<PathBuf> {
+    codex_home_from(
+        std::env::var_os("CODEX_HOME"),
+        std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")),
+    )
+}
+
+fn codex_home_from(codex_home: Option<OsString>, home: Option<OsString>) -> Option<PathBuf> {
+    match codex_home {
+        Some(dir) if !dir.is_empty() => Some(PathBuf::from(dir)),
+        _ => home.map(|home| PathBuf::from(home).join(".codex")),
+    }
+}
 
 /// Past this length Claude Code shortens a folder name with a hash.
 const MAX_FOLDER_NAME: usize = 200;
@@ -114,6 +131,23 @@ mod tests {
             project_folder(&Path::new("C:\\").join("a".repeat(250))),
             None
         );
+    }
+
+    #[test]
+    fn codex_keeps_its_logs_in_codex_home_else_in_the_home_folder() {
+        assert_eq!(
+            codex_home_from(Some(r"D:\codex".into()), Some(r"C:\Users\me".into())),
+            Some(PathBuf::from(r"D:\codex"))
+        );
+        assert_eq!(
+            codex_home_from(None, Some(r"C:\Users\me".into())),
+            Some(Path::new(r"C:\Users\me").join(".codex"))
+        );
+        assert_eq!(
+            codex_home_from(Some("".into()), Some(r"C:\Users\me".into())),
+            Some(Path::new(r"C:\Users\me").join(".codex"))
+        );
+        assert_eq!(codex_home_from(None, None), None);
     }
 
     #[test]

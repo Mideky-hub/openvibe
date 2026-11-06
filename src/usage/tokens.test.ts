@@ -30,23 +30,39 @@ describe("bars", () => {
 
 describe("byAgent", () => {
   const sessions: TokenReport["sessions"] = [
-    { sessionId: "s-isis", model: "claude-opus-5-5", counts: c(1, 100) },
-    { sessionId: "s-isis-old", model: "claude-opus-5-5", counts: c(1, 50) },
-    { sessionId: "s-thot", model: "claude-haiku-5-5", counts: c(1, 30) },
-    { sessionId: "s-other", model: null, counts: c(1, 5) },
+    { sessionId: "s-isis", agent: "claude", model: "claude-opus-5-5", counts: c(1, 100) },
+    { sessionId: "s-isis-old", agent: "claude", model: "claude-opus-5-5", counts: c(1, 50) },
+    { sessionId: "s-thot", agent: "claude", model: "claude-haiku-5-5", counts: c(1, 30) },
+    { sessionId: "s-other", agent: "claude", model: null, counts: c(1, 5) },
   ];
   const names = new Map([["s-isis", "Isis"], ["s-isis-old", "Isis"], ["s-thot", "Thot"]]);
+  const others = { claude: "Autres sessions", codex: "Sessions Codex" };
 
   it("names the sessions of OpenVibe's agents, merges an agent's sessions, and groups the rest", () => {
-    const rows = byAgent(sessions, names, "Autres sessions");
+    const rows = byAgent(sessions, names, others);
     expect(rows.map((r) => [r.label, r.counts.output])).toEqual([["Isis", 150], ["Thot", 30], ["Autres sessions", 5]]);
     expect(rows[0].model).toBe("claude-opus-5-5");
     expect(rows[2].other).toBe(true);
   });
 
+  it("groups Codex's sessions apart from Claude's, with their main model", () => {
+    const codex: TokenReport["sessions"] = [
+      { sessionId: "c1", agent: "codex", model: "gpt-5-codex", counts: c(10, 40) },
+      { sessionId: "c2", agent: "codex", model: "gpt-5", counts: c(1, 2) },
+    ];
+    const rows = byAgent([...sessions, ...codex], names, others);
+    expect(rows.map((r) => [r.label, r.counts.output])).toEqual([
+      ["Isis", 150],
+      ["Sessions Codex", 42],
+      ["Thot", 30],
+      ["Autres sessions", 5],
+    ]);
+    expect(rows[1]).toMatchObject({ model: "gpt-5-codex", other: true });
+  });
+
   it("shows the biggest rows only, and sums the rest", () => {
-    const many = Array.from({ length: MAX_AGENT_ROWS + 3 }, (_, i) => ({ sessionId: `s${i}`, model: null, counts: c(0, 100 - i) }));
-    const rows = byAgent(many, new Map(many.map((s, i) => [s.sessionId, `A${i}`])), "Autres");
+    const many = Array.from({ length: MAX_AGENT_ROWS + 3 }, (_, i) => ({ sessionId: `s${i}`, model: null, agent: "claude" as const, counts: c(0, 100 - i) }));
+    const rows = byAgent(many, new Map(many.map((s, i) => [s.sessionId, `A${i}`])), { claude: "Autres", codex: "Codex" });
     expect(rows).toHaveLength(MAX_AGENT_ROWS + 1);
     expect(rows[rows.length - 1].label).toBe("…");
     expect(rows[rows.length - 1].counts.output).toBe(many.slice(MAX_AGENT_ROWS).reduce((n, s) => n + s.counts.output, 0));
