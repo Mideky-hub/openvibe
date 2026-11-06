@@ -71,3 +71,12 @@ it("opens the 30-day tokens from the detail, and comes back to it", async () => 
   await act(async () => document.querySelector<HTMLButtonElement>('[data-tokens] [aria-label="Usage"]')!.click());
   expect(document.querySelector("[data-usage-detail]")).not.toBeNull();
 });
+
+it("shows a model's own weekly limit in the bar even when it is the only window sent", async () => {
+  usageStore.setState({
+    limits: { models: [{ key: "seven_day_fable", label: "Fable", limit: { usedPercent: 41, resetsAt: null } }], at: Date.now() },
+  });
+  await act(async () => undefined);
+  expect(meter().textContent).toContain("Fable");
+  expect(meter().textContent).toContain("41");
+});
