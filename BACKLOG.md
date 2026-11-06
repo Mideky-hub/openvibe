@@ -77,10 +77,6 @@ Ce qui est reporté. La spec en cours est `docs/superpowers/specs/2026-10-24-ope
 
 - Non traités : un proxy HTTP qui intercepterait `127.0.0.1` (les hooks échouent, l'activité du terminal prend le relais) ; un dialogue d'autorisation répondu hors du terminal (IDE, à distance) laisse ATTEND jusqu'au hook suivant.
 
-## Constats du plan B3 (commande et orchestrateur, relecture finale)
-
-- Le test Windows de `pty_send_text` vérifie l'effet de la commande, pas les octets écrits.
-
 ## Constats du plan C1 (fenêtre et livraison, relecture finale)
 
 - Deux « Fermer » dans la rangée du haut : la pastille « × Fermer » (ferme le projet) et le bouton de fenêtre (quitte l'application, arrête les agents) ont la même info-bulle. Renommer celle du bouton de fenêtre « Fermer OpenVibe » (comme spec fenêtre §7.3) ; change la spec §4.3.
