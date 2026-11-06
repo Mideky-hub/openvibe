@@ -306,7 +306,8 @@ export function proposedTasks(args: Record<string, unknown>, mission: Mission, g
 
 /**
  * `propose_plan`'s arguments (internal names, `@/mcp/protocol`) as a plan, or what is wrong (spec §7.2).
- * `linked`: names of the linked Claude agents; `groups`: the linked groups; `cards`: ids of the cards of its linked boards.
+ * `linked`: names of the linked Claude agents; `groups`: the linked groups; `cards`: ids of the cards of its linked boards;
+ * `busy`: names of the linked agents another running mission holds.
  */
 export function proposedPlan(
   args: Record<string, unknown>,
@@ -314,6 +315,7 @@ export function proposedPlan(
   linked: readonly string[],
   groups: readonly PlanGroup[] = [],
   cards: readonly string[] = [],
+  busy: readonly string[] = [],
 ): { name: string; task: string; plan: SubTask[] } | string {
   const e = messages(agentMessages).plan;
   const name = text(args.nom);
@@ -333,7 +335,10 @@ export function proposedPlan(
     if (typeof fields === "string") return fields;
     const agent = text(r.agent);
     const known = sameName(agent, NEW_AGENT) ? NEW_AGENT : linked.find((l) => sameName(l, agent));
-    if (!known) return e.notLinked(n, agent);
+    if (!known) {
+      const held = busy.find((b) => sameName(b, agent));
+      return held ? e.otherMission(n, held) : e.notLinked(n, agent);
+    }
     if (known !== NEW_AGENT && plan.some((s) => s.agent === known)) return e.alreadyHas(known);
     if ([...taken, ...plan.map((s) => s.title)].some((title) => sameName(title, fields.title))) return e.titleTaken(n, fields.title);
     const wanted = text(r.groupe);
