@@ -60,6 +60,11 @@ it("staffs a mission's group with the names, folders and pantheon it is given, a
   expect(frame?.customData?.openvibe).toMatchObject({ kind: "group", pantheon: "egyptian" });
 });
 
+it("creates a group with its speciality already set: its first agent may start before anything else is written", async () => {
+  await launchGroup({ name: "Back", role: "backend", speciality: "API", agents: ["shell"] }, { cwd: "C:/code", shell: "default", title: "", command: "" }, { x: 0, y: 0 });
+  expect(scene.find((e) => e.type === "frame")?.customData?.openvibe).toMatchObject({ kind: "group", role: "backend", speciality: "API" });
+});
+
 it("marks each agent of a new group as starting before its node appears: never ARRÊTÉ before it mounts (issue #3)", async () => {
   const marked = new Set<string>();
   vi.mocked(markForAutostart).mockImplementation((id) => void marked.add(id));
