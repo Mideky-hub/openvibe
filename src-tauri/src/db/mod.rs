@@ -30,6 +30,7 @@ const MIGRATIONS: &[Step] = &[
     Step::Rust(migrate_v2::run),
     Step::Sql(include_str!("migrations/003_file_nodes.sql")),
     Step::Sql(include_str!("migrations/004_workspace_kind.sql")),
+    Step::Sql(include_str!("migrations/005_goals_nodes.sql")),
 ];
 
 /// The single SQLite connection shared by every command (spec V1 §8.1).
@@ -319,6 +320,55 @@ mod tests {
         assert_eq!(version, 4);
     }
 
+    #[test]
+    fn migration_5_keeps_the_nodes_and_their_scrollback_and_accepts_goals_nodes() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        migrate_up_to(&mut conn, 4, "C:/home").unwrap();
+        let (_, workspace) = raw_workspace(&conn);
+        conn.execute(
+            "INSERT INTO nodes VALUES ('t1', ?1, 'terminal', '{}', 10), ('f1', ?1, 'file', '{}', 11)",
+            [&workspace],
+        )
+        .unwrap();
+        conn.execute_batch("INSERT INTO terminal_scrollback VALUES ('t1', x'41', 12);")
+            .unwrap();
+        let insert_goals = |conn: &Connection, id: &str| {
+            conn.execute(
+                "INSERT INTO nodes VALUES (?1, ?2, 'goals', '{\"goals\":[]}', 13)",
+                [id, workspace.as_str()],
+            )
+        };
+        assert!(insert_goals(&conn, "g0").is_err());
+
+        migrate_up_to(&mut conn, 5, "C:/home").unwrap();
+
+        let count = |sql: &str| -> i64 { conn.query_row(sql, [], |row| row.get(0)).unwrap() };
+        assert_eq!(count("SELECT COUNT(*) FROM nodes"), 2);
+        assert_eq!(
+            count("SELECT COUNT(*) FROM terminal_scrollback WHERE node_id = 't1'"),
+            1
+        );
+        assert_eq!(
+            count(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'nodes_workspace'"
+            ),
+            1
+        );
+        insert_goals(&conn, "g1").unwrap();
+        assert!(
+            conn.execute(
+                "INSERT INTO nodes VALUES ('x', ?1, 'other', '{}', 14)",
+                [&workspace]
+            )
+            .is_err()
+        );
+        // The cascades still reach the rebuilt table.
+        conn.execute("DELETE FROM nodes WHERE id = 't1'", [])
+            .unwrap();
+        assert_eq!(count("SELECT COUNT(*) FROM terminal_scrollback"), 0);
+    }
+
     fn base_at_version(path: &Path, version: usize) {
         let mut conn = Connection::open(path).unwrap();
         migrate_up_to(&mut conn, version, "C:/home").unwrap();
@@ -436,9 +486,9 @@ mod tests {
         .unwrap();
     }
 
-    /// What the night added lives in payloads and settings: a 1.1.0-beta.1 base needs no step.
+    /// A 1.1.0-beta.1 base (v4) climbs to the goals widget's schema with a copy, its rows kept.
     #[test]
-    fn a_base_of_the_published_version_opens_as_it_is() {
+    fn a_base_of_the_published_version_keeps_its_rows() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("openvibe.db");
         base_at_version(&path, 4);
@@ -455,10 +505,10 @@ mod tests {
             .unwrap();
         }
         let db = Db::open(&path).unwrap();
-        assert_eq!(backups_in(dir.path()), 0);
+        assert!(backup_path(&path, 4).exists());
         db.with(|conn| {
             let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-            assert_eq!(version, 4);
+            assert_eq!(version, MIGRATIONS.len() as i64);
             let payload: String =
                 conn.query_row("SELECT payload_json FROM nodes WHERE id = 'k1'", [], |r| {
                     r.get(0)
