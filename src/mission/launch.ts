@@ -22,7 +22,7 @@ import { notify } from "./events";
 import { NEW_AGENT, NEW_MISSION, oneLine, pastTask, sameName, type Member, type Mission, type SubTask } from "./mission";
 import { whenReady } from "./ready";
 import { modelFor } from "./router";
-import { busyLinkedAgents, canvasKnown, linkedClaudeAgents, linkedGroups, missionOf, orchestratorShown, releaseAgents, reserveAgents, setMission, updateMember, workspaceCanvas } from "./store";
+import { busyLinkedAgents, canvasKnown, linkedClaudeAgents, linkedGroups, missionOf, orchestratorShown, readCanvas, releaseAgents, reserveAgents, setMission, updateMember, workspaceCanvas } from "./store";
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const t = () => messages(agentMessages);
@@ -252,8 +252,12 @@ export function endMission(orchestratorId: string, summary: string) {
     removeTeam(orchestratorId, record.workspaceId, mission.frameId, joined);
     return;
   }
-  // Its scene was never read: the created agents stop, freeing their worktrees (final review H2).
-  for (const member of mission.members) if (!member.linked) stopTerminal(member.nodeId);
+  // Its scene was never read since startup: read now, the team closes there as on screen (#69).
+  void readCanvas(orchestratorId).then((known) => {
+    if (known) return removeTeam(orchestratorId, record.workspaceId, mission.frameId, joined);
+    // Unreadable: the created agents stop, freeing their worktrees (final review H2).
+    for (const member of mission.members) if (!member.linked) stopTerminal(member.nodeId);
+  });
 }
 
 /** The merges under way, by mission worktree: git merges one branch at a time there. */
