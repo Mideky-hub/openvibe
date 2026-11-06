@@ -31,6 +31,18 @@ describe("proposedPlan (spec orchestrateur §7.2)", () => {
     expect(proposedPlan(args(), NEW_MISSION, [])).toContain("au moins une");
   });
 
+  it("says when a named agent is linked but works for another running mission (#64)", () => {
+    expect(proposedPlan(args(task("isis")), NEW_MISSION, ["Athéna"], [], [], ["Isis"])).toBe(
+      "Sous-tâche 1 : Isis travaille déjà pour une autre mission en cours ; choisis un autre agent, ou « new ».",
+    );
+    langStore.setState({ lang: "en" });
+    try {
+      expect(proposedPlan(args(task("isis")), NEW_MISSION, [], [], [], ["Isis"])).toBe('Sub-task 1: Isis already works for another running mission; choose another agent, or "new".');
+    } finally {
+      langStore.setState({ lang: "fr" });
+    }
+  });
+
   it("keeps the Kanban card of a sub-task, when its boards have it", () => {
     const result = proposedPlan(args({ ...task("nouveau"), card: "c1" }), NEW_MISSION, [], [], ["c1"]);
     expect(typeof result !== "string" && result.plan[0].card).toBe("c1");
