@@ -56,6 +56,9 @@ function fakeBackend(initial: string[] = [], activeSetting: string | null = null
       case "set_setting":
         db.settings.set(args.key, (raw as { value: unknown }).value);
         return;
+      case "delete_setting":
+        db.settings.delete(args.key);
+        return;
     }
   });
   return db;
@@ -153,6 +156,22 @@ describe("workspaces store", () => {
     store = createWorkspacesStore();
     await state().load("p1");
     expect(names()).toEqual(["B", "A", "C"]);
+  });
+
+  it("migrates the tab order saved in the settings, then drops the old key", async () => {
+    const db = fakeBackend(["A", "B", "C"]);
+    db.settings.set("ui.workspaceOrder.p1", ["w3", "gone", "w1"]);
+    await state().load("p1");
+    expect(db.reorders).toEqual([["w3", "w1", "w2"]]);
+    expect(names()).toEqual(["C", "A", "B"]);
+    expect(db.settings.has("ui.workspaceOrder.p1")).toBe(false);
+  });
+
+  it("leaves the order alone when no old setting exists", async () => {
+    const db = fakeBackend(["A", "B"]);
+    await state().load("p1");
+    expect(db.reorders).toEqual([]);
+    expect(names()).toEqual(["A", "B"]);
   });
 
   it("never removes the last workspace", async () => {

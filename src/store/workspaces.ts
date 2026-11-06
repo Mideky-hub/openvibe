@@ -1,6 +1,7 @@
 import { createStore, useStore } from "zustand";
 import {
   createWorkspace,
+  deleteSetting,
   deleteWorkspace,
   getSetting,
   listWorkspaces,
@@ -19,6 +20,8 @@ export type { Workspace, WorkspaceKind };
 
 /** Plan 2 kept a single active workspace; it seeds the first project opened. */
 const LEGACY_ACTIVE_KEY = "ui.activeWorkspaceId";
+/** Before the order moved to the database, a drag saved the ids in this setting. */
+const legacyOrderKey = (projectId: string) => `ui.workspaceOrder.${projectId}`;
 const activeKey = (projectId: string) => `ui.activeWorkspaceId.${projectId}`;
 
 export interface WorkspacesState {
@@ -66,6 +69,20 @@ export function nextDefaultName(workspaces: Workspace[]): string {
   return `Workspace ${n}`;
 }
 
+/** One-off: applies the tab order saved in the old setting, then drops the key. */
+async function migrateLegacyOrder(projectId: string, workspaces: Workspace[]): Promise<Workspace[]> {
+  const key = legacyOrderKey(projectId);
+  const saved = await getSetting<unknown>(key);
+  if (saved === null || saved === undefined) return workspaces;
+  const known = new Map(workspaces.map((w) => [w.id, w]));
+  const ids = (Array.isArray(saved) ? saved : []).filter((id): id is string => typeof id === "string" && known.has(id));
+  const ordered = [...new Set(ids)].map((id) => known.get(id)!);
+  const next = [...ordered, ...workspaces.filter((w) => !ordered.includes(w))];
+  if (ordered.length > 0) await reorderWorkspaces(projectId, next.map((w) => w.id));
+  await deleteSetting(key);
+  return ordered.length > 0 ? next : workspaces;
+}
+
 export function createWorkspacesStore() {
   const store = createStore<WorkspacesState>()((set, get) => {
     const rememberActive = (id: string) => {
@@ -85,6 +102,7 @@ export function createWorkspacesStore() {
         set({ projectId, workspaces: [], activeId: null, lastCanvasId: null, status: "loading", error: undefined });
         try {
           let workspaces = (await listWorkspaces(projectId)).map(withKind);
+          workspaces = await migrateLegacyOrder(projectId, workspaces);
           if (!workspaces.some((w) => !isCode(w)))
             workspaces = [withKind(await createWorkspace(projectId, nextDefaultName(workspaces))), ...workspaces];
           const saved = (await getSetting<string>(activeKey(projectId))) ?? (await getSetting<string>(LEGACY_ACTIVE_KEY));
