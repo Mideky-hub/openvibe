@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { flushAll } from "@/lib/flush";
 import { nodesStore } from "@/store/nodes";
-import { editStoredScene, forgetScene, loadScene, rememberScene } from "./sceneCache";
+import { currentScene, editStoredScene, forgetScene, loadScene, rememberScene } from "./sceneCache";
 
 afterEach(() => {
   forgetScene("w1");
@@ -77,5 +77,19 @@ describe("a stored scene being edited (review)", () => {
     finish();
     await closing;
     expect(done).toBe(true);
+  });
+});
+
+describe("a canvas mounted again while the app runs (issue 11)", () => {
+  it("starts from the scene as last remembered, not from the one first read", async () => {
+    mockIPC((cmd) => (cmd === "load_workspace" ? { nodes: [], files: [], elementsJson: "[]", appStateJson: null } : undefined));
+    const first = await loadScene("w1");
+    rememberScene("w1", [{ id: "n" }] as never, {} as never, {}, []);
+    expect(currentScene("w1", first).initialData.elements).toHaveLength(1);
+  });
+
+  it("falls back on the scene it was given when nothing is remembered", async () => {
+    const given = { initialData: { elements: [] }, savedFileIds: [] };
+    expect(currentScene("w1", given)).toBe(given);
   });
 });
