@@ -15,7 +15,7 @@ vi.mock("@excalidraw/excalidraw", () => ({}));
 vi.mock("@/mission/launch", () => ({ endMission: vi.fn(), mergeMission: vi.fn(), reassignTask: vi.fn(), launchMission: vi.fn(() => Promise.resolve()) }));
 vi.mock("@/mission/tickets", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/mission/tickets")>()), readTickets: vi.fn() }));
 vi.mock("@/fleet/broadcast", () => ({ pauseAgents: vi.fn() }));
-vi.mock("@/fleet/remoteControl", () => ({ setRemoteControl: vi.fn() }));
+vi.mock("@/fleet/remoteControl", () => ({ setRemoteControl: vi.fn(), remoteBusy: vi.fn(() => false) }));
 vi.mock("@/nodes/terminal/registry", () => ({ terminalText: vi.fn(), quietFor: vi.fn(() => 0), typedAgo: vi.fn(() => Infinity), freshText: vi.fn(() => "") }));
 
 const session = { title: "Chef", name: "Chef", agent: "claude" as const, cwd: "C:/projet", shell: "default" as const, command: "", role: "orchestrator" as const };

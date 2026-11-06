@@ -1,5 +1,5 @@
 import { pauseAgents } from "@/fleet/broadcast";
-import { setRemoteControl } from "@/fleet/remoteControl";
+import { remoteBusy, setRemoteControl } from "@/fleet/remoteControl";
 import { messages } from "@/i18n";
 import { ptySendText } from "@/ipc/pty";
 import { endMission, launchMission, mergeMission, reassignTask } from "@/mission/launch";
@@ -287,6 +287,8 @@ async function write(mission: Mission, args: Record<string, unknown>): Promise<T
   if (!text) return refused(t().orchestrator.nothingToWrite);
   if (!isRunning(member.nodeId)) return refused(t().orchestrator.stopped(member.name));
   if (agentActivityStore.getState().activities[member.nodeId]?.activity === "waiting") return refused(t().orchestrator.waiting(member.name));
+  // A line typed while the Remote Control menu is open would land in the menu.
+  if (remoteBusy(member.nodeId)) return refused(t().orchestrator.remoteBusy(member.name));
   await ptySendText(member.nodeId, text);
   return said(t().orchestrator.written(member.name));
 }
@@ -359,7 +361,11 @@ async function remote(orchestratorId: string, mission: Mission, args: Record<str
   const ambiguous: string[] = [];
   for (const name of names) {
     if (sameName(name, "moi")) chosen.push({ nodeId: orchestratorId, name: o.you });
-    else if (sameName(name, "tous")) chosen.push(...team);
+    else if (sameName(name, "tous")) {
+      // Without its canvas the team lacks the linked agents: "all" would leave them out unsaid.
+      if (!canvasKnown(orchestratorId)) return refused(o.hiddenWorkspace);
+      chosen.push(...team);
+    }
     else {
       const found = team.filter((t) => sameName(t.name, name));
       // Two agents of the same name: the first would be picked silently.
