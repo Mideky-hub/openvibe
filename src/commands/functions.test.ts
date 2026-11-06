@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { labelOf, sectionOf, type Command, type CommandContext } from "./command";
 import { functionSections } from "./functions";
+import { shortcutBindingsStore } from "./shortcuts";
 
 const ctx: CommandContext = { project: true, workspaceId: "w1", terminalCount: 1, terminalId: null };
 const command = (id: string, label: string, section: string, available = true): Command => ({
@@ -53,6 +54,14 @@ describe("functionSections (spec fenêtre §7.3)", () => {
     expect(sections[1].items[0]).toMatchObject({ label: "Lancer Codex", hint: null, disabled: "codex introuvable dans le PATH" });
     expect(labelOf(rename, { ...ctx, terminalId: "Thot" })).toBe("Renommer Thot");
     expect(sectionOf(codex, ctx)).toBe("Agents");
+  });
+
+  it("shows the keys the settings give a shortcut (issue #84)", () => {
+    const goTo: Command = { ...command("palette.goTo", "Aller à…", "Navigation"), shortcut: "Ctrl+P" };
+    expect(functionSections([goTo], ctx, "")[0].items[0].hint).toBe("Ctrl+P");
+    shortcutBindingsStore.setState({ bindings: { "Ctrl+P": "Ctrl+Maj+K" } });
+    expect(functionSections([goTo], ctx, "")[0].items[0].hint).toBe("Ctrl+Maj+K");
+    shortcutBindingsStore.setState({ bindings: {} });
   });
 
   it("puts the recent functions first, most recent first, when nothing is typed, without repeating them below", () => {

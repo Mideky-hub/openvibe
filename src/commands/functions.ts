@@ -3,6 +3,7 @@ import { keyLabel } from "@/i18n/format";
 import { labelOf, sectionOf, type Command, type CommandContext } from "./command";
 import { commandsMessages } from "./messages";
 import { rank, rankSections, startsWords } from "./search";
+import { comboFor } from "./shortcuts";
 
 /** A line of the functions mode, as listed at this moment. */
 export interface FunctionLine {
@@ -39,7 +40,7 @@ export function functionSections(
         command,
         label: labelOf(command, ctx),
         section: sectionOf(command, ctx),
-        hint: command.shortcut ?? command.keys ? keyLabel(command.shortcut ?? command.keys ?? "") : null,
+        hint: command.shortcut ? keyLabel(comboFor(command.shortcut)) : command.keys ? keyLabel(command.keys) : null,
         disabled: command.disabled?.(ctx) ?? null,
       }),
     );
