@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import { createStore } from "zustand";
 import type { Point } from "@/fleet/terminals";
 import type { AgentId } from "@/ipc/pty";
+import { projectsStore } from "@/store/projects";
+import { workspacesStore } from "@/store/workspaces";
 
 /** Something a command asks a component on screen to do: edit a name, open its menu (plan F2). */
 export type UiRequest =
@@ -28,6 +30,15 @@ export function requestUi(request: UiRequest) {
   requestStore.setState({ request });
   expiry = setTimeout(() => requestStore.setState({ request: null }), EXPIRY_MS);
 }
+
+// The user moving to another tab, project or the home screen abandons the request.
+const dropRequest = () => requestStore.setState({ request: null });
+workspacesStore.subscribe((s, previous) => {
+  if (s.activeId !== previous.activeId || s.projectId !== previous.projectId) dropRequest();
+});
+projectsStore.subscribe((s, previous) => {
+  if (s.view !== previous.view || s.activeId !== previous.activeId) dropRequest();
+});
 
 export function pendingUiRequest(): UiRequest | null {
   return requestStore.getState().request;

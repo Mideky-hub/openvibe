@@ -204,4 +204,14 @@ describe("a target that went between the palette and Entrée (plan F2)", () => {
     await expect(Promise.resolve(find("terminal.relaunch").run(ctx("closed")))).resolves.toBeUndefined();
     expect(relaunchTerminal).not.toHaveBeenCalled();
   });
+  it("does nothing for the other terminal commands when the terminal is gone", async () => {
+    for (const id of ["terminal.rename", "terminal.duplicate", "terminal.review", "terminal.stop", "terminal.pause", "terminal.resume", "terminal.close", "terminal.copy", "terminal.paste"]) {
+      await expect(Promise.resolve(find(id).run(ctx("closed")))).resolves.toBeUndefined();
+    }
+    expect(duplicateTerminal).not.toHaveBeenCalled();
+    expect(stopTerminal).not.toHaveBeenCalled();
+    expect(requestClose).not.toHaveBeenCalled();
+    expect(pasteIntoTerminal).not.toHaveBeenCalled();
+    expect(pendingUiRequest()?.kind).not.toBe("renameTerminal");
+  });
 });

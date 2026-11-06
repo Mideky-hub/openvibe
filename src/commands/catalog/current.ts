@@ -44,7 +44,14 @@ function factsOf(ctx: CommandContext): AgentFacts | null {
 
 const hasTerminal = (ctx: CommandContext) => payloadOf(ctx) !== undefined;
 const hasGroup = (ctx: CommandContext) => groupOfCurrent(ctx) !== null;
-// `available` guarantees both before `run`.
+/** `run` of a terminal command: nothing happens if the terminal went between the palette and Entrée. */
+function forTerminal(run: (id: string, ctx: CommandContext, payload: TerminalPayload) => void | Promise<void>): Command["run"] {
+  return (ctx) => {
+    const payload = payloadOf(ctx);
+    if (payload && ctx.terminalId) return run(ctx.terminalId, ctx, payload);
+  };
+}
+// Only for `available`, which already needs a terminal.
 const terminalId = (ctx: CommandContext) => ctx.terminalId as string;
 /** `run` of a group command: nothing happens if the group went between the palette and Entrée. */
 function forGroup(run: (id: string) => void | Promise<void>): Command["run"] {
@@ -66,37 +73,35 @@ export const CURRENT: readonly Command[] = [
     section: terminalSection,
     available: hasTerminal,
     // The view moves if needed, without the keyboard: the name editor takes it.
-    run: (ctx) => {
-      showNode(terminalId(ctx));
-      requestUi({ kind: "renameTerminal", id: terminalId(ctx) });
-    },
+    run: forTerminal((id) => {
+      showNode(id);
+      requestUi({ kind: "renameTerminal", id });
+    }),
   }),
   command("terminal.duplicate", {
     section: terminalSection,
     available: hasTerminal,
-    run: async (ctx) => {
-      if (ctx.workspaceId) await duplicateTerminal(ctx.workspaceId, terminalId(ctx));
-    },
+    run: forTerminal(async (id, ctx) => {
+      if (ctx.workspaceId) await duplicateTerminal(ctx.workspaceId, id);
+    }),
   }),
   command("terminal.review", {
     section: terminalSection,
     available: hasTerminal,
-    run: (ctx) => openReview(terminalId(ctx)),
+    run: forTerminal((id) => openReview(id)),
   }),
   command("terminal.relaunch", {
     section: terminalSection,
     available: hasTerminal,
     // Claude resumes its session, other agents start anew (plan F2, décision 2).
-    run: (ctx) => {
-      const payload = payloadOf(ctx);
-      if (!payload) return;
-      relaunchTerminal(terminalId(ctx), payload, payload.agent === "claude" && payload.claudeSessionId ? "resume" : "new");
-    },
+    run: forTerminal((id, _ctx, payload) => {
+      relaunchTerminal(id, payload, payload.agent === "claude" && payload.claudeSessionId ? "resume" : "new");
+    }),
   }),
   command("terminal.stop", {
     section: terminalSection,
     available: (ctx) => hasTerminal(ctx) && isRunning(terminalId(ctx)),
-    run: (ctx) => stopTerminal(terminalId(ctx)),
+    run: forTerminal((id) => stopTerminal(id)),
   }),
   command("terminal.pause", {
     section: terminalSection,
@@ -104,9 +109,9 @@ export const CURRENT: readonly Command[] = [
       const facts = factsOf(ctx);
       return facts !== null && canPause(facts);
     },
-    run: async (ctx) => {
-      await pauseAgents([terminalId(ctx)]);
-    },
+    run: forTerminal(async (id) => {
+      await pauseAgents([id]);
+    }),
   }),
   command("terminal.resume", {
     section: terminalSection,
@@ -114,30 +119,30 @@ export const CURRENT: readonly Command[] = [
       const facts = factsOf(ctx);
       return facts !== null && canResume(facts);
     },
-    run: async (ctx) => {
-      await resumeAgent(terminalId(ctx));
-    },
+    run: forTerminal(async (id) => {
+      await resumeAgent(id);
+    }),
   }),
   command("terminal.close", {
     section: terminalSection,
     available: hasTerminal,
-    run: (ctx) => requestClose(terminalId(ctx)),
+    run: forTerminal((id) => requestClose(id)),
   }),
   command("terminal.copy", {
     section: terminalSection,
     available: hasTerminal,
     disabled: (ctx) => (terminalSelection(terminalId(ctx)) ? null : catalog().reasons.noSelection),
-    run: async (ctx) => {
-      await navigator.clipboard.writeText(terminalSelection(terminalId(ctx)));
-    },
+    run: forTerminal(async (id) => {
+      await navigator.clipboard.writeText(terminalSelection(id));
+    }),
   }),
   command("terminal.paste", {
     section: terminalSection,
     available: hasTerminal,
-    run: async (ctx) => {
+    run: forTerminal(async (id) => {
       const text = await readClipboardText();
-      if (text !== null) pasteIntoTerminal(terminalId(ctx), text);
-    },
+      if (text !== null) pasteIntoTerminal(id, text);
+    }),
   }),
   command("group.rename", {
     section: groupSection,
