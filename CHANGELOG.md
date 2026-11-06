@@ -7,6 +7,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 ### Added
 - The Agents panel shows a "Launch a mission" button on each orchestrator whose mission is planned, so a mission starts in one click without opening its node; clicking an orchestrator in the panel no longer moves the view (#2).
 - **Workspace tabs:** the order you give them by dragging (or Alt+←/→) is now saved with the workspaces through a `reorder_workspaces` command, and survives a restart (#85).
+- **Usage detail:** an "Activity · 30 days" section maps each day of the last 30 by the tokens Claude spent (a column per week), with active days, current and longest streak, busiest day and the averages per active day and per session. It reads the same local logs as the Tokens view, so it survives a restart and nothing is sent (#74).
 
 ### Fixed
 - **Status line:** a change to your own `statusLine` in Claude's settings is now picked up during the session instead of only at launch; the usage bar slowness, newline, reset date, resumed-session and cache points of the card were already in (#20).
