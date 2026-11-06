@@ -5,6 +5,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 ## [Unreleased]
 
 ### Fixed
+- **Title bar:** the whole bar now drags the window (logo, app name and gaps included, buttons still click), and the stacking rule keeping it above the canvas is documented (#57).
 - **Language switch:** the "diff truncated" marker of the review now follows the interface language (#33).
 - **Workspaces:** two workspaces of a project can no longer share a name (case aside), by creation or rename, with an error saying so. The rest of the project-list robustness card was already in: folders checked outside the database lock, no "Rename" on a missing project, agent names in the delete confirmation, the agent list awaited before "New console", save failures toasted (#31).
 - **Step timeline:** a declared step list with duplicate titles (case aside) is refused, the sub-agent "×N" stays visible next to a truncated title, an in-progress step no longer pulses under a stopped terminal, and sub-agent counts survive a page reload (#75).
