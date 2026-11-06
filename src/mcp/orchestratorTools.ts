@@ -9,7 +9,7 @@ import { boardView } from "@/kanban/missionLink";
 import { LEVELS, modelLabel } from "@/mission/router";
 import { readTickets } from "@/mission/tickets";
 import { linkedBoards } from "@/kanban/orchestrate";
-import { agentGroup, agentState, busyLinkedAgents, linkedClaudeAgents, linkedGroups, missionOf, canvasKnown, setMission, updateMember } from "@/mission/store";
+import { agentGroup, agentState, busyLinkedAgents, linkedClaudeAgents, linkedGroups, missionOf, canvasKnown, readCanvas, setMission, updateMember } from "@/mission/store";
 import { terminalText } from "@/nodes/terminal/registry";
 import { agentActivityStore } from "@/store/agentActivity";
 import { nodesStore, sessionOf, terminalOf } from "@/store/nodes";
@@ -393,6 +393,8 @@ async function remote(orchestratorId: string, mission: Mission, args: Record<str
 export async function orchestratorTool(orchestratorId: string, name: string, args: Record<string, unknown>): Promise<ToolResult> {
   const mission = missionOf(nodesStore.getState().nodes[orchestratorId]);
   if (!mission) return refused(t().orchestrator.gone);
+  // Off screen, its wires and groups come from its saved scene: read once, if it never was (#69).
+  await readCanvas(orchestratorId);
   switch (name) {
     case "mission":
       return describeMission(orchestratorId, mission);

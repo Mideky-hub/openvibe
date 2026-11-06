@@ -1,6 +1,6 @@
 import { canvasStore } from "@/canvas/canvasStore";
 import { framesFromScene, groupOf } from "@/canvas/groups";
-import { cachedElements } from "@/canvas/sceneCache";
+import { cachedElements, loadScene } from "@/canvas/sceneCache";
 import { AGENTS } from "@/fleet/catalog";
 import { linkedAgents, NO_LINKS, orchestratorLinks } from "@/fleet/wires";
 import { agentActivityStore } from "@/store/agentActivity";
@@ -73,6 +73,15 @@ export function workspaceCanvas(workspaceId: string | undefined): Pick<ReturnTyp
 export function canvasKnown(orchestratorId: string): boolean {
   const record = nodesStore.getState().nodes[orchestratorId];
   return record !== undefined && (orchestratorShown(orchestratorId) || cachedElements(record.workspaceId) !== undefined);
+}
+
+/** Whether the orchestrator's canvas is known, its saved scene read first if it never was since startup (#69). */
+export async function readCanvas(orchestratorId: string): Promise<boolean> {
+  const record = nodesStore.getState().nodes[orchestratorId];
+  if (!record || canvasKnown(orchestratorId)) return record !== undefined;
+  // An unreadable scene leaves it unknown: the tools say so rather than guess.
+  await loadScene(record.workspaceId).catch((error: unknown) => console.warn("orchestrator's scene not read", error));
+  return canvasKnown(orchestratorId);
 }
 
 const canvasOfNode = (nodeId: string) => workspaceCanvas(nodesStore.getState().nodes[nodeId]?.workspaceId);
