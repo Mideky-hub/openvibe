@@ -24,10 +24,10 @@ const ROW_COLOR: Partial<Record<DiffLine["kind"], string>> = {
 /** One line of a diff; `onClick` makes it take a remark, without it the diff is read-only. */
 export function DiffRow({ line, onClick }: { line: DiffLine; onClick?: () => void }) {
   const t = useMessages(reviewMessages);
-  if (line.kind === "hunk" || line.kind === "meta") {
+  if (line.kind === "hunk" || line.kind === "meta" || line.kind === "cut") {
     return (
       <div data-diff-line={line.kind} className="bg-ov-field px-3 text-ov-text-3">
-        {line.text}
+        {line.kind === "cut" ? t.diffCut : line.text}
       </div>
     );
   }
