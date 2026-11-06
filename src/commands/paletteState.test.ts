@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { CommandContext } from "./command";
-import { closePalette, modeOf, openPalette, paletteStore, setPaletteQuery, stripPrefix } from "./paletteState";
+import { chosenKey, closePalette, modeOf, openPalette, paletteStore, setPaletteQuery, stripPrefix } from "./paletteState";
 
 const ctx: CommandContext = { project: true, workspaceId: "w1", terminalCount: 2, terminalId: "isis" };
 
@@ -47,5 +47,20 @@ describe("the palette (spec fenêtre §7.1)", () => {
     closePalette();
     expect(paletteStore.getState().open).toBe(false);
     expect(document.activeElement).toBe(xterm);
+  });
+});
+
+describe("chosenKey (the line chosen while typing)", () => {
+  it("keeps the line chosen by the arrow keys for the same query", () => {
+    expect(chosenKey({ query: "th", key: "b" }, "th", ["a", "b"])).toBe("b");
+  });
+
+  it("drops a choice made for another query at once, the first line being chosen", () => {
+    expect(chosenKey({ query: "th", key: "b" }, "tho", ["a", "b"])).toBe("a");
+  });
+
+  it("falls back to the first line when the chosen one is no longer listed", () => {
+    expect(chosenKey({ query: "th", key: "z" }, "th", ["a", "b"])).toBe("a");
+    expect(chosenKey({ query: "", key: "" }, "", [])).toBe("");
   });
 });
