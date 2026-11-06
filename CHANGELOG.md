@@ -6,6 +6,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ### Fixed
 - A shortcut pressed with a menu open no longer ends placement or link mode, and a click outside the palette closes it without moving the keyboard to what lies underneath.
+- A copied terminal no longer reads *Terminal not found* while it is being set up, and the agents of a new group no longer show *Stopped* before they start.
 
 ## [1.2.0-beta.1] - 2026-11-01
 
