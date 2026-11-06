@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AGENT_IDS } from "@/ipc/pty";
 import { AGENT_ORDER, AGENTS, AGENTS_WITHOUT_OPTIONS, agentInk, defaultAgent } from "./catalog";
+import { defaultAgentStore } from "./defaultAgentChoice";
 
 describe("agent catalog", () => {
   it("describes every agent, in menu order", () => {
@@ -15,6 +16,21 @@ describe("agent catalog", () => {
     expect(defaultAgent(info("codex"))).toBe("codex");
     expect(defaultAgent(info())).toBe("shell");
     expect(defaultAgent([])).toBe("shell");
+  });
+
+  it("picks the default agent of the settings while it is on this computer", () => {
+    const info = (...ids: string[]) => AGENT_IDS.map((id) => ({ id, available: ids.includes(id) }));
+    expect(defaultAgent(info("claude", "gemini"), "gemini")).toBe("gemini");
+    expect(defaultAgent(info("claude"), "shell")).toBe("shell");
+    expect(defaultAgent(info("claude"), "gemini")).toBe("claude");
+    expect(defaultAgent(info("claude"), "auto")).toBe("claude");
+  });
+
+  it("reads the default agent of the settings when none is given", () => {
+    const info = (...ids: string[]) => AGENT_IDS.map((id) => ({ id, available: ids.includes(id) }));
+    defaultAgentStore.setState({ choice: "codex" });
+    expect(defaultAgent(info("claude", "codex"))).toBe("codex");
+    defaultAgentStore.setState({ choice: "auto" });
   });
 });
 
