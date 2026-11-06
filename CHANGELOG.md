@@ -4,6 +4,9 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Fixed
+- Pinching on a laptop trackpad now zooms the canvas, also when the fingers are over a terminal, a board or an orchestrator (#89).
+
 ## [1.2.0-beta.1] - 2026-11-01
 
 ### Added
