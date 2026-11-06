@@ -4,6 +4,9 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Added
+- **Tokens:** the 30-day view now also reads Codex's local logs (`~/.codex/sessions`, or `CODEX_HOME`), read-only and on this PC only: its sessions get their own row with their main model, next to OpenVibe's agents and the other Claude sessions. A missing or unreadable log folder, Claude's or Codex's, now counts for nothing instead of showing an error (#76).
+
 ### Fixed
 - **Status line:** a change to your own `statusLine` in Claude's settings is now picked up during the session instead of only at launch; the usage bar slowness, newline, reset date, resumed-session and cache points of the card were already in (#20).
 - **Icon panel card:** each category already had its own loading and error state, the thumbnail cache was bounded and dropped failed drawings, rotated icons centred by their turned bounds, the panel stayed without a canvas, copies got fresh seeds and an icon dropped on a group joined its frame; the per-category failure and the search-while-loading messages are now covered by tests (#16).
