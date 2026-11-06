@@ -20,6 +20,8 @@ export interface ClaudeLaunch {
   permission?: Permission;
   /** The profile's folder: this terminal's `CLAUDE_CONFIG_DIR` (spec comptes §4). */
   configDir?: string;
+  /** Its group, role and speciality, added to its instructions (issue #66). */
+  team?: string;
 }
 
 /** Agents of the launch menu (spec habillage §8), in menu order. */
