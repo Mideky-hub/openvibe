@@ -5,6 +5,7 @@ export interface AgentActivity {
   activity: Activity;
   since: number;
   message?: string;
+  seq?: number;
 }
 
 interface AgentActivityState {
@@ -31,15 +32,27 @@ function sameWait(held: AgentActivity, event: AgentActivity): boolean {
   return held.activity === "waiting" && event.activity === "waiting" && Math.abs(held.since - event.since) <= SAME_WAIT_MS;
 }
 
+/**
+ * An event older than the one held arrived out of order (two Rust threads emit after releasing their lock)
+ * or is a startup snapshot overtaken by a live event. Rust numbers its changes; without numbers, `since`
+ * dates them, on a wall clock that can go back.
+ */
+function stale(held: AgentActivity, event: AgentActivity): boolean {
+  if (held.seq !== undefined && event.seq !== undefined) return event.seq < held.seq;
+  return !sameWait(held, event) && held.since > event.since;
+}
+
+/** The event, keeping the place of an agent that still waits. */
+function newer(held: AgentActivity | undefined, event: AgentActivity): AgentActivity {
+  return held && sameWait(held, event) ? { ...event, since: held.since } : event;
+}
+
 export const agentActivityStore = createStore<AgentActivityState>()((set) => ({
   activities: {},
-  // `since` dates each transition: an event older than the one held arrived out of order (two Rust threads
-  // emit after releasing their lock) or is a startup snapshot overtaken by a live event, and is dropped.
   apply: ({ nodeId, ...event }) =>
     set((s) => {
       const held = s.activities[nodeId];
-      if (held && sameWait(held, event)) return { activities: { ...s.activities, [nodeId]: { ...event, since: held.since } } };
-      return held && held.since > event.since ? s : { activities: { ...s.activities, [nodeId]: event } };
+      return held && stale(held, event) ? s : { activities: { ...s.activities, [nodeId]: newer(held, event) } };
     }),
   load: (events) =>
     set((s) => {
@@ -47,7 +60,7 @@ export const agentActivityStore = createStore<AgentActivityState>()((set) => ({
       const activities: Record<string, AgentActivity> = {};
       for (const { nodeId, ...event } of events) {
         const held = s.activities[nodeId];
-        activities[nodeId] = held && held.since > event.since ? held : event;
+        activities[nodeId] = held && stale(held, event) ? held : newer(held, event);
       }
       return { activities };
     }),

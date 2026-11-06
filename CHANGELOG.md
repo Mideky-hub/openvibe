@@ -6,15 +6,18 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ### Fixed
 - **Renaming a group** from the palette now waits for the view to reach it before opening the name field, so the labels no longer drift when the group was off screen (#7).
+- A token left in `curl.cfg` by a previous run is deleted at startup, and a Codex terminal launched under `cmd` from a profile path holding `%`, `!` or `^` is covered by tests (it starts without the hook, with a warning in the log, rather than with a wrong path).
 - A node's × now closes it at the first click, instead of selecting it first (#47).
 - **Icon libraries:** what a library drops (embeddable content, frames, images) is now logged, and Excalidraw no longer tries its `esm.sh` font fallback, which flooded the console with ~460 blocked requests on each load (#13).
 - OpenVibe's MCP server is stricter with what agents send: a malformed request gets a proper JSON-RPC error instead of a silent answer, a flood of calls is turned away (503) instead of holding a thread each, and a terminal relaunched as its previous process exits keeps its access to OpenVibe's tools.
 - Pinching on a laptop trackpad now zooms the canvas, also when the fingers are over a terminal, a board or an orchestrator (#89).
 - A shortcut pressed with a menu open no longer ends placement or link mode, and a click outside the palette closes it without moving the keyboard to what lies underneath.
 - A copied terminal no longer reads *Terminal not found* while it is being set up, and the agents of a new group no longer show *Stopped* before they start.
+- Going to an agent of another workspace gives its terminal the keyboard even when it mounts late, and a "go to" still waiting for its workspace no longer fires later if you moved to another tab, the home screen or another project in the meantime (#38).
 - **Mission clock:** an overrun warning that was still waiting for a busy orchestrator is no longer lost if OpenVibe closes, and restarting OpenVibe after a long pause no longer fires a burst of "global budget used up" toasts: each one waits for its orchestrator to be restarted.
 - A request that makes OpenVibe's local server fail is now written to the log with its address (never its token), so the failure can be traced; the server keeps answering the next ones (#6).
 - **Missions:** an agent wired to two orchestrators can no longer join a second mission while the first one is launching or before its sub-task is typed; the orchestrator is told the agent works for another running mission instead of "not linked" (#64).
+- **Agent activity:** resizing a terminal without hooks (Shell, Codex, Gemini…) no longer lights WORKING while it redraws, and a badge no longer stays stale when two changes arrive out of order or the clock is set back (#14).
 
 ## [1.2.0-beta.1] - 2026-11-01
 

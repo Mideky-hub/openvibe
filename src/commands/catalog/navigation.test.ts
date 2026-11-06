@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { showAbout } from "@/app/about";
+import { arrive, arrivingNode } from "@/canvas/arrive";
+import { canvasStore } from "@/canvas/canvasStore";
 import { fitScene, zoomTo } from "@/canvas/viewActions";
 import { agentsPanelStore } from "@/fleet/agentsPanelState";
 import { currentWaitingAgents } from "@/fleet/waitingAgents";
@@ -105,6 +108,22 @@ describe("Navigation (spec fenêtre §7.3)", () => {
     expect(next.available(busy)).toBe(true);
     await next.run(busy);
     expect(goToNextWaiting).toHaveBeenCalledWith("isis");
+  });
+
+  it("steps on from the terminal still arriving: a held Ctrl+Tab never targets the same one twice (plan E1)", async () => {
+    const terminal = (id: string, x: number) => ({ id, type: "embeddable", customData: { kind: "terminal" }, x, y: 0, width: 100, height: 100 });
+    canvasStore.setState({
+      api: { getSceneElements: () => [terminal("isis", 0), terminal("thot", 200), terminal("ra", 400)] } as unknown as ExcalidrawImperativeAPI,
+    });
+    const next = find(NAVIGATION, "terminal.next");
+    await next.run(busy);
+    expect(arrive).toHaveBeenLastCalledWith("thot");
+    // The repeat comes before the keyboard reached Thot: the context still names Isis.
+    vi.mocked(arrivingNode).mockReturnValue("thot");
+    await next.run(busy);
+    expect(arrive).toHaveBeenLastCalledWith("ra");
+    vi.mocked(arrivingNode).mockReturnValue(null);
+    canvasStore.setState({ api: null });
   });
 
   it("offers nothing but « Aller à… » outside a project", () => {
