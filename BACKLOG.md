@@ -122,12 +122,7 @@ Ce qui est reporté. La spec en cours est `docs/superpowers/specs/2026-10-24-ope
 
 ## Constats du plan H2 (mission de l'orchestrateur, relecture finale)
 
-- Les orchestrateurs créés avant H2 gardent leur taille 320 × 420 : le terminal de Claude et le panneau y sont à l'étroit.
 - La détection « Claude est prêt » lit l'écran : la boîte de saisie (`❯` sous un trait) et l'invite de confiance (« trust » + « folder »). Une autre mise en page de Claude retombe sur le délai de 60 s.
-
-## Constats du plan H3 (temps d'une mission, relecture finale)
-
-- L'horloge ne voit que les missions des espaces chargés depuis le démarrage.
 
 ## Constats de la mise à jour du 27 octobre (relectures)
 
