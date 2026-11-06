@@ -5,6 +5,7 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 ## [Unreleased]
 
 ### Fixed
+- The palette no longer shows the previous line as selected for a frame after each keystroke or arrow key: the line chosen by the arrows only holds for the search it was made for.
 - **Theme & UI polish card:** the git chip's branch truncation (now covered by a test), the Agents panel stopping above the resume offer, its filter reset on reopen from the rail, the toast shadow out-ranking sonner's injected style and the first-paint theme script were already in; the agent rows' hover actions (Center, Review, Pause/Resume, Close) are complete (#60).
 - **Theme & UI:** the canvas selection color now shows the accent token in the dark theme (Excalidraw draws it through its dark filter, so it is given pre-inverted). The zen/reading exit pill, the Shapes button keeping the last shape and the Pen menu leaving the shared color and width alone were already in and tested (#27).
 - The palette no longer fails with an error when a terminal closes between opening it and pressing Enter, and a command's pending request to open a menu or editor is dropped when you switch tab, project or the home screen, instead of firing at a later mount (#44).
