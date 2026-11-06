@@ -20,10 +20,14 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
 
+    /* No Node types here: the test helpers that need them live in tsconfig.test.json. */
+    "types": ["vite/client"],
+
     "paths": {
       "@/*": ["./src/*"]
     }
   },
   "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/theme/cssBlocks.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
