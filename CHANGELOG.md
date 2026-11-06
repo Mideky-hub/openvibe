@@ -4,6 +4,9 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Added
+- The Agents panel shows a "Launch a mission" button on each orchestrator whose mission is planned, so a mission starts in one click without opening its node; clicking an orchestrator in the panel no longer moves the view (#2).
+
 ### Fixed
 - The README model-router tables now use the effort IDs accepted by the orchestrator (`low`, `medium`, `high`, `extreme`), with French labels alongside them in the French README.
 - **Status line:** a change to your own `statusLine` in Claude's settings is now picked up during the session instead of only at launch; the usage bar slowness, newline, reset date, resumed-session and cache points of the card were already in (#20).
