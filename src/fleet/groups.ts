@@ -30,6 +30,8 @@ import { isWire } from "./wires";
 export interface GroupPlan {
   name: string;
   role: RoleId;
+  /** Set with the frame: its first agent starts knowing it (issue #66). */
+  speciality?: string;
   agents: AgentId[];
 }
 
@@ -79,7 +81,7 @@ export async function launchGroup(
     obstacles,
   );
   const name = plan.name.trim() || ROLES[plan.role].label;
-  const frame = createGroupFrame({ ...origin, width: grid.width, height: grid.height }, name, { role: plan.role, pantheon });
+  const frame = createGroupFrame({ ...origin, width: grid.width, height: grid.height }, name, { role: plan.role, pantheon, ...(plan.speciality ? { speciality: plan.speciality } : {}) });
   const taken = namesInWorkspace(workspaceId);
   const terminals: ExcalidrawElement[] = [];
   const nodeIds: string[] = [];

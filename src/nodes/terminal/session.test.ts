@@ -3,7 +3,10 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { accountsStore, openAccounts } from "@/accounts/store";
 import type { TerminalPayload } from "@/nodes/types";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { canvasStore } from "@/canvas/canvasStore";
 import { nodesStore } from "@/store/nodes";
+import { workspacesStore } from "@/store/workspaces";
 import { statusOf, terminalStatusStore } from "@/store/terminalStatus";
 import { acceptsInput, attachSession, reattachSession, relaunchSession, restoreSession, startSession, type TermSink } from "./session";
 
@@ -43,6 +46,26 @@ it("marks the terminal running before spawning, so ConPTY's cursor query can be 
   await startSession("t", fakeTerm(), payload, "new");
   expect(statusDuringSpawn).toBe("running");
   expect(calls[0].args).toMatchObject({ nodeId: "t", cols: 100, rows: 30, spec: { agent: "shell" } });
+});
+
+it("starts a Claude agent of a group knowing its group's role and speciality (issue #66)", async () => {
+  const claude: TerminalPayload = { ...payload, agent: "claude", claudeSessionId: "s1" };
+  mockIPC((cmd, args) => {
+    calls.push({ cmd, args: args as Record<string, unknown> });
+    return 1;
+  });
+  const frame = { id: "g", type: "frame", name: "Back", isDeleted: false, customData: { openvibe: { kind: "group", role: "backend", pantheon: "egyptian", speciality: "API" } } };
+  const elements = [{ id: "c", type: "embeddable", isDeleted: false, frameId: "g" }, frame];
+  canvasStore.setState({ api: { getSceneElementsIncludingDeleted: () => elements } as unknown as ExcalidrawImperativeAPI });
+  workspacesStore.setState({ activeId: "w" });
+  try {
+    await nodesStore.getState().create("c", { workspaceId: "w", kind: "terminal", payload: claude });
+    await startSession("c", fakeTerm(), claude, "new");
+    const spec = calls.find((c) => c.cmd === "pty_spawn")!.args.spec as { claude: { team?: string } };
+    expect(spec.claude.team).toContain("« Back » (rôle : Backend ; spécialité : API)");
+  } finally {
+    canvasStore.setState({ api: null });
+  }
 });
 
 it("gives a Claude terminal without a conversation id one, and keeps it in its node", async () => {
