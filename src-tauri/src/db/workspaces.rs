@@ -150,6 +150,31 @@ pub fn delete(conn: &Connection, id: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// Saves the tab order of a project: `ids` come first, in that order, then the
+/// workspaces left out in their current order. All or nothing: an id that is
+/// not one of the project's workspaces refuses the whole call.
+pub fn reorder(conn: &Connection, project_id: &str, ids: &[String]) -> AppResult<()> {
+    let current: Vec<String> = list(conn, project_id)?.into_iter().map(|w| w.id).collect();
+    if let Some(unknown) = ids.iter().find(|id| !current.contains(id)) {
+        return Err(not_found(unknown));
+    }
+    let mut order: Vec<&String> = Vec::with_capacity(current.len());
+    for id in ids.iter().chain(&current) {
+        if !order.contains(&id) {
+            order.push(id);
+        }
+    }
+    let tx = conn.unchecked_transaction()?;
+    for (position, id) in order.into_iter().enumerate() {
+        tx.execute(
+            "UPDATE workspaces SET position = ?2 WHERE id = ?1",
+            params![id, position as i64],
+        )?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
 pub fn set_pantheon(conn: &Connection, id: &str, pantheon: &str) -> AppResult<()> {
     let pantheon = pantheon.trim();
     if pantheon.is_empty() {
@@ -308,6 +333,38 @@ mod tests {
                 })
                 .unwrap();
         });
+    }
+
+    #[test]
+    fn reorders_a_projects_workspaces_and_keeps_the_order() {
+        Db::open_in_memory()
+            .unwrap()
+            .with(|conn| {
+                let p = project(conn, "C:/p");
+                let q = project(conn, "C:/q");
+                let a = create(conn, &p, "A", CANVAS)?;
+                let b = create(conn, &p, "B", CANVAS)?;
+                let c = create(conn, &p, "C", CANVAS)?;
+                create(conn, &q, "Q", CANVAS)?;
+                reorder(conn, &p, &[c.id.clone(), a.id.clone(), b.id.clone()])?;
+                assert_eq!(names(conn, &p), ["C", "A", "B"]);
+                // A new workspace goes after the reordered ones.
+                create(conn, &p, "D", CANVAS)?;
+                assert_eq!(names(conn, &p), ["C", "A", "B", "D"]);
+                // Ids left out keep their relative order, after the listed ones.
+                reorder(conn, &p, std::slice::from_ref(&b.id))?;
+                assert_eq!(names(conn, &p), ["B", "C", "A", "D"]);
+                // Unknown ids and another project's ids are refused, nothing moves.
+                assert_eq!(
+                    reorder(conn, &p, &["nope".to_string()]).unwrap_err().kind(),
+                    "notFound"
+                );
+                let other = list(conn, &q)?[0].id.clone();
+                assert!(reorder(conn, &p, &[other]).is_err());
+                assert_eq!(names(conn, &p), ["B", "C", "A", "D"]);
+                Ok(())
+            })
+            .unwrap();
     }
 
     #[test]
