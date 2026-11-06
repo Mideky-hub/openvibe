@@ -132,6 +132,7 @@ pub fn run() {
             commands::workspace::list_workspaces,
             commands::workspace::create_workspace,
             commands::workspace::rename_workspace,
+            commands::workspace::reorder_workspaces,
             commands::workspace::delete_workspace,
             commands::workspace::load_workspace,
             commands::workspace::save_scene,
