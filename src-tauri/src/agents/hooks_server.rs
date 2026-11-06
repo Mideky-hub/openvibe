@@ -869,6 +869,38 @@ mod tests {
     }
 
     #[test]
+    fn malformed_mcp_requests_get_a_json_rpc_error_with_a_body() {
+        let (tx, _rx) = mpsc::channel();
+        let server = start(Arc::new(TestSink::new(tx))).unwrap();
+        let auth = [("Authorization", "Bearer tok-n1")];
+        let code = |body: &[u8]| {
+            let (status, body) = exchange(server.port, "POST", "/mcp", &auth, body);
+            let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+            (status, json["error"]["code"].clone())
+        };
+        assert_eq!(code(b"not json"), (200, serde_json::json!(-32700)));
+        assert_eq!(
+            code(br#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":null}"#),
+            (200, serde_json::json!(-32602))
+        );
+        assert_eq!(
+            code(br#"{"jsonrpc":"2.0","id":2}"#),
+            (200, serde_json::json!(-32600))
+        );
+        let (status, body) = exchange(
+            server.port,
+            "POST",
+            "/mcp",
+            &auth,
+            br#"[{"jsonrpc":"2.0","id":1,"method":"ping"},{"jsonrpc":"2.0","id":2,"method":"nope"}]"#,
+        );
+        assert_eq!(status, 200);
+        let replies: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(replies[0]["result"], serde_json::json!({}));
+        assert_eq!(replies[1]["error"]["code"], -32601);
+    }
+
+    #[test]
     fn a_status_line_posting_too_much_gets_413() {
         let (tx, _rx) = mpsc::channel();
         let sink = Arc::new(TestSink::new(tx));
