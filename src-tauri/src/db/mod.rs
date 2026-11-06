@@ -31,6 +31,7 @@ const MIGRATIONS: &[Step] = &[
     Step::Sql(include_str!("migrations/003_file_nodes.sql")),
     Step::Sql(include_str!("migrations/004_workspace_kind.sql")),
     Step::Sql(include_str!("migrations/005_goals_nodes.sql")),
+    Step::Sql(include_str!("migrations/006_calendar_nodes.sql")),
 ];
 
 /// The single SQLite connection shared by every command (spec V1 §8.1).
@@ -369,6 +370,71 @@ mod tests {
         assert_eq!(count("SELECT COUNT(*) FROM terminal_scrollback"), 0);
     }
 
+    #[test]
+    fn migration_6_keeps_the_nodes_and_their_scrollback_and_accepts_calendar_nodes() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        migrate_up_to(&mut conn, 5, "C:/home").unwrap();
+        let (_, workspace) = raw_workspace(&conn);
+        conn.execute(
+            "INSERT INTO nodes VALUES ('t1', ?1, 'terminal', '{}', 10), ('g1', ?1, 'goals', '{}', 11)",
+            [&workspace],
+        )
+        .unwrap();
+        conn.execute_batch("INSERT INTO terminal_scrollback VALUES ('t1', x'41', 12);")
+            .unwrap();
+        let insert_calendar = |conn: &Connection, id: &str| {
+            conn.execute(
+                "INSERT INTO nodes VALUES (?1, ?2, 'calendar', '{\"events\":[]}', 13)",
+                [id, workspace.as_str()],
+            )
+        };
+        assert!(insert_calendar(&conn, "c0").is_err());
+
+        migrate_up_to(&mut conn, 6, "C:/home").unwrap();
+
+        let count = |sql: &str| -> i64 { conn.query_row(sql, [], |row| row.get(0)).unwrap() };
+        assert_eq!(count("SELECT COUNT(*) FROM nodes"), 2);
+        assert_eq!(count("SELECT COUNT(*) FROM nodes WHERE kind = 'goals'"), 1);
+        assert_eq!(
+            count("SELECT COUNT(*) FROM terminal_scrollback WHERE node_id = 't1'"),
+            1
+        );
+        assert_eq!(
+            count(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'nodes_workspace'"
+            ),
+            1
+        );
+        insert_calendar(&conn, "c1").unwrap();
+        for (id, kind) in [
+            ("t2", "terminal"),
+            ("o2", "orchestrator"),
+            ("n2", "note"),
+            ("k2", "kanban"),
+            ("v2", "git"),
+            ("f2", "file"),
+            ("g2", "goals"),
+        ] {
+            conn.execute(
+                "INSERT INTO nodes VALUES (?1, ?2, ?3, '{}', 14)",
+                [id, workspace.as_str(), kind],
+            )
+            .unwrap();
+        }
+        assert!(
+            conn.execute(
+                "INSERT INTO nodes VALUES ('x', ?1, 'other', '{}', 15)",
+                [&workspace]
+            )
+            .is_err()
+        );
+        // The cascades still reach the rebuilt table.
+        conn.execute("DELETE FROM nodes WHERE id = 't1'", [])
+            .unwrap();
+        assert_eq!(count("SELECT COUNT(*) FROM terminal_scrollback"), 0);
+    }
+
     fn base_at_version(path: &Path, version: usize) {
         let mut conn = Connection::open(path).unwrap();
         migrate_up_to(&mut conn, version, "C:/home").unwrap();
@@ -486,7 +552,7 @@ mod tests {
         .unwrap();
     }
 
-    /// A 1.1.0-beta.1 base (v4) climbs to the goals widget's schema with a copy, its rows kept.
+    /// A 1.1.0-beta.1 base (v4) climbs to the latest schema (goals, calendar) with a copy, its rows kept.
     #[test]
     fn a_base_of_the_published_version_keeps_its_rows() {
         let dir = tempfile::tempdir().unwrap();

@@ -98,6 +98,18 @@ describe("design tokens (spec identité §4.2)", () => {
     expect(cssBlock(tokens, ':root[data-theme][data-transparency="off"]')).toMatchObject(OPAQUE);
   });
 
+  it("gives the calendar's six event colors a value in each theme (issue #32)", () => {
+    const names = ["terracotta", "ochre", "sage", "slate", "lilac", "rose"].map((c) => `--ov-event-${c}`);
+    const dark = cssBlock(tokens, ':root, :root[data-theme="dark"]');
+    const light = cssBlock(tokens, ':root[data-theme="light"]');
+    for (const name of names) {
+      expect(dark[name], name).toMatch(/^#[0-9A-F]{6}$/);
+      expect(light[name], name).toMatch(/^#[0-9A-F]{6}$/);
+    }
+    expect(new Set(names.map((n) => dark[n])).size).toBe(6);
+    expect(new Set(names.map((n) => light[n])).size).toBe(6);
+  });
+
   it("offers the glass and ambient utilities built on these tokens", () => {
     expect(index).toMatch(/\.ov-glass \{[^}]*var\(--ov-glass\)[^}]*var\(--ov-blur\)/);
     expect(index).toMatch(/\.ov-glass-strong \{[^}]*var\(--ov-glass-strong\)[^}]*var\(--ov-blur\)/);
