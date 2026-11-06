@@ -77,17 +77,48 @@ export function canvasKnown(orchestratorId: string): boolean {
 
 const canvasOfNode = (nodeId: string) => workspaceCanvas(nodesStore.getState().nodes[nodeId]?.workspaceId);
 
-/** The Claude agents wired to an orchestrator: only they have OpenVibe's tools for a mission (spec §2). */
-export function linkedClaudeAgents(orchestratorId: string): { nodeId: string; name: string }[] {
+/** The linked agents each launch under way has read free: its team is not stored before its worktrees exist. */
+const enrolling = new Map<string, readonly string[]>();
+
+export function reserveAgents(orchestratorId: string, nodeIds: readonly string[]) {
+  enrolling.set(orchestratorId, nodeIds);
+}
+
+export function releaseAgents(orchestratorId: string) {
+  enrolling.delete(orchestratorId);
+}
+
+/**
+ * Whether an agent works for another orchestrator's mission: being enrolled by
+ * its launch, or a member of it running, its sub-task typed or not yet (#64).
+ */
+export function inOtherMission(nodeId: string, orchestratorId: string): boolean {
+  for (const [id, nodeIds] of enrolling) if (id !== orchestratorId && nodeIds.includes(nodeId)) return true;
+  // Unlike memberOf, before its sub-task is typed: it is already moving to that mission's worktree.
+  return Object.entries(nodesStore.getState().nodes).some(([id, record]) => {
+    const mission = missionOf(record);
+    return id !== orchestratorId && mission?.state === "en_cours" && !closedOrchestrators.has(id) && mission.members.some((m) => m.nodeId === nodeId);
+  });
+}
+
+function linkedClaude(orchestratorId: string): { nodeId: string; name: string; busy: boolean }[] {
   const { links, frames } = canvasOfNode(orchestratorId);
   const nodes = nodesStore.getState().nodes;
   return linkedAgents(links[orchestratorId] ?? NO_LINKS, frames).agentIds.flatMap((nodeId) => {
-    // An agent already working for another running mission is not free to be enrolled in this one.
-    const elsewhere = memberOf(nodeId);
-    if (elsewhere && elsewhere.orchestratorId !== orchestratorId) return [];
     const payload = terminalOf(nodes[nodeId]);
-    return payload?.agent === "claude" ? [{ nodeId, name: payload.name || AGENTS.claude.label }] : [];
+    return payload?.agent === "claude" ? [{ nodeId, name: payload.name || AGENTS.claude.label, busy: inOtherMission(nodeId, orchestratorId) }] : [];
   });
+}
+
+/** The Claude agents wired to an orchestrator: only they have OpenVibe's tools for a mission (spec §2). */
+export function linkedClaudeAgents(orchestratorId: string): { nodeId: string; name: string }[] {
+  // An agent already working for another running mission is not free to be enrolled in this one.
+  return linkedClaude(orchestratorId).flatMap(({ nodeId, name, busy }) => (busy ? [] : [{ nodeId, name }]));
+}
+
+/** The names of the Claude agents wired to an orchestrator that another mission holds: to say why they are refused. */
+export function busyLinkedAgents(orchestratorId: string): string[] {
+  return linkedClaude(orchestratorId).flatMap(({ name, busy }) => (busy ? [name] : []));
 }
 
 /** The groups wired to an orchestrator, with what each is for (spec groupes spécialisés §3). */
