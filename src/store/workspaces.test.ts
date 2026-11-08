@@ -17,13 +17,23 @@ function fakeBackend(initial: string[] = [], activeSetting: string | null = null
   });
   const db = {
     workspaces: initial.map((name, i) => make(name, i)),
+    reorders: [] as string[][],
     settings: new Map<string, unknown>(activeSetting ? [["ui.activeWorkspaceId.p1", activeSetting]] : []),
   };
   mockIPC((cmd, raw) => {
     const args = raw as Record<string, string>;
     switch (cmd) {
       case "list_workspaces":
-        return db.workspaces.filter((w) => w.projectId === args.projectId).map((w) => ({ ...w }));
+        return db.workspaces
+          .filter((w) => w.projectId === args.projectId)
+          .sort((a, b) => a.position - b.position)
+          .map((w) => ({ ...w }));
+      case "reorder_workspaces": {
+        const ids = raw as unknown as { ids: string[] };
+        db.reorders.push(ids.ids);
+        db.workspaces = db.workspaces.map((w) => ({ ...w, position: ids.ids.indexOf(w.id) }));
+        return;
+      }
       case "create_workspace": {
         // One code workspace per project: the backend hands back the existing one.
         const existing = args.kind === "code" && db.workspaces.find((w) => w.kind === "code");
@@ -45,6 +55,9 @@ function fakeBackend(initial: string[] = [], activeSetting: string | null = null
         return db.settings.get(args.key) ?? null;
       case "set_setting":
         db.settings.set(args.key, (raw as { value: unknown }).value);
+        return;
+      case "delete_setting":
+        db.settings.delete(args.key);
         return;
     }
   });
@@ -133,7 +146,7 @@ describe("workspaces store", () => {
     await state().load("p1");
     await state().move("w3", 0);
     expect(names()).toEqual(["C", "A", "B"]);
-    expect(db.settings.get("ui.workspaceOrder.p1")).toEqual(["w3", "w1", "w2"]);
+    expect(db.reorders[db.reorders.length - 1]).toEqual(["w3", "w1", "w2"]);
     await state().move("w3", 99);
     expect(names()).toEqual(["A", "B", "C"]);
     store = createWorkspacesStore();
@@ -143,6 +156,22 @@ describe("workspaces store", () => {
     store = createWorkspacesStore();
     await state().load("p1");
     expect(names()).toEqual(["B", "A", "C"]);
+  });
+
+  it("migrates the tab order saved in the settings, then drops the old key", async () => {
+    const db = fakeBackend(["A", "B", "C"]);
+    db.settings.set("ui.workspaceOrder.p1", ["w3", "gone", "w1"]);
+    await state().load("p1");
+    expect(db.reorders).toEqual([["w3", "w1", "w2"]]);
+    expect(names()).toEqual(["C", "A", "B"]);
+    expect(db.settings.has("ui.workspaceOrder.p1")).toBe(false);
+  });
+
+  it("leaves the order alone when no old setting exists", async () => {
+    const db = fakeBackend(["A", "B"]);
+    await state().load("p1");
+    expect(db.reorders).toEqual([]);
+    expect(names()).toEqual(["A", "B"]);
   });
 
   it("never removes the last workspace", async () => {

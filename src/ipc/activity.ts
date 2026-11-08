@@ -23,6 +23,9 @@ export interface ActivitySnapshot {
 
 export const agentActivitySnapshot = () => call<ActivitySnapshot>("agent_activity_snapshot");
 
+/** How long a terminal without hooks stays working after its output stops (Rust keeps it between 0.5 and 30 s). */
+export const setActivityThreshold = (ms: number) => call<void>("set_activity_threshold", { ms });
+
 export function onAgentActivity(handler: (event: ActivityEvent) => void): Promise<UnlistenFn> {
   return listen<ActivityEvent>("agent-activity", (event) => handler(event.payload));
 }

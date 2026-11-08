@@ -29,6 +29,15 @@ pub async fn rename_workspace(db: State<'_, Db>, id: String, name: String) -> Ap
 }
 
 #[tauri::command]
+pub async fn reorder_workspaces(
+    db: State<'_, Db>,
+    project_id: String,
+    ids: Vec<String>,
+) -> AppResult<()> {
+    db.with(|conn| workspaces::reorder(conn, &project_id, &ids))
+}
+
+#[tauri::command]
 pub async fn delete_workspace(
     db: State<'_, Db>,
     pty: State<'_, PtyManager>,
@@ -150,6 +159,11 @@ mod tests {
         assert_eq!(pty.list(), vec!["t".to_string()]);
         pty.kill_all();
     }
+}
+
+#[tauri::command]
+pub async fn delete_setting(db: State<'_, Db>, key: String) -> AppResult<()> {
+    db.with(|conn| settings::delete(conn, &key))
 }
 
 #[tauri::command]
