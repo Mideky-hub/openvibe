@@ -1,43 +1,26 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 import { loadAccounts, useAccounts } from "@/accounts/store";
 import { AGENTS } from "@/fleet/catalog";
 import { useMessages } from "@/i18n";
-import { formatDecimal } from "@/i18n/format";
-import { tokenUsage, type TokenReport } from "@/ipc/tokens";
 import { sessionOf, useNodes } from "@/store/nodes";
-import { bars, byAgent, total } from "@/usage/tokens";
+import { useTokenReport } from "@/usage/tokenReport";
+import { bars, byAgent, formatTokens, total } from "@/usage/tokens";
 import { shellMessages } from "./messages";
 
-/** « 67,8 k », « 1,2 M » tokens. */
-function formatTokens(count: number): string {
-  if (count >= 1_000_000) return `${formatDecimal(count / 1_000_000, 1)} M`;
-  if (count >= 1_000) return `${formatDecimal(count / 1_000, 1)} k`;
-  return String(count);
-}
-
 /**
- * The tokens Claude Code logged over 30 days (spec Tokens): a column per day
- * and the part of each agent. Read from the logs on the disk when opened;
- * nothing leaves the machine.
+ * The tokens Claude Code and Codex logged over 30 days (spec Tokens): a column
+ * per day and the part of each agent. Read from the logs on the disk when
+ * opened; nothing leaves the machine.
  */
 export function TokensView({ onBack }: { onBack: () => void }) {
   const u = useMessages(shellMessages).usage;
   const nodes = useNodes((s) => s.nodes);
   const hasProfiles = useAccounts((s) => s.profiles.length > 0);
-  const [report, setReport] = useState<TokenReport | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { report, error } = useTokenReport();
 
   useEffect(() => {
     void loadAccounts();
-    let alive = true;
-    tokenUsage().then(
-      (next) => alive && setReport(next),
-      (failure: unknown) => alive && setError(failure instanceof Error ? failure.message : String(failure)),
-    );
-    return () => {
-      alive = false;
-    };
   }, []);
 
   // The Claude conversations of OpenVibe's own agents, by the id it gave them.
@@ -103,7 +86,7 @@ export function TokensView({ onBack }: { onBack: () => void }) {
           </section>
           <section className="flex flex-col gap-1.5">
             <p className="ov-label">{u.tokensByAgent}</p>
-            {byAgent(report.sessions, names, u.tokensOtherSessions).map((row) => (
+            {byAgent(report.sessions, names, { claude: u.tokensOtherSessions, codex: u.tokensCodexSessions }).map((row) => (
               <div key={row.label} data-agent-row className="flex flex-col text-[12px]">
                 <div className="flex items-center gap-2">
                   <span className={row.other ? "text-ov-text-2" : "text-ov-text"}>{row.label}</span>

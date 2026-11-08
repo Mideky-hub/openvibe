@@ -32,7 +32,7 @@ The meter in the top bar reads Claude Code's usage through a small script run by
 
 ## The Tokens view is empty, or says its reading was cut short
 
-The view reads the `.jsonl` logs that Claude Code keeps under `~/.claude/projects` (or under the folder named by `CLAUDE_CONFIG_DIR`), for the last 30 days, in UTC days. It stays empty if Claude Code has not run on this PC, if its folder is somewhere else, or if its history was cleared. For a very large history OpenVibe stops at fixed limits (number of files, bytes read, time) and says the figures are a minimum. Only Claude Code is read; Codex is not supported yet. The view never shows conversation text.
+The view reads the `.jsonl` logs that Claude Code keeps under `~/.claude/projects` (or under the folder named by `CLAUDE_CONFIG_DIR`) and those Codex keeps under `~/.codex/sessions` (or under the folder named by `CODEX_HOME`), for the last 30 days, in UTC days. A missing or unreadable folder counts for nothing, with no error message. It stays empty if neither Claude Code nor Codex has run on this PC, if its folder is somewhere else, or if its history was cleared. For a very large history OpenVibe stops at fixed limits (number of files, bytes read, time) and says the figures are a minimum. For Codex, only logs in the current format (`session_meta`, `turn_context` and `token_count` lines) are counted. The view never shows conversation text.
 
 ## Code Studio refuses to save
 

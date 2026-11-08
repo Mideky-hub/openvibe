@@ -7,17 +7,13 @@ import { formatClock, formatDecimal } from "@/i18n/format";
 import { formatDuration } from "@/lib/format";
 import { useNow } from "@/lib/useNow";
 import { sessionOf, useNodes } from "@/store/nodes";
+import { useTokenReport } from "@/usage/tokenReport";
+import { formatTokens, total } from "@/usage/tokens";
 import { currentLimit, formatUsd, limitTone, liveCacheSessions, totals, type Limit, type Limits } from "@/usage/usage";
 import { useUsage } from "@/usage/usageStore";
+import { ActivityMap } from "./ActivityMap";
 import { shellMessages } from "./messages";
 import { TokensView } from "./TokensView";
-
-/** « 67,8 k », « 1,2 M » tokens. */
-function formatTokens(count: number): string {
-  if (count >= 1_000_000) return `${formatDecimal(count / 1_000_000, 1)} M`;
-  if (count >= 1_000) return `${formatDecimal(count / 1_000, 1)} k`;
-  return String(count);
-}
 
 function Bar({ limit, wide = false }: { limit: Limit; wide?: boolean }) {
   const tone = limitTone(limit.usedPercent);
@@ -119,6 +115,16 @@ function LimitRow({ label, limit, now }: { label: string; limit: Limit; now: num
   );
 }
 
+/** The 30 days of activity, read from Claude's and Codex's logs like the Tokens view, which reuses the same scan. */
+function Activity() {
+  const u = useMessages(shellMessages).usage;
+  const { report, error } = useTokenReport();
+  if (error) return <p className="text-[12px] text-ov-danger">{u.tokensFailed(error)}</p>;
+  if (!report) return <p className="text-[12px] text-ov-text-2">{u.tokensLoading}</p>;
+  if (!report.days.some((day) => total(day.counts) > 0)) return <p className="text-[12px] text-ov-text-2">{u.activityEmpty}</p>;
+  return <ActivityMap report={report} />;
+}
+
 /** The usage detail, or the 30-day tokens it links to (spec Tokens §4). */
 function UsageContent() {
   const [tokens, setTokens] = useState(false);
@@ -192,6 +198,9 @@ function UsageDetail({ onTokens }: { onTokens: () => void }) {
             ))}
         </Section>
       )}
+      <Section title={u.activityTitle}>
+        <Activity />
+      </Section>
       <button
         type="button"
         onClick={onTokens}
