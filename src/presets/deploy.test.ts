@@ -28,7 +28,6 @@ function deps(over: Partial<DeployDeps> = {}) {
       calls.push(`group ${plan.name}`);
       return { frameId: `f${plans.length}`, nodeIds: plan.agents.map((_a: string, i: number) => `n${plans.length}${i}`) };
     }),
-    setSpeciality: vi.fn((frameId, speciality) => void calls.push(`speciality ${frameId} ${speciality}`)),
     orchestrate: vi.fn(async (groupId) => {
       calls.push(`orchestrate ${groupId}`);
       return "chef1";
@@ -46,8 +45,17 @@ describe("deployPreset", () => {
     const { made, calls } = deps();
     const result = await deployPreset(preset, made);
     // The view ends on the whole team: every group and orchestrator posed, once, after the last one.
-    expect(calls).toEqual(["group Backend", "speciality f1 API", "group Tests", "orchestrate f2", "link chef1 f1", "rename chef1 Chef", "fit f1,f2,chef1"]);
+    expect(calls).toEqual(["group Backend", "group Tests", "orchestrate f2", "link chef1 f1", "rename chef1 Chef", "fit f1,f2,chef1"]);
     expect(result).toEqual({ groups: 2, agents: 3, orchestrators: 1, substituted: 0, orchestratorsSkipped: 0 });
+  });
+
+  it("poses each group with its role and speciality: its agents start knowing them", async () => {
+    const { made, plans } = deps();
+    await deployPreset(preset, made);
+    expect(plans.map(({ plan }) => plan)).toEqual([
+      { name: "Backend", role: "backend", speciality: "API", agents: ["claude", "codex"] },
+      { name: "Tests", role: "testers", agents: ["gemini"] },
+    ]);
   });
 
   it("keeps the team's shape around the view's center: relative positions, each group centered on its own grid", async () => {

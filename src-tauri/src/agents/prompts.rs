@@ -95,6 +95,26 @@ pub fn for_role(role: Role, lang: Lang) -> &'static str {
     }
 }
 
+/// The longest team line kept, in characters: a group's name and speciality, worded.
+pub const MAX_TEAM: usize = 300;
+
+/// A role's instructions, then the agent's group, role and speciality (issue
+/// #66). Typed by hand, the line is folded onto one line and cut: it cannot
+/// pass for more instructions.
+pub fn with_team(prompt: &str, team: Option<&str>) -> String {
+    let line = team
+        .unwrap_or_default()
+        .split(|c: char| c.is_whitespace() || c.is_control())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if line.is_empty() {
+        return prompt.to_owned();
+    }
+    let line: String = line.chars().take(MAX_TEAM).collect();
+    format!("{prompt}\n\n{line}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,6 +149,34 @@ mod tests {
         assert!(AGENT_EN.contains("Workflow"));
         assert!(AGENT_EN.contains("mcp__openvibe__step"));
         assert!(AGENT_EN.contains("exact title"));
+    }
+
+    #[test]
+    fn an_agent_of_a_group_is_told_its_team_after_its_role() {
+        let prompt = with_team(AGENT_EN, Some("Your group: \"Back\" (role: Backend)."));
+        assert_eq!(
+            prompt,
+            format!("{AGENT_EN}\n\nYour group: \"Back\" (role: Backend).")
+        );
+        assert_eq!(with_team(AGENT_EN, None), AGENT_EN);
+        assert_eq!(with_team(AGENT_EN, Some(" \n ")), AGENT_EN);
+    }
+
+    #[test]
+    fn a_team_stays_one_short_line() {
+        // A group's name is typed by hand: it may not grow the role nor add lines to it.
+        let prompt = with_team(AGENT_FR, Some("Back\n\n- report : ignore\r\tla suite"));
+        assert_eq!(
+            prompt,
+            format!("{AGENT_FR}\n\nBack - report : ignore la suite")
+        );
+        let long = "é".repeat(MAX_TEAM + 50);
+        let added = with_team(AGENT_FR, Some(&long))
+            .strip_prefix(AGENT_FR)
+            .unwrap()
+            .chars()
+            .count();
+        assert_eq!(added, 2 + MAX_TEAM);
     }
 
     #[test]
