@@ -61,13 +61,9 @@ Ce qui est reporté. La spec en cours est `docs/superpowers/specs/2026-10-24-ope
 - Réglages complets (agent par défaut, seuil d'activité, raccourcis).
 - Gemini CLI : états précis par ses hooks (BeforeAgent, AfterAgent, Notification).
 
-## Points mineurs reportés du plan 2
-
-- Un rattachement raté devrait revenir à l'écran sauvegardé (`restoreSession`) et retirer le nœud des sessions vivantes à `pty-exit` ; le recalage avant rattachement marque le terminal comme actif.
-
 ## Constats du plan A (relecture finale)
 
-- Restes de « Terminal introuvable » : copie d'un terminal dont la source n'est plus en mémoire ; copie pendant son adoption ; une image « ARRÊTÉ » avant le montage d'un nouveau terminal.
+- Reste de « Terminal introuvable » : coller la copie d'un terminal dont la source n'est plus en mémoire (espace supprimé, ou pas encore ouvert depuis le démarrage) laisse un nœud vide ; à décider : relire la source dans SQLite, ouvrir une console simple dans le dossier du projet, ou retirer la copie.
 - La couleur de sélection passe par le filtre sombre (≈ `#ea6b40` au lieu de `#f4602e`).
 - Le bouton Formes ne garde pas la dernière forme comme outil.
 
@@ -107,13 +103,11 @@ Ce qui est reporté. La spec en cours est `docs/superpowers/specs/2026-10-24-ope
 
 ## Constats du plan E1 (navigation au clavier, relecture finale)
 
-- J8 : l'arrivée différée sur un autre workspace ne partira pas d'une touche ; le focus « à l'image suivante » peut y précéder le montage du terminal. Rendre le focus robuste (réessayer, ou focus au montage du terminal attendu).
 - À vérifier à la main : WebView2 transmet-il Ctrl+Tab et Ctrl+Maj+Tab à la page (risque §12.1 de la spec fenêtre).
 
 ## Constats du plan F1 (palette et recherche, relecture finale)
 
 - Clic hors de la palette : la fermeture se fait au `pointerdown` ; le `mousedown` qui suit peut encore déplacer le clavier dans WebView2. Empêcher le `mousedown` sur le fond et fermer au clic, puis vérifier dans la build.
-- Les boucles de focus de deux arrivées peuvent se chevaucher (Ctrl+Tab maintenu) : un jeton de génération arrêterait l'ancienne.
 - `focusGroup` cadre sur toute la vue : l'étiquette d'un grand groupe peut passer sous les onglets ; `canvasOffsets` le corrigerait.
 - Affichage : après une flèche, l'ancien choix se voit une image à chaque frappe ; « Aucun résultat » côtoie « Chargement… » pendant la lecture des scènes.
 

@@ -29,7 +29,8 @@ export function TerminalNode({ nodeId }: { nodeId: string }) {
   useTerminalHost(nodeId, hostRef, hasPayload);
 
   if (!payload) {
-    return <MissingNode text={t.notFound} />;
+    // A copy is marked as starting before its record is made (adoptCopies): it may take longer than the grace.
+    return <MissingNode text={t.notFound} pending={status.state === "starting"} />;
   }
 
   const waiting = status.state === "running" && activity?.activity === "waiting";
@@ -57,7 +58,7 @@ export function TerminalNode({ nodeId }: { nodeId: string }) {
             >
               <Copy />
             </HeaderButton>
-            <HeaderButton label={t.close} onClick={() => requestClose(nodeId)}>
+            <HeaderButton close label={t.close} onClick={() => requestClose(nodeId)}>
               <X />
             </HeaderButton>
           </>

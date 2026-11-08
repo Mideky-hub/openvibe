@@ -2,6 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
+import { terminalStatusStore } from "@/store/terminalStatus";
 import { MISSING_GRACE_MS } from "./MissingNode";
 import { TerminalNode } from "./TerminalNode";
 
@@ -19,4 +20,16 @@ it("does not flash « Terminal introuvable » while a copy's record is on its wa
   await act(async () => void vi.advanceTimersByTime(MISSING_GRACE_MS + 1));
   expect(host.textContent).toBe("Terminal introuvable");
   await act(async () => root.unmount());
+});
+
+it("stays quiet past the grace while a copy marked as starting waits for its record (issue #3)", async () => {
+  vi.useFakeTimers();
+  terminalStatusStore.getState().set("lente", { state: "starting" });
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  await act(async () => root.render(<TerminalNode nodeId="lente" />));
+  await act(async () => void vi.advanceTimersByTime(MISSING_GRACE_MS * 5));
+  expect(host.textContent).toBe("");
+  await act(async () => root.unmount());
+  terminalStatusStore.getState().remove("lente");
 });

@@ -37,3 +37,16 @@ describe("colors in each theme", () => {
     expect(exportBackground("dark")).toEqual({ exportWithDarkMode: true, viewBackgroundColor: toSceneColor("#232220") });
   });
 });
+
+describe("selection color under the dark filter", () => {
+  it("is stored pre-inverted so that the canvas shows the accent token", async () => {
+    const { readFileSync } = await import("node:fs");
+    const tokens = readFileSync("src/theme/tokens.css", "utf8");
+    const accent = /data-theme="dark"[^}]*?--ov-accent:\s*(#[0-9a-f]{6})/i.exec(tokens)?.[1];
+    const scene = /data-theme="dark"[^}]*?--ov-accent-scene:\s*(#[0-9a-f]{6})/i.exec(tokens)?.[1];
+    expect(accent).toBeDefined();
+    expect(scene?.toLowerCase()).toBe(toSceneColor(accent!));
+    const css = readFileSync("src/theme/excalidraw.css", "utf8");
+    expect(css).toMatch(/--color-selection:\s*var\(--ov-accent-scene\)/);
+  });
+});

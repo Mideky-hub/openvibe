@@ -28,6 +28,8 @@
   --ov-text-2: #B3B0A8;
   --ov-text-3: #86837C;
   --ov-accent: #D97757;
+  /* The accent as Excalidraw must be given it: its canvas goes through the dark filter (selection color). */
+  --ov-accent-scene: #d05e39;
   --ov-accent-soft: rgba(217,119,87,.18);
   --ov-on-accent: #1F1E1D;
   /* Role colors do not change with the theme, nor does the ink written on them. */
@@ -66,6 +68,7 @@
   --ov-text-2: #625F57;
   --ov-text-3: #8F8C83;
   --ov-accent: #C2603F;
+  --ov-accent-scene: var(--ov-accent);
   --ov-accent-soft: rgba(194,96,63,.13);
   --ov-on-accent: #FFFFFF;
   --ov-on-role: #1F1E1D;

@@ -69,7 +69,8 @@ describe("opening the ring (spec menu radial §5.2, §6.4)", () => {
   it("closes Excalidraw's own menu and the open dropdowns when the ring opens (plan G1)", () => {
     document.body.insertAdjacentHTML("beforeend", '<div role="menu" data-state="open"></div>');
     const escapes: string[] = [];
-    document.addEventListener("keydown", (e) => escapes.push(e.key), { once: true });
+    // Radix listens to Escape on the document, in the capture phase.
+    document.addEventListener("keydown", (e) => escapes.push(e.key), { capture: true, once: true });
     pointer(canvas(), "pointerdown", 500, 400);
     expect(escapes).toEqual(["Escape"]);
     expect(updateScene).toHaveBeenCalledWith({ appState: { contextMenu: null } });

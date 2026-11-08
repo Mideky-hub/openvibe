@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, Ellipsis, Layers, Network, Pause, Play, Plus, SquareTerminal, X } from "lucide-react";
+import { ChevronDown, Ellipsis, Layers, Network, Pause, Play, Plus, Rocket, SquareTerminal, X } from "lucide-react";
 import { useStore } from "zustand";
 import { useCanvas } from "@/canvas/canvasStore";
 import { focusNode } from "@/canvas/focusNode";
@@ -8,6 +8,8 @@ import { useMessages } from "@/i18n";
 import { formatDuration } from "@/lib/format";
 import { useNow } from "@/lib/useNow";
 import { cn } from "@/lib/utils";
+import { launchMission } from "@/mission/launch";
+import { missionOf } from "@/mission/store";
 import { readOrchestratorPayload } from "@/nodes/types";
 import { IconButton } from "@/shell/buttons";
 import { BOTTOM_BAR_HEIGHT, TOP_ROW_HEIGHT } from "@/shell/layout";
@@ -58,7 +60,7 @@ export function AgentsPanel() {
     ];
   });
   const orchestrators = nodeIds.flatMap((id) =>
-    nodes[id]?.kind === "orchestrator" ? [{ id, name: readOrchestratorPayload(nodes[id]?.payload).name }] : [],
+    nodes[id]?.kind === "orchestrator" ? [{ id, name: readOrchestratorPayload(nodes[id]?.payload).name, planned: missionOf(nodes[id])?.state === "plan" && !!missionOf(nodes[id])?.plan?.length }] : [],
   );
   const counts = filterCounts(agents);
   const sections = fleetSections(agents, frames, filter);
@@ -214,15 +216,15 @@ export function AgentsPanel() {
             </button>
             {!folded.has("orchestrators") &&
               orchestrators.map((o) => (
-                <button
-                  key={o.id}
-                  type="button"
-                  onClick={() => focusNode(o.id)}
-                  className="flex h-[26px] w-full items-center gap-2 rounded-[6px] pl-6 pr-2 text-left text-[12.5px] hover:bg-ov-hover"
-                >
-                  <Network className="size-3.5 text-ov-accent" />
-                  <span className="truncate font-semibold text-ov-text">{o.name}</span>
-                </button>
+                <div key={o.id} data-orchestrator={o.id} className="flex h-[26px] items-center gap-2 rounded-[6px] pl-6 pr-1 text-[12.5px] hover:bg-ov-hover">
+                  <Network className="size-3.5 shrink-0 text-ov-accent" />
+                  <span className="min-w-0 flex-1 truncate font-semibold text-ov-text">{o.name}</span>
+                  {o.planned && (
+                    <IconButton label={t.launchMission(o.name)} className="size-[22px]" onClick={() => void launchMission(o.id)}>
+                      <Rocket />
+                    </IconButton>
+                  )}
+                </div>
               ))}
           </section>
         )}

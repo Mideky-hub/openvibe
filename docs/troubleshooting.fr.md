@@ -90,6 +90,13 @@ OpenVibe ne tourne qu'une fois, exprès : deux copies se disputeraient la base d
 - Journaux : `%LOCALAPPDATA%\dev.openvibe.app\logs\openvibe.log`. Ils ne contiennent jamais de jeton, de texte de terminal ni de consigne. **Ouvrir le dossier des journaux** dans le dialogue Dépannage ou le menu des réglages.
 - Données (projets, canvas, historique des terminaux) : `%APPDATA%\dev.openvibe.app\openvibe.db`. Avant de mettre à jour sa base, OpenVibe en garde une copie à côté (`openvibe.v<N>-backup.db`). **Ouvrir le dossier des données** dans le dialogue Dépannage.
 
+## Un agent affiche un mauvais état
+
+OpenVibe lit l'état d'un agent Claude Code par ses hooks, qui envoient leurs messages à un serveur sur `127.0.0.1`. Deux cas ne sont pas couverts :
+
+- **Un proxy HTTP intercepte `127.0.0.1`.** Les hooks échouent, et l'état de l'agent se fie alors à l'activité de son terminal. Exclus le serveur local du proxy, par exemple en ajoutant `127.0.0.1,localhost` à la variable d'environnement `NO_PROXY`, puis relance l'agent.
+- **Un dialogue d'autorisation est répondu hors du terminal** (dans un IDE, ou à distance). L'agent reste en *attente* jusqu'à son hook suivant. Réponds au prochain message dans le terminal, ou envoie un message à l'agent, pour remettre son état à jour.
+
 ## Signaler un bug
 
 Dans le dialogue Dépannage, clique sur **Copier le diagnostic**, puis **Signaler un problème** : une nouvelle issue GitHub s'ouvre avec ta version préremplie. Colle le diagnostic et, si tu peux, joins `openvibe.log`. Le diagnostic ne contient ni jeton ni chemin de projet, et ton dossier personnel y apparaît comme `~`.
