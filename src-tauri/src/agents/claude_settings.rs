@@ -89,16 +89,20 @@ pub struct StatusLine {
     pub config: PathBuf,
     /// The user's `statusLine` setting, when it runs a command.
     pub user: Option<Value>,
+    /// The file that holds the user's command, read at each refresh (`user_command_file`).
+    pub own: PathBuf,
 }
 
 /// Run by Claude through bash, Git Bash on Windows: `$1` is OpenVibe's URL,
-/// `$2` the curl config that carries the token, `$3` the user's own status
-/// line command, given the same JSON.
+/// `$2` the curl config that carries the token, `$3` the file that holds the
+/// user's own status line command (read at each refresh, so a change of their
+/// settings is followed), which is given the same JSON.
 pub const STATUS_SCRIPT: &str = "#!/usr/bin/env bash\n\
 # OpenVibe : la ligne d'état de Claude transmet l'usage de la session, puis affiche celle de l'utilisateur.\n\
 input=$(cat; printf x); input=${input%x}\n\
 printf '%s' \"$input\" | curl -s -m 1 -K \"$2\" -X POST -H 'Content-Type: application/json' --data-binary @- \"$1\" >/dev/null 2>&1 &\n\
-if [ -n \"${3:-}\" ]; then printf '%s' \"$input\" | bash -c \"$3\"; fi\n";
+own=$(cat \"$3\" 2>/dev/null)\n\
+if [ -n \"$own\" ]; then printf '%s' \"$input\" | bash -c \"$own\"; fi\n";
 
 /// The curl config that gives the local server's token to curl as a header
 /// (spec première version §4.3): on a command line, any program of the
@@ -126,17 +130,15 @@ pub fn status_line_json(status: &StatusLine) -> Value {
     // bash reads Windows paths with forward slashes.
     let script = status.script.to_string_lossy().replace('\\', "/");
     let config = status.config.to_string_lossy().replace('\\', "/");
-    let mut command = format!(
-        "bash {} {} {}",
+    let own = status.own.to_string_lossy().replace('\\', "/");
+    let command = format!(
+        "bash {} {} {} {}",
         bash_quote(&script),
         bash_quote(&status.url),
-        bash_quote(&config)
+        bash_quote(&config),
+        bash_quote(&own)
     );
     let user = status.user.as_ref();
-    if let Some(own) = user.and_then(|u| u["command"].as_str()) {
-        command.push(' ');
-        command.push_str(&bash_quote(own));
-    }
     let mut line = json!({ "type": "command", "command": command });
     for key in ["padding", "refreshInterval"] {
         if let Some(value) = user.and_then(|u| u.get(key)) {
@@ -171,6 +173,27 @@ pub fn status_line_for(cwd: &Path, user: Option<&Path>) -> Option<Value> {
     .iter()
     .find_map(|file| user_status_line(file))
     .or_else(|| user.and_then(user_status_line))
+}
+
+/// `<dir>/<nodeId>.status-cmd`: the user's own status line command, read by the script at each refresh.
+pub fn user_command_file(dir: &Path, node_id: &str) -> PathBuf {
+    dir.join(format!("{node_id}.status-cmd"))
+}
+
+/// Brings `file` in line with the status line command Claude would run now in `cwd`; true when it changed.
+pub fn sync_user_command(file: &Path, cwd: &Path, user: Option<&Path>) -> io::Result<bool> {
+    let line = status_line_for(cwd, user);
+    let wanted = line
+        .as_ref()
+        .and_then(|l| l["command"].as_str())
+        .unwrap_or("");
+    if std::fs::read_to_string(file).ok().as_deref() == Some(wanted)
+        || (wanted.is_empty() && !file.exists())
+    {
+        return Ok(false);
+    }
+    std::fs::write(file, wanted)?;
+    Ok(true)
 }
 
 /// Claude's folder: `$CLAUDE_CONFIG_DIR`, else `~/.claude`.
@@ -218,7 +241,13 @@ pub fn write(
     if let Some(status) = status {
         // Without its script, Claude goes without the status line, never without its hooks.
         match std::fs::write(&status.script, STATUS_SCRIPT) {
-            Ok(()) => settings["statusLine"] = status_line_json(status),
+            Ok(()) => {
+                let own = status.user.as_ref().and_then(|u| u["command"].as_str());
+                match std::fs::write(&status.own, own.unwrap_or("")) {
+                    Ok(()) => settings["statusLine"] = status_line_json(status),
+                    Err(err) => log::warn!("user status line of {node_id} not written: {err}"),
+                }
+            }
             Err(err) => log::warn!("status line of {node_id} not written: {err}"),
         }
     }
@@ -229,6 +258,7 @@ pub fn write(
 pub fn remove(dir: &Path, node_id: &str) {
     if valid_node_id(node_id) {
         let _ = std::fs::remove_file(dir.join(format!("{node_id}.json")));
+        let _ = std::fs::remove_file(user_command_file(dir, node_id));
     }
 }
 
@@ -241,7 +271,11 @@ pub fn clear(dir: &Path) {
         let path = entry.path();
         // `curl.cfg` holds the previous run's token: gone with the server.
         let stale_token = path.file_name().is_some_and(|name| name == "curl.cfg");
-        if stale_token || path.extension().is_some_and(|ext| ext == "json") {
+        if stale_token
+            || path
+                .extension()
+                .is_some_and(|ext| ext == "json" || ext == "status-cmd")
+        {
             let _ = std::fs::remove_file(path);
         }
     }
@@ -351,22 +385,24 @@ mod tests {
             url: STATUS_URL.into(),
             config: PathBuf::from(r"C:\data\Jean O'Brien\hooks\curl.cfg"),
             user,
+            own: PathBuf::from(r"C:\data\hooks\n1.status-cmd"),
         }
     }
 
     #[test]
     fn its_status_line_tells_openvibe_then_shows_the_user_s_own() {
         let config = "'C:/data/Jean O'\\''Brien/hooks/curl.cfg'";
+        let own = "'C:/data/hooks/n1.status-cmd'";
         assert_eq!(
             status_line_json(&status(None)),
-            json!({ "type": "command", "command": format!("bash 'C:/data/hooks/statusline.sh' '{STATUS_URL}' {config}") })
+            json!({ "type": "command", "command": format!("bash 'C:/data/hooks/statusline.sh' '{STATUS_URL}' {config} {own}") })
         );
         let user = json!({ "type": "command", "command": "~/bin/it's.sh --x", "padding": 0, "refreshInterval": 5 });
         assert_eq!(
             status_line_json(&status(Some(user))),
             json!({
                 "type": "command",
-                "command": format!("bash 'C:/data/hooks/statusline.sh' '{STATUS_URL}' {config} '~/bin/it'\\''s.sh --x'"),
+                "command": format!("bash 'C:/data/hooks/statusline.sh' '{STATUS_URL}' {config} {own}"),
                 "padding": 0,
                 "refreshInterval": 5
             })
@@ -475,6 +511,7 @@ mod tests {
             url: STATUS_URL.into(),
             config: dir.path().join("curl.cfg"),
             user: None,
+            own: dir.path().join("n1.status-cmd"),
         };
         let path = write(dir.path(), "n1", URL, Role::Agent, Some(&line), None).unwrap();
         let read: serde_json::Value =
@@ -491,6 +528,7 @@ mod tests {
             url: STATUS_URL.into(),
             config: dir.path().join("curl.cfg"),
             user: None,
+            own: dir.path().join("n1.status-cmd"),
         };
         let path = write(dir.path(), "n1", URL, Role::Agent, Some(&line), None).unwrap();
         let read: serde_json::Value =
@@ -500,7 +538,7 @@ mod tests {
         assert!(
             script.contains("curl -s -m 1 -K \"$2\"")
                 && script.contains("\"$1\"")
-                && script.contains("bash -c \"$3\""),
+                && script.contains("cat \"$3\""),
             "{script}"
         );
         assert!(!script.contains('\r'), "bash needs LF line ends");
@@ -542,6 +580,7 @@ until [ -e release ] || [ ! -e statusline.sh ]; do sleep 0.05; done\n\
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&curl, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
+        std::fs::write(dir.path().join("own.txt"), "cat > out.txt").unwrap();
         let input = b"{\"a\":1}\n\n";
         let mut child = Command::new(bash)
             .current_dir(dir.path())
@@ -550,8 +589,12 @@ until [ -e release ] || [ ! -e statusline.sh ]; do sleep 0.05; done\n\
                 "-c",
                 "PATH=\"$PWD:${BASH%/*}:$PATH\" exec \"$BASH\" statusline.sh \"$@\"",
             ])
-            .args(["bash", "http://127.0.0.1:1/status/n1", "none.cfg"])
-            .arg("cat > out.txt")
+            .args([
+                "bash",
+                "http://127.0.0.1:1/status/n1",
+                "none.cfg",
+                "own.txt",
+            ])
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -580,6 +623,76 @@ until [ -e release ] || [ ! -e statusline.sh ]; do sleep 0.05; done\n\
             input,
             "the user's line must get the JSON as sent"
         );
+    }
+
+    #[test]
+    fn the_user_s_status_line_is_followed_when_their_settings_change_mid_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join("settings.json");
+        let file = user_command_file(dir.path(), "n1");
+        let cwd = dir.path().join("project");
+        let sync = || sync_user_command(&file, &cwd, Some(&settings)).unwrap();
+        let read = || std::fs::read_to_string(&file).unwrap_or_default();
+
+        assert!(!sync(), "nothing to follow yet");
+        std::fs::write(
+            &settings,
+            r#"{"statusLine":{"type":"command","command":"first.sh"}}"#,
+        )
+        .unwrap();
+        assert!(sync());
+        assert_eq!(read(), "first.sh");
+        assert!(!sync(), "unchanged settings are not rewritten");
+        std::fs::write(
+            &settings,
+            r#"{"statusLine":{"type":"command","command":"second.sh"}}"#,
+        )
+        .unwrap();
+        assert!(sync());
+        assert_eq!(read(), "second.sh");
+        std::fs::write(&settings, "{}").unwrap();
+        assert!(sync());
+        assert_eq!(read(), "", "a removed status line stops showing");
+    }
+
+    #[test]
+    fn the_status_script_runs_the_command_its_file_holds_at_that_moment() {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let Some(bash) = real_bash() else {
+            return; // no bash on this machine
+        };
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("statusline.sh"), STATUS_SCRIPT).unwrap();
+        let run = |own: &str| {
+            std::fs::write(dir.path().join("own.txt"), own).unwrap();
+            let mut child = Command::new(&bash)
+                .current_dir(dir.path())
+                .args([
+                    "statusline.sh",
+                    "http://127.0.0.1:1/status/n1",
+                    "none.cfg",
+                    "own.txt",
+                ])
+                .env(
+                    "PATH",
+                    format!(
+                        "{}:{}",
+                        bash.parent().unwrap().display(),
+                        std::env::var("PATH").unwrap_or_default()
+                    ),
+                )
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .spawn()
+                .unwrap();
+            child.stdin.take().unwrap().write_all(b"{}").unwrap();
+            String::from_utf8(child.wait_with_output().unwrap().stdout).unwrap()
+        };
+        assert_eq!(run("printf one"), "one");
+        assert_eq!(run("printf two"), "two");
+        assert_eq!(run(""), "");
     }
 
     #[test]

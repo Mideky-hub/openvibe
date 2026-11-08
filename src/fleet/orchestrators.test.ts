@@ -4,16 +4,16 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import { toast } from "sonner";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { canvasStore } from "@/canvas/canvasStore";
-import { markForAutostart } from "@/nodes/terminal/registry";
+import { markForAutostart, relaunchTerminal } from "@/nodes/terminal/registry";
 import { nodesStore, sessionOf } from "@/store/nodes";
 import { terminalStatusStore } from "@/store/terminalStatus";
 import { uiStore } from "@/store/ui";
 import { agentsStore } from "./agentsStore";
-import { addOrchestrator, orchestrateGroup, requestCloseOrchestrator } from "./orchestrators";
+import { addOrchestrator, orchestrateGroup, removeOrchestrator, requestCloseOrchestrator } from "./orchestrators";
 import { adoptCopies } from "./terminals";
 
 vi.mock("@excalidraw/excalidraw", () => ({ CaptureUpdateAction: { IMMEDIATELY: "i", NEVER: "n" }, newElementWith: (e: object, patch: object) => ({ ...e, ...patch }) }));
-vi.mock("@/nodes/terminal/registry", () => ({ markForAutostart: vi.fn() }));
+vi.mock("@/nodes/terminal/registry", () => ({ markForAutostart: vi.fn(), relaunchTerminal: vi.fn(() => Promise.resolve()) }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 let scene: { id: string; isDeleted?: boolean; link?: string; customData?: object; type?: string; frameId?: string | null }[] = [];
@@ -87,6 +87,17 @@ it("asks before closing a working orchestrator, with its wires; a stopped one go
   requestCloseOrchestrator("chef");
   expect(uiStore.getState().closing).toBeNull();
   expect(scene.filter((e) => e.isDeleted).map((e) => e.id)).toEqual(["chef", "fil"]);
+});
+
+it("sends the linked agents of a running mission back to the default model when their orchestrator is removed (backlog Routeur)", async () => {
+  const payload = { title: "Isis", name: "Isis", agent: "claude" as const, cwd: "C:/code/proj.worktrees/auth-isis", shell: "default" as const, command: "", claudeSessionId: "s1", model: "haiku" };
+  await nodesStore.getState().create("isis", { workspaceId: "w1", kind: "terminal", payload });
+  const member = { nodeId: "isis", name: "Isis", branch: "auth-isis", worktree: "C:/code/proj.worktrees/auth-isis", task: "t", budgetMin: 30, linked: true, model: "haiku" };
+  await nodesStore.getState().create("chef", { workspaceId: "w1", kind: "orchestrator", payload: { name: "Chef", mission: { state: "en_cours", maxAgents: 3, project: "C:/code/proj", members: [member] } } });
+  scene = [{ id: "chef", type: "embeddable" }];
+  removeOrchestrator("chef");
+  expect(relaunchTerminal).toHaveBeenCalledWith("isis", expect.objectContaining({ cwd: "C:/code/proj" }), "new");
+  expect(nodesStore.getState().nodes.isis.payload).toMatchObject({ cwd: "C:/code/proj", model: undefined });
 });
 
 it("puts a second orchestrator of the same group clear of the first (plan B3)", async () => {

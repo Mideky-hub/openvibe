@@ -10,6 +10,8 @@ export interface ActivityEvent {
   since: number;
   /** What a waiting agent says it waits for, cleaned by Rust; untrusted, plain text only (spec notification §7). */
   message?: string;
+  /** The order of Rust's changes, which `since` cannot give: Rust always sends it. */
+  seq?: number;
 }
 
 export interface ActivitySnapshot {

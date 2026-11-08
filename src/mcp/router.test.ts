@@ -27,7 +27,7 @@ vi.mock("@/mission/launch", () => ({
 }));
 vi.mock("@/mission/events", () => ({ notify: vi.fn() }));
 vi.mock("@/fleet/broadcast", () => ({ pauseAgents: vi.fn(() => Promise.resolve(1)) }));
-vi.mock("@/fleet/remoteControl", () => ({ setRemoteControl: vi.fn() }));
+vi.mock("@/fleet/remoteControl", () => ({ setRemoteControl: vi.fn(), remoteBusy: vi.fn(() => false) }));
 vi.mock("@/mission/store", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/mission/store")>()),
   linkedClaudeAgents: vi.fn(() => [{ nodeId: "isis", name: "Isis" }]),
@@ -76,7 +76,7 @@ describe("the agent's tools (spec orchestrateur §4.4)", () => {
 
   it("declares and marks the terminal's steps, saved in its payload", async () => {
     expect(textOf(await call("isis", "declare_steps", { steps: ["Plan", "Code"] }))).toBe("2 étapes déclarées.");
-    expect(textOf(await call("isis", "step", { title: "Plan", state: "done" }))).toBe("Plan : fait.");
+    expect(textOf(await call("isis", "step", { title: "Plan", state: "done" }))).toBe("Plan : done.");
     expect(terminalOf(nodesStore.getState().nodes.isis)?.steps).toEqual([
       { title: "Plan", state: "fait" },
       { title: "Code", state: "a_venir" },
@@ -200,6 +200,19 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
       expect(mission.linked_agents_note).toBeNull();
       expect(textOf(await call("ailleurs", "propose_plan", plan))).toContain("Plan proposé");
       forgetScene("w8");
+    });
+
+    it("reads its saved scene when it was never shown since startup (#69)", async () => {
+      await nodesStore.getState().create("jamais", { workspaceId: "w7", kind: "orchestrator", payload: { name: "Jamais" } });
+      const elements = [{ id: "g", type: "frame", name: "Interface", isDeleted: false, frameId: null, x: 0, y: 0, width: 1, height: 1, customData: { openvibe: { kind: "group", role: "frontend", pantheon: "norse", speciality: "Frontend" } } }, { id: "jamais", type: "embeddable", isDeleted: false, frameId: null, x: 0, y: 0, width: 1, height: 1, customData: { kind: "orchestrator" } }, { id: "a", type: "arrow", isDeleted: false, frameId: null, startBinding: { elementId: "jamais" }, endBinding: { elementId: "g" } }];
+      mockIPC((command) => (command === "load_workspace" ? { nodes: [], files: [], elementsJson: JSON.stringify(elements), appStateJson: null } : undefined));
+      try {
+        expect(JSON.parse(textOf(await call("jamais", "mission", {})))).toMatchObject({ linked_groups: [{ name: "Interface", speciality: "Frontend" }], linked_agents_note: null });
+        expect(textOf(await call("jamais", "propose_plan", { ...plan, subtasks: [{ ...plan.subtasks[1], group: "Interface" }] }))).toContain("Plan proposé");
+      } finally {
+        mockIPC(() => undefined);
+        forgetScene("w7");
+      }
     });
   });
 
@@ -402,13 +415,14 @@ describe("the orchestrator's tools (spec orchestrateur §7.2)", () => {
   });
 });
 
-it("answers a failed step with its accent in French (backlog R5c)", async () => {
-  expect(textOf(await call("isis", "step", { title: "Plan", state: "failed" }))).toBe("Plan : échec.");
+it("reads a step back with the vocabulary it sent, in French too (#30)", async () => {
+  expect(textOf(await call("isis", "step", { title: "Plan", state: "failed" }))).toBe("Plan : failed.");
+  expect(textOf(await call("isis", "step", { title: "Plan", state: "done" }))).toBe("Plan : done.");
 });
 
 describe("the English protocol (spec première version §7.1)", () => {
   it("still takes French values, and tells a former name what it became", async () => {
-    expect(textOf(await call("isis", "step", { title: "Plan", state: "en_cours" }))).toBe("Plan : en cours.");
+    expect(textOf(await call("isis", "step", { title: "Plan", state: "en_cours" }))).toBe("Plan : in_progress.");
     const old = await call("isis", "rendre_compte", { resume: "x", statut: "termine" });
     expect(old).toMatchObject({ isError: true });
     expect(textOf(old)).toBe("Outil renommé : utilise report.");

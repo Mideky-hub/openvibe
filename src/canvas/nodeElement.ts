@@ -25,6 +25,18 @@ export function nodeKindOf(element: ExcalidrawElement): NodeKind | null {
   return element.type === "embeddable" && NODE_KINDS.includes(kind as NodeKind) ? (kind as NodeKind) : null;
 }
 
+/** An orchestrator's size before plan H2: too narrow for Claude's terminal and the mission panel. */
+const OLD_ORCHESTRATOR = { width: 320, height: 420 };
+
+/** A saved scene with its orchestrators of the old default size grown to today's, from the same corner (#69). */
+export function grownOrchestrators(elements: ExcalidrawElement[]): ExcalidrawElement[] {
+  return elements.map((element) =>
+    nodeKindOf(element) === "orchestrator" && element.width === OLD_ORCHESTRATOR.width && element.height === OLD_ORCHESTRATOR.height
+      ? { ...element, ...NODE_SIZE.orchestrator }
+      : element,
+  );
+}
+
 /**
  * Builds a complete embeddable element for an OpenVibe node, centered on `center`
  * (scene coordinates). Excalidraw's skeleton API does not accept embeddables, so

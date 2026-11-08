@@ -306,7 +306,8 @@ export function proposedTasks(args: Record<string, unknown>, mission: Mission, g
 
 /**
  * `propose_plan`'s arguments (internal names, `@/mcp/protocol`) as a plan, or what is wrong (spec §7.2).
- * `linked`: names of the linked Claude agents; `groups`: the linked groups; `cards`: ids of the cards of its linked boards.
+ * `linked`: names of the linked Claude agents; `groups`: the linked groups; `cards`: ids of the cards of its linked boards;
+ * `busy`: names of the linked agents another running mission holds.
  */
 export function proposedPlan(
   args: Record<string, unknown>,
@@ -314,6 +315,7 @@ export function proposedPlan(
   linked: readonly string[],
   groups: readonly PlanGroup[] = [],
   cards: readonly string[] = [],
+  busy: readonly string[] = [],
 ): { name: string; task: string; plan: SubTask[] } | string {
   const e = messages(agentMessages).plan;
   const name = text(args.nom);
@@ -333,7 +335,10 @@ export function proposedPlan(
     if (typeof fields === "string") return fields;
     const agent = text(r.agent);
     const known = sameName(agent, NEW_AGENT) ? NEW_AGENT : linked.find((l) => sameName(l, agent));
-    if (!known) return e.notLinked(n, agent);
+    if (!known) {
+      const held = busy.find((b) => sameName(b, agent));
+      return held ? e.otherMission(n, held) : e.notLinked(n, agent);
+    }
     if (known !== NEW_AGENT && plan.some((s) => s.agent === known)) return e.alreadyHas(known);
     if ([...taken, ...plan.map((s) => s.title)].some((title) => sameName(title, fields.title))) return e.titleTaken(n, fields.title);
     const wanted = text(r.groupe);
@@ -402,16 +407,22 @@ export function overruns(mission: Mission, now: number): { members: Overrun[]; g
     const level = ratio >= 2 ? 2 : ratio >= 1 ? 1 : 0;
     return level > (m.overdue ?? 0) ? [{ nodeId: m.nodeId, name: m.name, task: m.task, level: level as 1 | 2, budget: budgetOf(m) }] : [];
   });
-  const global =
-    mission.budgetMin !== undefined && mission.startedAt !== undefined && !mission.globalOverdue && (now - mission.startedAt) / MINUTE >= mission.budgetMin;
+  const global = mission.startedAt !== undefined && !mission.globalOverdue && remainingGlobal(mission, now) === 0;
   return { members, global };
 }
 
-/** The whole minutes left of the global budget, real time from the go-ahead (spec mission de nuit §3); undefined without one. */
+/**
+ * The one measure of the global budget: real time from the go-ahead to the end, closed app included,
+ * whatever the number of agents; the plan checks it the same way (spec mission de nuit §3).
+ */
+function elapsedMin(mission: Mission, now: number): number {
+  return mission.startedAt === undefined ? 0 : ((mission.endedAt ?? now) - mission.startedAt) / MINUTE;
+}
+
+/** The whole minutes left of the global budget (spec mission de nuit §3); undefined without one, all of it before the go-ahead. */
 export function remainingGlobal(mission: Mission, now: number): number | undefined {
   if (mission.budgetMin === undefined) return undefined;
-  if (mission.startedAt === undefined) return mission.budgetMin;
-  return Math.max(0, Math.ceil(mission.budgetMin - ((mission.endedAt ?? now) - mission.startedAt) / MINUTE));
+  return Math.max(0, Math.ceil(mission.budgetMin - elapsedMin(mission, now)));
 }
 
 /** The last minutes of an overnight mission keep the time to merge and finish: 10 %, 10 min at least, half of a short one. */
@@ -420,7 +431,7 @@ const windDownMin = (budget: number) => Math.min(budget / 2, Math.max(10, budget
 /** An overnight mission near its end: no new work, the orchestrator wraps up (spec mission de nuit §3). */
 export function windingDown(mission: Mission, now: number): boolean {
   if (!mission.overnight || mission.budgetMin === undefined || mission.startedAt === undefined) return false;
-  return (now - mission.startedAt) / MINUTE >= mission.budgetMin - windDownMin(mission.budgetMin);
+  return elapsedMin(mission, now) >= mission.budgetMin - windDownMin(mission.budgetMin);
 }
 
 /** No new work starts: the mission is winding down, or the global budget is spent, overnight or not. */
@@ -439,6 +450,6 @@ export function budgetBar(spent: number, budget: number): { ratio: number; tone:
 /** The orchestrator's header during a mission (spec §8.3): time spent, over the global budget if any. */
 export function clockText(mission: Mission, now: number): string | null {
   if (mission.state !== "en_cours" || mission.startedAt === undefined) return null;
-  const spent = Math.floor((now - mission.startedAt) / MINUTE);
+  const spent = Math.floor(elapsedMin(mission, now));
   return mission.budgetMin === undefined ? `${spent} min` : `${spent} / ${mission.budgetMin} min`;
 }

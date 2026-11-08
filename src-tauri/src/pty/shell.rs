@@ -403,7 +403,9 @@ fn ollama_command(launch: Option<&OllamaLaunch>, syntax: ShellSyntax) -> AppResu
         AppError::InvalidInput(tr!("options Ollama manquantes", "Ollama options missing"))
     })?;
     let model = launch.model.trim();
-    let valid = !model.is_empty()
+    // The first character is alphanumeric so the name can never read as a flag.
+    let valid = model.len() <= MAX_MODEL_LEN
+        && model.starts_with(|c: char| c.is_ascii_alphanumeric())
         && model
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || "._:/-".contains(c));
@@ -672,6 +674,42 @@ mod tests {
     #[test]
     fn quotes_for_cmd_by_dropping_expansion_characters() {
         assert_eq!(quote(ShellSyntax::Cmd, "50% \"done\"!"), "\"50 done\"");
+    }
+
+    #[test]
+    fn cmd_and_git_bash_keep_spaces_and_apostrophes_in_one_argument() {
+        // cmd: double quotes hold the spaces, the apostrophe needs no escape.
+        assert_eq!(
+            quote(ShellSyntax::Cmd, r"C:\Users\O'Brien\My Projects"),
+            "\"C:\\Users\\O'Brien\\My Projects\""
+        );
+        // Git Bash: single quotes hold the spaces, the apostrophe closes and reopens.
+        assert_eq!(
+            quote(ShellSyntax::Posix, "C:/Users/O'Brien/My Projects"),
+            r"'C:/Users/O'\''Brien/My Projects'"
+        );
+        assert_eq!(quote(ShellSyntax::Posix, "''"), r"''\'''\'''");
+    }
+
+    #[test]
+    fn a_title_with_a_space_and_an_apostrophe_stays_one_argument_in_cmd_and_git_bash() {
+        let under = |syntax| {
+            agent_command(
+                &spec(Agent::Claude, claude(ClaudeMode::New, "L'agent d'Isis")),
+                syntax,
+                &AgentHooks::default(),
+            )
+            .unwrap()
+            .unwrap()
+        };
+        assert_eq!(
+            under(ShellSyntax::Cmd),
+            "claude --session-id 0b9c4b5e-6f1a-4c39-9d2e-8f6c2d1a7e10 -n \"L'agent d'Isis\""
+        );
+        assert_eq!(
+            under(ShellSyntax::Posix),
+            r"MSYS_NO_PATHCONV=1 claude --session-id 0b9c4b5e-6f1a-4c39-9d2e-8f6c2d1a7e10 -n 'L'\''agent d'\''Isis'"
+        );
     }
 
     #[test]
@@ -1037,19 +1075,22 @@ mod tests {
 
     #[test]
     fn codex_gets_no_hook_rather_than_a_wrong_config_path_under_cmd() {
-        let hooks = AgentHooks {
-            codex_notify: Some("http://127.0.0.1:1/hook/codex/n1".into()),
-            curl_config: Some(PathBuf::from(r"C:\Users\100%Jean\curl.cfg")),
-            ..Default::default()
-        };
-        let under = |syntax| {
-            agent_command(&spec(Agent::Codex, None), syntax, &hooks)
-                .unwrap()
-                .unwrap()
-        };
-        assert_eq!(under(ShellSyntax::Cmd), "codex");
-        // PowerShell and POSIX shells keep the path as it is.
-        assert!(under(ShellSyntax::PowerShell).contains(r"100%Jean"));
+        // Each character cmd strips from an argument, in an account name.
+        for name in ["100%Jean", "Jean!", "Jean^Luc"] {
+            let hooks = AgentHooks {
+                codex_notify: Some("http://127.0.0.1:1/hook/codex/n1".into()),
+                curl_config: Some(PathBuf::from(format!(r"C:\Users\{name}\curl.cfg"))),
+                ..Default::default()
+            };
+            let under = |syntax| {
+                agent_command(&spec(Agent::Codex, None), syntax, &hooks)
+                    .unwrap()
+                    .unwrap()
+            };
+            assert_eq!(under(ShellSyntax::Cmd), "codex", "{name}");
+            // PowerShell and POSIX shells keep the path as it is.
+            assert!(under(ShellSyntax::PowerShell).contains(name), "{name}");
+        }
     }
 
     #[test]
@@ -1415,6 +1456,20 @@ mod tests {
                 .kind(),
             "invalidInput"
         );
+        // A name that would read as a flag for `ollama run`, nor an endless one.
+        for bad in ["-x", "--dangerous", &"a".repeat(65)] {
+            s.ollama = Some(OllamaLaunch {
+                model: bad.into(),
+                mode: OllamaMode::Chat,
+            });
+            assert_eq!(
+                agent_command(&s, ShellSyntax::PowerShell, &AgentHooks::default())
+                    .unwrap_err()
+                    .kind(),
+                "invalidInput",
+                "{bad}"
+            );
+        }
     }
 
     #[test]

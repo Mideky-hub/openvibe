@@ -81,10 +81,6 @@ Ce qui est reporté. La spec en cours est `docs/superpowers/specs/2026-10-24-ope
 
 - Non traités : un proxy HTTP qui intercepterait `127.0.0.1` (les hooks échouent, l'activité du terminal prend le relais) ; un dialogue d'autorisation répondu hors du terminal (IDE, à distance) laisse ATTEND jusqu'au hook suivant.
 
-## Constats du plan B3 (commande et orchestrateur, relecture finale)
-
-- Le test Windows de `pty_send_text` vérifie l'effet de la commande, pas les octets écrits.
-
 ## Constats du plan C1 (fenêtre et livraison, relecture finale)
 
 - Deux « Fermer » dans la rangée du haut : la pastille « × Fermer » (ferme le projet) et le bouton de fenêtre (quitte l'application, arrête les agents) ont la même info-bulle. Renommer celle du bouton de fenêtre « Fermer OpenVibe » (comme spec fenêtre §7.3) ; change la spec §4.3.
@@ -128,12 +124,7 @@ Ce qui est reporté. La spec en cours est `docs/superpowers/specs/2026-10-24-ope
 
 ## Constats du plan H2 (mission de l'orchestrateur, relecture finale)
 
-- Les orchestrateurs créés avant H2 gardent leur taille 320 × 420 : le terminal de Claude et le panneau y sont à l'étroit.
 - La détection « Claude est prêt » lit l'écran : la boîte de saisie (`❯` sous un trait) et l'invite de confiance (« trust » + « folder »). Une autre mise en page de Claude retombe sur le délai de 60 s.
-
-## Constats du plan H3 (temps d'une mission, relecture finale)
-
-- L'horloge ne voit que les missions des espaces chargés depuis le démarrage.
 
 ## Constats de la mise à jour du 27 octobre (relectures)
 

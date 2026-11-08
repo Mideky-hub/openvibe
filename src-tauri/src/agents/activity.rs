@@ -38,61 +38,70 @@ pub struct Change {
     pub since: Instant,
     /// What it waits for, while it waits.
     pub message: Option<String>,
+    /// The order of the tracker's changes: Rust emits them after releasing its
+    /// lock and dates them on a wall clock that can go back, so only this orders two.
+    pub seq: u64,
 }
 
 struct Node {
     activity: Activity,
     since: Instant,
     message: Option<String>,
+    /// The number of its last change.
+    seq: u64,
     last_output: Option<Instant>,
     hooked: bool,
     /// When the user typed while a hooked agent worked or waited. No hook
     /// reports the answer to a permission prompt (a refusal fires neither
     /// `Stop` nor `PermissionDenied`), so the output decides until the next hook.
     answered: Option<Instant>,
-    /// The last keystroke: the echo that follows it is not work.
-    last_key: Option<Instant>,
+    /// The last keystroke or resize: the echo or redraw that follows it is not work.
+    echo_from: Option<Instant>,
 }
 
-/// Output this soon after a keystroke is the terminal echoing it back.
+/// Output this soon after a keystroke is the terminal echoing it back, and
+/// this soon after a resize, the program redrawing its screen.
 pub const ECHO_WINDOW: Duration = Duration::from_millis(200);
 
 /// The activity of every running terminal.
 #[derive(Default)]
 pub struct Tracker {
     nodes: HashMap<String, Node>,
+    /// The number of the last change, of any terminal.
+    seq: u64,
 }
 
 impl Tracker {
     /// A process just started: idle until it shows otherwise.
     pub fn start(&mut self, node_id: &str, now: Instant) -> Change {
-        self.nodes.insert(
-            node_id.to_string(),
-            Node {
-                activity: Activity::Idle,
-                since: now,
-                message: None,
-                last_output: None,
-                hooked: false,
-                answered: None,
-                last_key: None,
-            },
-        );
-        change(node_id, Activity::Idle, now)
+        self.seq += 1;
+        let node = Node {
+            activity: Activity::Idle,
+            since: now,
+            message: None,
+            seq: self.seq,
+            last_output: None,
+            hooked: false,
+            answered: None,
+            echo_from: None,
+        };
+        let change = change_of(node_id, &node);
+        self.nodes.insert(node_id.to_string(), node);
+        change
     }
 
     /// The terminal printed something. Returns a change only when the
     /// activity changes, not for every chunk read.
     pub fn output(&mut self, node_id: &str, now: Instant) -> Option<Change> {
         let node = self.nodes.get_mut(node_id)?;
-        // The echo of a keystroke (and the redraw it causes) is not work: it
-        // counts neither as activity nor as keeping a working terminal busy.
+        // The echo of a keystroke, or the redraw after a resize, is not work:
+        // it counts neither as activity nor as keeping a working terminal busy.
         // A hooked agent's output after an answer is real: only plain
         // terminals (Shell, Codex, Gemini...) are filtered.
         if !node.hooked
             && node
-                .last_key
-                .is_some_and(|key| now.saturating_duration_since(key) < ECHO_WINDOW)
+                .echo_from
+                .is_some_and(|from| now.saturating_duration_since(from) < ECHO_WINDOW)
         {
             return None;
         }
@@ -100,7 +109,14 @@ impl Tracker {
         if node.hooked && node.answered.is_none() {
             return None;
         }
-        set(node_id, node, Activity::Working, now)
+        set(&mut self.seq, node_id, node, Activity::Working, now)
+    }
+
+    /// The terminal was resized: the program redraws, which is not work.
+    pub fn resize(&mut self, node_id: &str, now: Instant) {
+        if let Some(node) = self.nodes.get_mut(node_id) {
+            node.echo_from = Some(now);
+        }
     }
 
     /// The user typed in the terminal. An answer to a hooked agent hands it
@@ -112,7 +128,7 @@ impl Tracker {
         if !is_keystroke(data) {
             return None;
         }
-        node.last_key = Some(now);
+        node.echo_from = Some(now);
         if !node.hooked {
             return None;
         }
@@ -125,7 +141,7 @@ impl Tracker {
             return None;
         }
         node.answered = Some(now);
-        set(node_id, node, Activity::Working, now)
+        set(&mut self.seq, node_id, node, Activity::Working, now)
     }
 
     /// Claude ended its session; its shell lives on, and the output decides again.
@@ -133,7 +149,7 @@ impl Tracker {
         let node = self.nodes.get_mut(node_id)?;
         node.hooked = false;
         node.answered = None;
-        set(node_id, node, Activity::Idle, now)
+        set(&mut self.seq, node_id, node, Activity::Idle, now)
     }
 
     pub fn hook(
@@ -154,10 +170,12 @@ impl Tracker {
         if still_waiting && node.message != message {
             // A new question, not a new wait: `since` keeps the agent's place.
             node.message = message;
+            self.seq += 1;
+            node.seq = self.seq;
             return Some(change_of(node_id, node));
         }
         node.message = message;
-        set(node_id, node, activity, now)
+        set(&mut self.seq, node_id, node, activity, now)
     }
 
     /// Working terminals that went quiet become idle: after 1.5 s without
@@ -178,10 +196,8 @@ impl Tracker {
                 QUIET_AFTER
             };
             if now.saturating_duration_since(last) >= limit {
-                node.activity = Activity::Idle;
-                node.since = now;
                 node.answered = None;
-                changes.push(change(node_id, Activity::Idle, now));
+                changes.extend(set(&mut self.seq, node_id, node, Activity::Idle, now));
             }
         }
         changes
@@ -199,23 +215,24 @@ impl Tracker {
     }
 }
 
-fn change(node_id: &str, activity: Activity, since: Instant) -> Change {
-    Change {
-        node_id: node_id.to_string(),
-        activity,
-        since,
-        message: None,
-    }
-}
-
 fn change_of(node_id: &str, node: &Node) -> Change {
     Change {
+        node_id: node_id.to_string(),
+        activity: node.activity,
+        since: node.since,
         message: node.message.clone(),
-        ..change(node_id, node.activity, node.since)
+        seq: node.seq,
     }
 }
 
-fn set(node_id: &str, node: &mut Node, activity: Activity, now: Instant) -> Option<Change> {
+/// `seq` is the tracker's last number, given apart from its nodes.
+fn set(
+    seq: &mut u64,
+    node_id: &str,
+    node: &mut Node,
+    activity: Activity,
+    now: Instant,
+) -> Option<Change> {
     if activity != Activity::Waiting {
         node.message = None;
     }
@@ -224,6 +241,8 @@ fn set(node_id: &str, node: &mut Node, activity: Activity, now: Instant) -> Opti
     }
     node.activity = activity;
     node.since = now;
+    *seq += 1;
+    node.seq = *seq;
     Some(change_of(node_id, node))
 }
 
@@ -741,6 +760,49 @@ mod tests {
         // Output that follows no keystroke still counts.
         let working = tracker.output("a", t0 + ms(400)).unwrap();
         assert_eq!(working.activity, Activity::Working);
+    }
+
+    #[test]
+    fn the_redraw_after_a_resize_is_not_work() {
+        let t0 = Instant::now();
+        let mut tracker = started(t0);
+        tracker.resize("a", t0 + ms(10));
+        assert_eq!(tracker.output("a", t0 + ms(20)), None);
+        assert_eq!(tracker.output("a", t0 + ms(150)), None);
+        assert!(tracker.tick(t0 + ms(3000)).is_empty());
+        let working = tracker.output("a", t0 + ms(400)).unwrap();
+        assert_eq!(working.activity, Activity::Working);
+        tracker.resize("zzz", t0);
+    }
+
+    #[test]
+    fn changes_are_numbered_in_the_order_they_happen() {
+        // Rust emits after releasing its lock and dates on the wall clock, which can go
+        // back: only these numbers order two changes, and the snapshot carries the last one.
+        let t0 = Instant::now();
+        let mut tracker = started(t0);
+        let started_seq = tracker.snapshot()[0].seq;
+        let working = tracker.output("a", t0 + ms(10)).unwrap();
+        let first = waiting(&mut tracker, Some("First?"), t0 + ms(20)).unwrap();
+        let second = waiting(&mut tracker, Some("Second?"), t0 + ms(30)).unwrap();
+        assert!(started_seq < working.seq);
+        assert!(working.seq < first.seq);
+        assert!(first.seq < second.seq, "a new question is a newer change");
+        tracker.start("b", t0 + ms(40));
+        let snapshot = tracker.snapshot();
+        let a = snapshot.iter().find(|c| c.node_id == "a").unwrap();
+        let b = snapshot.iter().find(|c| c.node_id == "b").unwrap();
+        assert_eq!(a.seq, second.seq);
+        assert!(b.seq > a.seq);
+        let idle = tracker
+            .hook("a", HookSource::Claude, Activity::Idle, t0 + ms(50), None)
+            .unwrap();
+        assert!(idle.seq > b.seq);
+        let quiet = {
+            tracker.output("b", t0 + ms(60));
+            tracker.tick(t0 + ms(5000))
+        };
+        assert!(quiet[0].seq > idle.seq);
     }
 
     #[test]

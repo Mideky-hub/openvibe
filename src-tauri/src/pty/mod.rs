@@ -192,6 +192,17 @@ impl PtyManager {
         })
     }
 
+    /// Runs `clear` unless `node_id` runs or is being started, and lets no
+    /// start begin meanwhile: an exit then cannot clear the token a relaunch
+    /// was just given (issue #53). `None` when it did not run.
+    pub fn if_idle<R>(&self, node_id: &str, clear: impl FnOnce() -> R) -> Option<R> {
+        let starting = lock(&self.starting);
+        if self.is_running(node_id) || starting.contains(node_id) {
+            return None;
+        }
+        Some(clear())
+    }
+
     /// The previous run's saved output, for the next `spawn` of `node_id` to start from.
     pub fn seed_history(&self, node_id: &str, history: Vec<u8>) {
         lock(&self.histories).insert(node_id.to_string(), history);
@@ -318,6 +329,34 @@ mod tests {
         assert!(pty.claim_start("n2").is_ok(), "another terminal is free");
         drop(first);
         assert!(pty.claim_start("n1").is_ok());
+    }
+
+    /// An exit clears its terminal's token only while no relaunch is under
+    /// way, and no relaunch begins while it clears (issue #53).
+    #[test]
+    fn an_exit_does_not_clear_a_relaunch_under_way() {
+        let pty = Arc::new(PtyManager::default());
+        let relaunch = pty.claim_start("n1").unwrap();
+        assert_eq!(pty.if_idle("n1", || "cleared"), None);
+        assert_eq!(pty.if_idle("n2", || "cleared"), Some("cleared"));
+        drop(relaunch);
+
+        let (claimed, heard) = std::sync::mpsc::channel();
+        let cleared = pty.if_idle("n1", || {
+            let other = Arc::clone(&pty);
+            let claimed = claimed.clone();
+            let racer = std::thread::spawn(move || {
+                let claim = other.claim_start("n1");
+                let _ = claimed.send(claim.is_ok());
+            });
+            assert!(
+                heard.recv_timeout(Duration::from_millis(300)).is_err(),
+                "a relaunch began while the exit was clearing"
+            );
+            racer
+        });
+        cleared.unwrap().join().unwrap();
+        assert_eq!(heard.recv_timeout(Duration::from_secs(1)), Ok(true));
     }
 }
 

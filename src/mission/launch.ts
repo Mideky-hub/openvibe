@@ -22,7 +22,7 @@ import { notify } from "./events";
 import { NEW_AGENT, NEW_MISSION, oneLine, pastTask, sameName, type Member, type Mission, type SubTask } from "./mission";
 import { whenReady } from "./ready";
 import { modelFor } from "./router";
-import { canvasKnown, linkedClaudeAgents, linkedGroups, missionOf, orchestratorShown, setMission, updateMember, workspaceCanvas } from "./store";
+import { busyLinkedAgents, canvasKnown, linkedClaudeAgents, linkedGroups, missionOf, orchestratorShown, readCanvas, releaseAgents, reserveAgents, setMission, updateMember, workspaceCanvas } from "./store";
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const t = () => messages(agentMessages);
@@ -100,8 +100,10 @@ async function formTeam(orchestratorId: string, workspaceId: string, project: st
   const linked = linkedClaudeAgents(orchestratorId);
   const agents = plan.map((task) => (task.agent === NEW_AGENT ? null : (linked.find((a) => sameName(a.name, task.agent)) ?? null)));
   const lost = plan.find((task, i) => task.agent !== NEW_AGENT && !agents[i]);
-  if (lost) throw new Error(t().launch.unlinked(lost.agent));
+  if (lost) throw new Error(busyLinkedAgents(orchestratorId).some((name) => sameName(name, lost.agent)) ? t().launch.otherMission(lost.agent) : t().launch.unlinked(lost.agent));
   checkGroups(orchestratorId, plan);
+  // Read free and held at once, before any await: another launch cannot take them meanwhile (#64).
+  reserveAgents(orchestratorId, agents.flatMap((a) => (a ? [a.nodeId] : [])));
   const pantheon = pantheonForNewGroup(workspaceId);
   const taken = namesInWorkspace(workspaceId);
   const pantheonOf = (task: SubTask) => workspaceCanvas(workspaceId).frames.find((f) => f.id === task.group?.id)?.group?.pantheon ?? pantheon;
@@ -221,11 +223,14 @@ export async function launchMission(orchestratorId: string): Promise<void> {
   try {
     team = await formTeam(orchestratorId, record.workspaceId, session.cwd, mission, restarts);
   } catch (error) {
+    releaseAgents(orchestratorId);
     setMission(orchestratorId, { state: "plan", error: errorText(error) });
     notify(orchestratorId, t().lines.couldNotStart(errorText(error)));
     return;
   }
   setMission(orchestratorId, { state: "en_cours", startedAt: Date.now(), ...team });
+  // Its members hold them now.
+  releaseAgents(orchestratorId);
   const names = team.members.map((m) => `${m.name} (${m.task})`).join(", ");
   notify(orchestratorId, t().lines.goAhead(names, team.branch));
   const plan = mission.plan;
@@ -247,8 +252,12 @@ export function endMission(orchestratorId: string, summary: string) {
     removeTeam(orchestratorId, record.workspaceId, mission.frameId, joined);
     return;
   }
-  // Its scene was never read: the created agents stop, freeing their worktrees (final review H2).
-  for (const member of mission.members) if (!member.linked) stopTerminal(member.nodeId);
+  // Its scene was never read since startup: read now, the team closes there as on screen (#69).
+  void readCanvas(orchestratorId).then((known) => {
+    if (known) return removeTeam(orchestratorId, record.workspaceId, mission.frameId, joined);
+    // Unreadable: the created agents stop, freeing their worktrees (final review H2).
+    for (const member of mission.members) if (!member.linked) stopTerminal(member.nodeId);
+  });
 }
 
 /** The merges under way, by mission worktree: git merges one branch at a time there. */
