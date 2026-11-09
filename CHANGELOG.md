@@ -4,6 +4,8 @@ All notable changes to OpenVibe are documented here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.3.0-beta.1] - 2026-11-09
+
 ### Added
 - **Mission map:** under a running orchestrator, its team shows as a tree (the orchestrator, then its agents under their groups) that follows their states live, with a filter by state and a search. An inspector goes to an agent, pauses it or the whole team, frames the team in one view, and closes an agent after the usual confirmation.
 - **Settings:** the settings menu now sets the default agent, the quiet time before an agent without hooks reads READY (1, 1.5, 3 or 5 s), and the keyboard shortcuts. Each shortcut can take new keys; keys already used elsewhere are refused with the name of their owner, and *Reset* brings the defaults back. The palette shows the keys you chose.
